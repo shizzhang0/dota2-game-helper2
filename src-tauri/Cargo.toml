@@ -1,0 +1,27 @@
+[package]
+name = "dota2-game-helper2"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+winreg = "0.52"
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }
+
+[dependencies.windows]
+version = "0.58"
+features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

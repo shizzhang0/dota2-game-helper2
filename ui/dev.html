@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>helper2 · dev</title>
+<link rel="stylesheet" href="css/overlay.css">
+<style>
+  /* 开发页：铺游戏截图当背景调样式。放 dev/bg1.jpg…bg3.jpg 即自动使用，
+     没有截图时用三种极端亮度的渐变兜底。 */
+  /* 面板是 fixed 定位，body 本身高度为 0，渐变会被压成零高度画不出来，需显式给高 */
+  body.dev { min-height: 100vh; background: var(--devbg); background-size: cover;
+             background-position: center; }
+  #hud { position: fixed; left: 8px; bottom: 8px; font-size: 12px; color: #9AA6B4;
+         text-shadow: 0 0 3px #000; pointer-events: none; }
+  #tips { position: fixed; right: 8px; bottom: 8px; font-size: 12px; color: #9AA6B4;
+          text-shadow: 0 0 3px #000; }
+</style>
+<body class="dev">
+<div id="panel"></div>
+<div id="hud"></div>
+<div id="tips">按住 Alt 显示 · v 常显 · e 编辑态 · b 换背景</div>
+<script type="module" src="js/main.js"></script>
+<script>
+  const BGS = [
+    "url(dev/bg1.jpg)", "url(dev/bg2.jpg)", "url(dev/bg3.jpg)",
+    "linear-gradient(135deg,#d8e4ef,#b9c9d8 60%,#e8eef3)",   // 最亮：白天团战近似
+    "linear-gradient(135deg,#0b1410,#132018 60%,#0a0f0c)",   // 最暗：夜间野区近似
+    "conic-gradient(from 20deg,#4b1d6b,#c2410c,#0891b2,#4b1d6b)", // 最花：特效近似
+  ];
+  let i = 3;
+  const apply = () => document.body.style.setProperty("--devbg", BGS[i]);
+  apply();
+  addEventListener("keydown", (e) => { if (e.key === "b") { i = (i + 1) % BGS.length; apply(); } });
+</script>

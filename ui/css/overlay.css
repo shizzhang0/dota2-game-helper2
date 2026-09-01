@@ -1,0 +1,149 @@
+/* 游戏覆盖层。硬约束：body 透明、锁定态不吃鼠标、动画只用 opacity/transform
+   （环的 stroke-dashoffset 例外，设计文档明确许可）。 */
+
+:root {
+  --bg:     rgba(8, 10, 14, .72);
+  --bg-lit: rgba(8, 10, 14, .82);
+  --hair:   rgba(255, 255, 255, .10);
+  --fg:     #EDF1F6;
+  --dim:    #B3BECB;
+
+  /* 取自游戏中各事件自身的颜色 */
+  --k-bounty: #FFC24B;
+  --k-water:  #4FB8FF;
+  --k-power:  #A46BFF;
+  --k-wisdom: #47E0A0;
+  --k-lotus:  #FF7BC8;
+  --k-stack:  #FF9147;
+  --k-threat: #FF4D4D;   /* 敌方可用 = 威胁 */
+  --k-chance: #65D9F7;   /* 敌方缺失 = 机会 */
+
+  --accent: var(--k-bounty);
+}
+
+html, body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: Bahnschrift, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 面板 ───────────────────────────────────────────── */
+
+.panel {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  pointer-events: none;          /* 锁定态整窗穿透 */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .12s linear, visibility 0s linear .12s;
+}
+.panel.on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .12s linear;
+}
+.panel.edit {
+  pointer-events: auto;
+  cursor: grab;
+  outline: 1px dashed var(--k-chance);
+  outline-offset: 3px;
+  opacity: 1;
+  visibility: visible;
+}
+
+.grp { display: flex; align-items: flex-start; gap: 6px; }
+.sep { width: 1px; background: var(--hair); align-self: stretch; }
+
+/* ── 格子 ───────────────────────────────────────────── */
+
+.cell {
+  position: relative;
+  width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* 远期略压，但必须保持可读——按住 Alt 就是为了读它。
+     真正的层级差由 now 态的点亮（颜色 + 粗环）拉开，不靠把其余压到看不见。 */
+  opacity: .78;
+}
+.cell[data-urgency="near"], .cell[data-urgency="now"] { opacity: 1; }
+
+.cell svg { width: 52px; height: 52px; display: block; overflow: visible; }
+.ring-bg { fill: none; stroke: rgba(255, 255, 255, .13); stroke-width: 4; }
+.ring-fg {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 30px 30px;
+  transition: stroke-dashoffset .9s linear;
+}
+.cell[data-urgency="now"] .ring-fg { stroke-width: 6; }
+
+.num {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 600; letter-spacing: .2px;
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+}
+.cell[data-urgency="now"] .num { color: var(--accent); }
+
+.lab {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+}
+.cell[data-urgency="now"] .lab { color: var(--fg); }
+
+/* 宽度写死：净资产从 4 位涨到 5 位时若让宽度自适应，居中面板会整体横移，读数时抖动 */
+.cell.wide { justify-content: space-between; opacity: 1; }
+.cell[data-cell="buyback"] { width: 104px; }
+.cell.econ { width: 116px; }
+
+/* ── 敌方买活 ────────────────────────────────────────── */
+
+.dots { display: flex; gap: 5px; height: 52px; align-items: center; }
+.dot { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 16px; opacity: .5; }
+.dot[data-on="1"] { opacity: 1; }
+.dot i {
+  display: block; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--slot, #888);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
+}
+.dot[data-on="1"] i { outline: 2px solid var(--k-chance); outline-offset: 1px; }
+.dot span {
+  font-size: 10px; line-height: 1; color: var(--k-chance);
+  text-shadow: 0 0 3px #000; min-height: 10px;
+}
+
+/* ── 经济 ───────────────────────────────────────────── */
+
+.econ { justify-content: center; gap: 1px; height: 52px; }
+.nw {
+  font-size: 22px; font-weight: 600; color: #FFD76A;
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+}
+.rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .ring-fg { transition: none; }
+}

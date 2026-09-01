@@ -1,5 +1,7 @@
 # Rust / Tauri
 src-tauri/target/
+# tauri 生成的 schema，构建时自动重建
+src-tauri/gen/
 
 # Node
 node_modules/

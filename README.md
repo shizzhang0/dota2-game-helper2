@@ -3,7 +3,7 @@
 基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
 在游戏中按住 **Alt** 显示 Dota Plus 才有的那几个倒计时。
 
-> ⚠️ 开发中：目前处于设计定稿阶段，代码尚未开始编写。
+> 🚧 开发中：功能已全部实现并通过回放数据验证，**尚未进游戏实测校准**。
 > 设计文档见 [docs/design.md](docs/design.md)，实施计划见 [docs/plan.md](docs/plan.md)。
 
 ## 显示什么
@@ -45,6 +45,19 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 
 - Dota 2 启动项加 `-gamestateintegration`（首次运行会自动写入 GSI 配置文件）
 - 游戏需使用**无边框窗口**模式（独占全屏下任何非注入类悬浮层都无法显示，这是系统级限制）
+
+## 开发
+
+```bash
+cargo build --manifest-path src-tauri/Cargo.toml   # 构建
+python tools/replay.py                             # 回放服务器（用真实对局数据驱动前端）
+```
+
+回放服务器起好后打开 <http://127.0.0.1:8000/dev.html>，用真实 dump 调试前端，
+不必反复进游戏。`?file=` 选 dump 文件、`?speed=` 调倍速；页面内 `v` 常显、`e` 编辑态、`b` 换背景。
+
+装好之后常数表会落到 `%APPDATA%\dev.dota2helper2.app\constants\`，
+**改 JSON 重启即可生效，不需要重新编译**。
 
 ## 参考
 

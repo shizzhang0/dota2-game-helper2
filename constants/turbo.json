@@ -1,0 +1,18 @@
+{
+  "mode": "turbo",
+  "_note": "快速模式的符间隔尚未实测确认，当前沿用正常模式数值。dump 校准（n=13 次赏金符拾取）无法区分 180s 与 240s，需 Task 12 进游戏逐项核对：bounty.every / lotus.every（有资料称快速模式莲花为 90s）/ wisdom.every / midRune。",
+  "midRune": {
+    "fixed": [ { "clock": 0, "kind": "bounty" },
+               { "clock": 120, "kind": "water" },
+               { "clock": 240, "kind": "water" } ],
+    "repeat": { "fromClock": 360, "every": 120, "kind": "power" }
+  },
+  "bounty": { "start": 0, "every": 180 },
+  "lotus":  { "start": 180, "every": 180 },
+  "wisdom": { "start": 420, "every": 420 },
+  "stack":  { "every": 60, "windowStart": 50 },
+  "glyphCooldown": 300,
+  "buybackCooldown": 480,
+  "aghsShardValue": 1400,
+  "aghsScepterValue": 4200
+}

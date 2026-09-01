@@ -1,0 +1,17 @@
+{
+  "mode": "normal",
+  "midRune": {
+    "fixed": [ { "clock": 0, "kind": "bounty" },
+               { "clock": 120, "kind": "water" },
+               { "clock": 240, "kind": "water" } ],
+    "repeat": { "fromClock": 360, "every": 120, "kind": "power" }
+  },
+  "bounty": { "start": 0, "every": 180 },
+  "lotus":  { "start": 180, "every": 180 },
+  "wisdom": { "start": 420, "every": 420 },
+  "stack":  { "every": 60, "windowStart": 50 },
+  "glyphCooldown": 300,
+  "buybackCooldown": 480,
+  "aghsShardValue": 1400,
+  "aghsScepterValue": 4200
+}
