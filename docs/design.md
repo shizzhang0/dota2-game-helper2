@@ -1,0 +1,149 @@
+# Dota 2 GSI 覆盖层 v1 设计
+
+> 前置文档：`../dota2_gsi_dump/dota2-gsi-overlay-spec.md`（本仓库同级目录，总体结论与排除方案）。
+> 本文档是 v1 的实施设计，2026-08-31 讨论定稿。
+> 数据结论全部来自 3 局实测 dump（2 快速 + 1 正常，`dota2_gsi_dump\dump\`）。
+
+---
+
+## 一、v1 功能范围（定稿）
+
+### 显示项（Alt 面板内容）
+
+| # | 项目 | 数据驱动 | 说明 |
+|---|---|---|---|
+| 1 | 中路符时间线 | `map.clock_time` | 0:00 赏金 → 2:00、4:00 圣水符 → 6:00 起每 2 分钟强化符。一个显示位，图标随阶段变化 |
+| 2 | 赏金符 | `map.clock_time` | 0:00 起每 3 分钟 |
+| 3 | 智慧神符 | `map.clock_time` | 7:00 起每 7 分钟 |
+| 4 | 莲花 | `map.clock_time` | 3:00 起每 3 分钟 |
+| 5 | 堆野窗口 | `map.clock_time` | 野怪每整分钟刷新，倒数到整分 |
+| 6 | 敌方塔防 | events 解析 | ready / 冷却倒计时，含刷新里程碑逻辑（见第四节） |
+| 7 | 经济面板 | player + items | 自己的净资产（近似）+ GPM + XPM |
+| 8 | 敌方买活追踪 | events 解析 | 五个敌方槽位的买活冷却状态（见第四节） |
+
+### 基建功能
+
+- **自动写 GSI 配置**：首次运行向 Dota cfg 目录写 `gamestate_integration_*.cfg`（参考 nocamles）
+- **模式自动判定**：`player.gold_from_income / clock_time` ≈ 3.0 g/s = 快速，≈ 1.5 g/s = 正常（实测差整一倍，clock 60s 内可判定）。判定前默认快速表
+- **智能显隐**：`map.game_state` 不在 PRE_GAME / GAME_IN_PROGRESS 时整窗隐藏
+- **锁定/编辑双模式**：锁定态整窗鼠标穿透常开；`Ctrl+Alt+F10` 切编辑态可拖位置，位置存配置文件
+
+### 明确不做（v1）
+
+开机自启、眼位冷却、肉山、白天黑夜、语音、任何输入模拟、队友/敌人个体数据（GSI 玩家视角不提供，无解）。
+
+### v2 候选：我方眼位监控（2026-08-31 已调查，数据可行）
+
+被排提醒 + 到期倒计时。`WARD_KILLED` 事件只推己方排敌方眼（18 例全核对，无己方眼被排事件），
+但 minimap 段推己方眼对象（`npc_dota_observer_wards` / `npc_dota_sentry_wards`，带队伍+坐标，
+眼不动、坐标即身份）：消失早于寿命 = 被排，活满 = 到期。与塔防中途重建共用 minimap
+位置跟踪基建。缓刑原因：minimap 是最脆弱链路（槽位漂移），待 v1 实测其可靠性后再上。
+坑：中途启动的眼无出生时间（到期倒计时未知）；团战高峰 minimap 是否掉对象需实测。
+
+---
+
+## 二、显示与交互：纯 Alt 查询
+
+- **平时屏幕上什么都没有。按住 Alt 显示完整面板，松开即隐。**
+- 实现：Rust 侧轮询 `GetAsyncKeyState(VK_MENU)`（~50ms 间隔）。**只被动读键盘状态，不注册热键、不拦截按键**，游戏内 Alt 原有功能（Alt 点地图等）不受影响，与"纯接收器"定位一致。
+- 可读性与性能遵循前置 spec 第八节：深色描边/半透明底、等宽数字、SVG 圆环（`stroke-dashoffset`）、动画只用 `transform`/`opacity`、`setInterval` 每秒驱动、vanilla JS 无框架。
+
+---
+
+## 三、架构（Tauri 2）
+
+已决策：直接上 Tauri 2，不走 Electron 过渡（迁移大概率不会发生，主进程横竖要写一遍，不如只写一次）。装 Rust 工具链不阻塞前端开发（见第七节开发顺序）。
+
+### Rust 侧（约 300 行）
+
+| 模块 | 职责 |
+|---|---|
+| GSI 监听 | HTTP 服务 127.0.0.1:53000，收包立即回 200，原始 JSON 转发前端（Tauri event） |
+| Alt 轮询 | GetAsyncKeyState，状态变化时通知前端 |
+| 窗口管理 | 无边框透明置顶、`set_ignore_cursor_events`、整窗显隐 |
+| 全局热键 | Ctrl+Alt+F10 锁定/编辑切换 |
+| 配置 | 面板位置等，读写本地配置文件 |
+| GSI cfg 写入 | 首次运行探测 Steam/Dota 路径，写 gamestate_integration cfg |
+| 价格表 | 启动时拉 OpenDota `GET /api/constants/items`，成功则缓存本地；失败用上次缓存 |
+
+### 前端（vanilla JS + SVG）
+
+| 模块 | 职责 |
+|---|---|
+| 缓存池 | 合并 GSI 增量包（delta update，前置 spec 已知坑），维护完整状态 |
+| 对局管理 | 按 `map.matchid` 切分；POST_GAME / 断流时清空回待机 |
+| 倒计时引擎 | 常数表 + `clock_time` 纯函数计算全部符/堆野倒计时 |
+| 事件解析 | events 数组去重（按 `data.time` 字段）+ 塔防状态机（第四节） |
+| 净资产 | 第五节 |
+| 渲染 | Alt 面板、SVG 环、编辑态拖拽 |
+
+---
+
+## 四、敌方塔防状态机（机制已被 3 局数据逐条验证，无反例）
+
+**规则**：塔防冷却 300s；每队**第一座 T1、第一座 T2、第一座 T3、第一组近战兵营**被摧毁时该队塔防立即刷新（来源 Dota 2 Wiki，与全部实测数据吻合，含两个 15s/76s 连开塔防的刁钻案例）。
+
+**事件字段解码（实测确认）**：
+
+| 事件（generic_event.data.type） | 字段语义 |
+|---|---|
+| `CHAT_MESSAGE_GLYPH_USED` | `playerid1` = **使用方队伍**（2=天辉 3=夜魇，Dota 内部队伍常量） |
+| `CHAT_MESSAGE_TOWER_KILL` | `value` = 击杀方队伍（丢塔方 = 对面）；`value3` = 塔层级 1~4；`value2` = 赏金（90/110/125/145） |
+| `CHAT_MESSAGE_TOWER_DENY` | `value` = **丢塔方自己**（与 TOWER_KILL 相反，注意） |
+| `CHAT_MESSAGE_BARRACKS_KILL` | `value` = 击杀方；`value2`=155 近战 / 90 远程；`value3` = 兵营位置 bitmask |
+| `CHAT_MESSAGE_BUYBACK` | `playerid1` = 买活玩家槽位（0-4 天辉 / 5-9 夜魇）。**双方都推**（实测己方 3 次敌方 2 次），买活是公示信息 |
+
+**敌方买活追踪**：per 敌方槽位记录 `last_buyback`，冷却 480s（进常数表）。限制：玩家视角拿不到敌方英雄名，用 Dota 固定的**玩家槽位颜色点** + 倒计时显示。只表示"冷却中/可用"，无法得知对方是否有买活钱。
+
+**其余事件均已排查（2026-08-31 全量盘点）**：物品购买/扫描/烟雾/排眼/瓶装符/信使等事件只推己方，无信息差价值；击杀/阵亡/肉山/盾游戏原生已显示。敌方买活是唯一有信息差且数据可得的增量。
+
+**状态机**：per 敌方队伍维护 `last_use`（GLYPH_USED）与 4 个一次性刷新里程碑（首 T1/T2/T3/近战兵营损失）。`ready = now >= last_use + 300s`，里程碑触发时直接置 ready。
+
+**中途启动重建**：minimap 段推**双方所有塔**的存活状态（`minimap_tower90/tower45` + team + 坐标），已消失的塔 = 已触发过的里程碑，可完整重建。塔坐标→层级映射做成静态表（从 dump 提取，双方各 11 座塔坐标已齐）。
+
+**注意**：events 数组同一事件会在连续多包中重复出现，必须按 `(matchid, type, data.time)` 去重。
+
+---
+
+## 五、净资产计算（参考 nocamles/dota2_amount_plugins，价格源改进）
+
+```
+净资产 ≈ player.gold
+        + Σ 物品栏/背包/储藏处物品价格（items.slotN / stashN，价格表查询）
+        + 魔晶修正（hero.aghanims_shard 或 permanent_buffs.modifier_item_aghanims_shard → +1400）
+        + 神杖吞噬修正（permanent_buffs.modifier_item_ultimate_scepter_consumed → +4200）
+```
+
+- 中立物品（`neutralN`）按 0 计（不花钱）。
+- 价格表来自 OpenDota `constants/items`（Rust 侧启动拉取 + 本地缓存兜底），**不手工维护**，符合"常数外置、防版本漂移"原则。魔晶/神杖修正值也进常数表。
+- GPM/XPM 直接用 `player.gpm` / `player.xpm` 现成字段。
+
+---
+
+## 六、常数表
+
+- `constants/normal.json` + `constants/turbo.json`：各事件的起始时间、周期、堆野窗口参数、塔防冷却 300s、魔晶/神杖价格修正。
+- 快速表实际间隔用已有的两局快速 dump 校准（`bounty_rune_pickup` 事件时间可反推刷新点）。
+- 显示项的开关（比如不想看莲花）也进配置，逐项可关。
+
+---
+
+## 七、开发顺序
+
+1. **回放服务器**（Python 或 Node，几十行）：读 `raw_*.jsonl` 按原速/倍速通过 WebSocket 或 HTTP 重放 → 前端开发不用开游戏
+2. **前端在浏览器里开发**：缓存池 → 倒计时引擎 → 事件解析/塔防状态机 → Alt 面板 UI（拿真实游戏截图当背景调样式；Alt 键在浏览器阶段用普通 keydown 模拟）
+3. **并行**：装 Rust 工具链 + MSVC Build Tools（等待时间不阻塞步骤 1-2）
+4. **Tauri 壳**：窗口/穿透/热键/GSI 监听/cfg 写入/价格表拉取
+5. **进游戏实测校准**：无边框模式，验证穿透、Alt 响应、可读性、快速表常数
+
+### 验证方式
+
+回放驱动开发天然可验证：用已知对局的 dump 回放，倒计时/塔防状态与实际对局录像对照。塔防状态机用三局 dump 的全部塔防事件做回归验证（每次使用时刻状态机必须处于 ready）。
+
+---
+
+## 八、风险与开放问题
+
+- 快速模式的符间隔常数需校准（dump 反推 + 进游戏验证），设计上已用外置双表隔离风险。
+- OpenDota 接口不可用时用本地缓存；首次运行且无网则净资产项显示"价格表未加载"。
+- `GetAsyncKeyState` 在部分反作弊环境的表现——Dota/VAC 对外部进程读键盘状态无限制（不注入不 hook），风险评估为无，但保留"常显模式"作为配置项兜底。
