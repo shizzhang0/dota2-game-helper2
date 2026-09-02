@@ -69,18 +69,31 @@ function itemValues(items, prices, player) {
  * 查不到再退回常数表。
  *
  * 一律计入，不管是自己买的、肉山掉的，还是炼金术士送的——吞下去就是永久属性，
- * 到手即归自己，这点和"队友让你代拿的物品"不同（那个随时能还回去，所以不计）。
+ * 到手即归自己。这点和"队友让你代拿的物品"不同（那个随时能还回去，所以不计）。
  *
- * 第四项是同一个 buff 可能对应的几件物品，按实际在物品栏里见过的那件取价：
- * 神杖 4200 和阿哈利姆祝福 5800 用的是同一个 buff 名，不区分会少算 1600。
- * 数组顺序即优先级。
+ * 神杖系要区分两档，因为两者可能共用同一个 buff 名：
+ *   神杖         ultimate_scepter    4200
+ *   阿哈利姆祝福  ultimate_scepter_2  5800  = 神杖 4200 + 祝福卷轴 1600
+ * 走合成路线时神杖先被吞掉、卷轴再消耗，两件都不在物品栏里，光看 buff 分不出档次。
+ * 判据：本局见过祝福成品 / 肉山祝福 / 祝福卷轴 任一，就算升过级，按 5800 计。
+ * （若某版本给祝福单独的 buff 名，upgrade.mods 里认它，不依赖物品栏历史。）
  */
 const CONSUMED_BUFFS = [
-  ["modifier_item_ultimate_scepter_consumed", "ultimate_scepter", "aghsScepterValue",
-   ["ultimate_scepter_2", "ultimate_scepter_roshan", "ultimate_scepter"]],
-  ["modifier_item_moon_shard_consumed", "moon_shard", "moonShardValue",
-   ["moon_shard"]],
+  {
+    mods: ["modifier_item_ultimate_scepter_consumed"],
+    api: "ultimate_scepter",
+    constKey: "aghsScepterValue",
+    upgrade: {
+      api: "ultimate_scepter_2",
+      mods: ["modifier_item_ultimate_scepter_2_consumed"],
+      items: ["ultimate_scepter_2", "ultimate_scepter_roshan", "recipe_ultimate_scepter_2"],
+    },
+  },
+  { mods: ["modifier_item_moon_shard_consumed"], api: "moon_shard", constKey: "moonShardValue" },
 ];
+
+/** 需要记进物品栏历史的物品名 */
+const TRACKED_ITEMS = CONSUMED_BUFFS.flatMap(b => b.upgrade?.items ?? []);
 
 /**
  * 净资产 = 金钱 + 装备栏 + 储藏处 + 在途 + 魔晶/神杖修正。
@@ -98,14 +111,12 @@ export class EconTracker {
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
   }
 
-  /** 记下见过哪件吞噬类物品——神杖和祝福 buff 同名，靠这个区分 4200 还是 5800 */
+  /** 记下见过哪件升级物品——神杖和祝福可能共用 buff 名，靠这个区分 4200 还是 5800 */
   noteVariants(items) {
     for (const it of Object.values(items || {})) {
       if (!it || typeof it !== "object") continue;
       const n = (it.name || "").replace(/^item_/, "");
-      for (const [, , , variants] of CONSUMED_BUFFS) {
-        if (variants.includes(n)) this.seenVariants.add(n);
-      }
+      if (TRACKED_ITEMS.includes(n)) this.seenVariants.add(n);
     }
   }
 
@@ -145,10 +156,13 @@ export class EconTracker {
     let nw = (p.gold ?? 0) + slot + stash + inTransit;
     if (h.aghanims_shard) nw += prices.aghanims_shard?.cost ?? C.aghsShardValue ?? 0;
     const buffs = h.permanent_buffs || {};
-    for (const [mod, api, key, variants] of CONSUMED_BUFFS) {
-      if (!(mod in buffs)) continue;
-      const id = variants.find(v => this.seenVariants.has(v)) ?? api;
-      nw += prices[id]?.cost ?? C[key] ?? 0;
+    for (const b of CONSUMED_BUFFS) {
+      const up = b.upgrade;
+      const upActive = up && (up.mods.some(m => m in buffs)
+                              || up.items.some(n => this.seenVariants.has(n)));
+      if (!b.mods.some(m => m in buffs) && !upActive) continue;
+      const id = upActive ? up.api : b.api;
+      nw += prices[id]?.cost ?? C[b.constKey] ?? 0;
     }
     return { networth: nw, gpm: p.gpm ?? 0, xpm: p.xpm ?? 0 };
   }

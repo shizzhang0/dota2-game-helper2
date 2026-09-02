@@ -140,11 +140,16 @@
 - **吞噬类 buff 一律计入**，不管是自己买的、肉山掉的，还是炼金术士送的（炼金可以把
   神杖直接送给队友）——吞下去就是永久属性，到手即归自己。这点和"队友让你代拿的物品"
   不同：那个随时能还回去，所以不计。permanent_buffs 里也确实没有 purchaser 字段。
-- **同名 buff 要按实际吞的那件取价**：神杖（`ultimate_scepter` 4200）和阿哈利姆祝福
-  （`ultimate_scepter_2` / `ultimate_scepter_roshan`，均 5800）共用
-  `modifier_item_ultimate_scepter_consumed` 这一个 buff 名。记录本局在物品栏里见过
-  哪件变体，按它取价；没见过（如中途启动）则按 4200 兜底。不区分会少算 1600。
-  另注意 `recipe_ultimate_scepter_2`（神杖卷轴）是 1600，`refresher_shard` 才是 1000。
+- **神杖系要分两档**：神杖 `ultimate_scepter` 4200，阿哈利姆祝福 `ultimate_scepter_2`
+  / `ultimate_scepter_roshan` 5800（= 神杖 4200 + 祝福卷轴 `recipe_ultimate_scepter_2` 1600）。
+  两者可能共用 `modifier_item_ultimate_scepter_consumed` 这一个 buff 名。
+  **走合成路线时神杖先被吞、卷轴再消耗，两件都不在物品栏里，光看 buff 分不出档次**，
+  所以判据是物品栏历史：本局见过祝福成品 / 肉山祝福 / **祝福卷轴** 任一，即按 5800 计；
+  都没见过（如中途启动）按 4200 兜底。若某版本给祝福单独的 buff 名
+  （`modifier_item_ultimate_scepter_2_consumed`），也直接认。
+  实测印证：dump 里 8975953942 局 clock=1025 买神杖、clock=1845 买卷轴、clock=1852 出 buff，
+  原先只算 4200，少了 1600。
+  另注意 `refresher_shard` 才是 1000，别和卷轴的 1600 混。
 - **在途物品**：物品被信使取走后、送达前，既不在装备栏也不在储藏处，GSI 完全看不见。
   实测每局造成 1~10 次凹陷，幅度 1000~5000，持续中位 6~29 秒。记住从储藏处消失
   又没进装备栏的价值，等送达或 90 秒超时再抹掉。
