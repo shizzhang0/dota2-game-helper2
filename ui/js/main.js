@@ -3,10 +3,10 @@ import { CachePool } from "./cachepool.js";
 import { MatchTracker } from "./match.js";
 import { loadConstants, computeTimers } from "./timers.js";
 import { EventTracker, loadTowers } from "./events.js";
-import { loadPrices, computeEcon } from "./networth.js";
+import { loadPrices, EconTracker } from "./networth.js";
 import { initPanel, render, enableDrag, applyLayout } from "./render.js";
 
-const pool = new CachePool(), match = new MatchTracker();
+const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker();
 let tracker = null, C = null, alt = false, last = null, editMode = false, forceShow = false;
 
 initPanel(document.getElementById("panel"));
@@ -38,7 +38,8 @@ connectSource(async (pkt) => {
   if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
   tracker.C = C;                       // 模式判定完成后热切常数
   tracker.update(pkt, st, info);
-  last = { st, info };
+  if (info.newMatch) econ.reset();
+  last = { st, info, econ: econ.update(st, prices, C, info.clock) };
 });
 
 onAltChange((d) => { alt = d; });
@@ -46,7 +47,7 @@ onAltChange((d) => { alt = d; });
 setInterval(() => {
   if (!last) return;
   const { st, info } = last;
-  const econ = computeEcon(st, prices, C || {});
+  const e = last.econ;
   render({
     visible: (alt || forceShow || editMode) && (info.inMatch || forceShow || editMode),
     editMode,
@@ -54,12 +55,12 @@ setInterval(() => {
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
     buybacks: tracker ? tracker.enemyBuybacks(info) : [],
     enemyBase: info.myTeam === 2 ? 5 : 0,
-    econ,
+    econ: e,
   });
   const hud = document.getElementById("hud");
   if (hud) hud.textContent =
     `${info.matchid} clock=${info.clock} ${info.mode} team=${info.myTeam} in=${info.inMatch}` +
-    ` nw=${econ.networth} gpm=${econ.gpm}`;
+    ` nw=${e.networth} gpm=${e.gpm}`;
 }, 250);
 
 // 开发快捷键：v 常显、e 编辑态（Tauri 下由全局热键控制编辑态）
