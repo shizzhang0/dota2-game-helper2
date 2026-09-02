@@ -108,15 +108,37 @@
 ## 五、净资产计算（参考 nocamles/dota2_amount_plugins，价格源改进）
 
 ```
-净资产 ≈ player.gold
-        + Σ 物品栏/背包/储藏处物品价格（items.slotN / stashN，价格表查询）
-        + 魔晶修正（hero.aghanims_shard 或 permanent_buffs.modifier_item_aghanims_shard → +1400）
-        + 神杖吞噬修正（permanent_buffs.modifier_item_ultimate_scepter_consumed → +4200）
+净资产 = player.gold
+       + Σ 装备栏/储藏处物品价格（slotN / stashN，消耗品按剩余充能折价）
+       + 在途物品（被信使取走、尚未送达的部分）
+       + 魔晶（hero.aghanims_shard）
+       + 吞噬类永久 buff：神杖 modifier_item_ultimate_scepter_consumed、
+         月之碎片 modifier_item_moon_shard_consumed
 ```
 
-- 中立物品（`neutralN`）按 0 计（不花钱）。
-- 价格表来自 OpenDota `constants/items`（Rust 侧启动拉取 + 本地缓存兜底），**不手工维护**，符合"常数外置、防版本漂移"原则。魔晶/神杖修正值也进常数表。
+- **传送槽 `teleport0` 整个排除**（2026-09-01 实测定案）。开局白送一张 TP，
+  **被敌方击杀后还会再送一张**——实测一局 15 次阵亡对应 6 次充能 +1，每次都发生在
+  `hero.alive === false` 的时刻。三局数据里 TP 只出现在 `teleport0`（5811 次），
+  从不落进普通格子或储藏处，所以按槽位排除是干净的。
+  代价：自己买的 TP 也不计入，最多少算 300~400 金（传送槽最多叠 4 张）。
+  参考实现 nocamles 的槽位表同样不含传送槽。
+- **消耗品按剩余充能折价**：`价格 × 当前充能 ÷ 满充能`。判据是 OpenDota 的
+  `qual == "consumable"`——瓶子有充能但不是消耗品，空瓶仍值全价 675。
+- 中立物品（`neutralN` / `preserved_neutralN`）不计：OpenDota 表里价格本来就是 0。
+- **在途物品**：物品被信使取走后、送达前，既不在装备栏也不在储藏处，GSI 完全看不见。
+  实测每局造成 1~10 次凹陷，幅度 1000~5000，持续中位 6~29 秒。记住从储藏处消失
+  又没进装备栏的价值，等送达或 90 秒超时再抹掉。
+  已知残留：远程购买且直接上信使（从未在储藏处出现）的仍会短暂偏低；不去覆盖它，
+  因为要靠"金钱少了但没看到货"推断，会把买活和阵亡掉钱误判成在途，虚高 90 秒更糟。
+- **号角前不做在途推断**：`clock_time` 在选人/策略阶段不单调（先倒计时一轮，
+  再重置到 -90 数到 0），拿它算超时会攒出幽灵价值。
+- 价格表来自 OpenDota `constants/items`（Rust 侧启动拉取 + 本地缓存 + 内嵌快照三层兜底），
+  只保留 cost/qual/charges 三个字段（362KB → 14KB）。神杖/魔晶/月碎的价格优先查表，
+  随版本自动更新，查不到才退回常数表。
 - GPM/XPM 直接用 `player.gpm` / `player.xpm` 现成字段。
+- **items 段是全量推送**：实测对局中每包都含完整 23 个槽位，从不缺席或为空，
+  所以缓存池整段替换是安全的（参考实现按槽位逐个合并，属多余防御）。
+  但号角前会推空 `items`，缓存池需拒绝用空对象覆盖已有数据。
 
 ---
 
