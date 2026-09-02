@@ -114,6 +114,27 @@ export class EconTracker {
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
+    this.prevTp = null;             // 传送槽充能数
+    this.boughtTp = 0;              // 其中自己花钱买的张数
+  }
+
+  /**
+   * 传送卷轴：开局白送一张，**阵亡的同一秒**还会再送一张（实测三局 11 次阵亡赠送
+   * 全部发生在 alive=false 的那一秒，与复活时刻无关），这些不该计入资产。
+   * 但自己买的一张确实花了 100，要算。判据就是充能增加时人是活的。
+   * 三局实测：15 次充能增加中 2 次开局、11 次阵亡赠送、2 次购买。
+   */
+  noteTp(items, hero, clock) {
+    const tp = (items || {}).teleport0;
+    const ch = tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
+    if (this.prevTp !== null && clock !== null && clock >= 0) {
+      const d = ch - this.prevTp;
+      if (d > 0 && hero && hero.alive === true) this.boughtTp += d;
+      // 用掉时优先冲抵"已买"：买张 TP 立刻用掉是常见操作，而手里剩的那张
+      // 更可能是白送的（实测赠送 11 张 vs 购买 2 张）。宁可少算，不要虚高。
+      if (d < 0) this.boughtTp = Math.max(0, Math.min(this.boughtTp + d, ch));
+    }
+    this.prevTp = ch;
   }
 
   /** 记下见过哪件升级物品——神杖和祝福可能共用 buff 名，靠这个区分 4200 还是 5800 */
@@ -128,6 +149,7 @@ export class EconTracker {
   update(state, prices, C, clock) {
     const { slot, stash } = itemValues(state.items, prices, state.player);
     this.noteVariants(state.items);
+    this.noteTp(state.items, state.hero, clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
     // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
@@ -158,7 +180,8 @@ export class EconTracker {
   total(state, prices, C, slot, stash) {
     const p = state.player || {}, h = state.hero || {};
     const inTransit = this.transit.reduce((a, t) => a + t.v, 0);
-    let nw = (p.gold ?? 0) + slot + stash + inTransit;
+    let nw = (p.gold ?? 0) + slot + stash + inTransit
+           + this.boughtTp * (prices.tpscroll?.cost ?? 100);
     if (h.aghanims_shard) nw += prices.aghanims_shard?.cost ?? C.aghsShardValue ?? 0;
     const buffs = h.permanent_buffs || {};
     for (const b of CONSUMED_BUFFS) {
