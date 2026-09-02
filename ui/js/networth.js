@@ -64,11 +64,20 @@ function itemValues(items, prices, player) {
   return { slot, stash };
 }
 
-/** 吃掉后只留永久 buff、物品栏里看不到的东西。价格优先查表（随版本自动更新），
- *  查不到再退回常数表。 */
+/**
+ * 吃掉后只留永久 buff、物品栏里看不到的东西。价格优先查表（随版本自动更新），
+ * 查不到再退回常数表。第四项是"能证明这东西是自己买的"的物品名。
+ *
+ * 为什么要证明：炼金术士可以把神杖直接送给队友，受赠方一分钱没花却同样拿到
+ * modifier_item_ultimate_scepter_consumed，而 buff 里没有 purchaser 字段。
+ * 但自己买的神杖会先在物品栏里待着（实测一局待了 827 秒才吞），炼金送的则
+ * 从不进你的物品栏——以此区分。
+ */
 const CONSUMED_BUFFS = [
-  ["modifier_item_ultimate_scepter_consumed", "ultimate_scepter", "aghsScepterValue"],
-  ["modifier_item_moon_shard_consumed",       "moon_shard",       "moonShardValue"],
+  ["modifier_item_ultimate_scepter_consumed", "ultimate_scepter", "aghsScepterValue",
+   ["ultimate_scepter", "ultimate_scepter_2"]],
+  ["modifier_item_moon_shard_consumed", "moon_shard", "moonShardValue",
+   ["moon_shard"]],
 ];
 
 /**
@@ -82,10 +91,32 @@ const CONSUMED_BUFFS = [
  */
 export class EconTracker {
   constructor() { this.reset(); }
-  reset() { this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null; }
+  reset() {
+    this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
+    this.ownBought = new Set();     // 见过、且 purchaser 是自己的吞噬类物品
+    this.buffAtJoin = null;         // 首次见到本局时就已存在的 buff（多半是中途启动）
+  }
+
+  /** 记录"这件吞噬类物品确实是自己买的" */
+  noteOwned(items, mine) {
+    if (mine === null) return;
+    for (const it of Object.values(items || {})) {
+      if (!it || typeof it !== "object" || it.purchaser !== mine) continue;
+      const n = (it.name || "").replace(/^item_/, "");
+      for (const [, , , evidence] of CONSUMED_BUFFS) {
+        if (evidence.includes(n)) this.ownBought.add(n);
+      }
+    }
+  }
 
   update(state, prices, C, clock) {
     const { slot, stash } = itemValues(state.items, prices, state.player);
+    const buffs = state.hero?.permanent_buffs || {};
+    if (this.buffAtJoin === null) {
+      // 程序中途启动时 buff 可能已经在了，无从判断来源，按常见情况（自己买的）算
+      this.buffAtJoin = new Set(Object.keys(buffs));
+    }
+    this.noteOwned(state.items, mySlot(state.player));
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
     // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
@@ -119,8 +150,11 @@ export class EconTracker {
     let nw = (p.gold ?? 0) + slot + stash + inTransit;
     if (h.aghanims_shard) nw += prices.aghanims_shard?.cost ?? C.aghsShardValue ?? 0;
     const buffs = h.permanent_buffs || {};
-    for (const [mod, api, key] of CONSUMED_BUFFS) {
-      if (mod in buffs) nw += prices[api]?.cost ?? C[key] ?? 0;
+    for (const [mod, api, key, evidence] of CONSUMED_BUFFS) {
+      if (!(mod in buffs)) continue;
+      const bought = evidence.some(n => this.ownBought.has(n));
+      const joinedWithIt = this.buffAtJoin?.has(mod);
+      if (bought || joinedWithIt) nw += prices[api]?.cost ?? C[key] ?? 0;
     }
     return { networth: nw, gpm: p.gpm ?? 0, xpm: p.xpm ?? 0 };
   }
