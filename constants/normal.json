@@ -13,5 +13,6 @@
   "glyphCooldown": 300,
   "buybackCooldown": 480,
   "aghsShardValue": 1400,
-  "aghsScepterValue": 4200
+  "aghsScepterValue": 4200,
+  "moonShardValue": 4000
 }
