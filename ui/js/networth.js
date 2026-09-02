@@ -116,6 +116,34 @@ export class EconTracker {
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.prevTp = null;             // 传送槽充能数
     this.boughtTp = 0;              // 其中自己花钱买的张数
+    this.activeBuffs = new Set();   // 已经生效的吞噬类 buff
+  }
+
+  /** 某个吞噬 buff 当前该按多少钱计 */
+  buffPrice(b, prices, C, buffs) {
+    const up = b.upgrade;
+    const byUpMod = !!up && up.mods.some(m => m in buffs);
+    const upgraded = byUpMod || (!!up && up.items.some(n => this.seenVariants.has(n)));
+    return prices[upgraded ? up.api : b.api]?.cost ?? C[b.constKey] ?? 0;
+  }
+
+  /**
+   * buff 刚出现的那一刻，把对应价值从"在途"账上冲销。
+   * 因为物品被合成/吞噬时会从物品栏凭空消失，长得和"被信使取走"一模一样，
+   * 不冲销的话这部分价值会既算进 buff、又挂在在途账上，重复计到超时为止。
+   */
+  noteBuffs(hero, prices, C) {
+    const buffs = (hero || {}).permanent_buffs || {};
+    for (const b of CONSUMED_BUFFS) {
+      const active = b.mods.some(m => m in buffs)
+                     || (!!b.upgrade && b.upgrade.mods.some(m => m in buffs));
+      if (active && !this.activeBuffs.has(b.api)) {
+        this.activeBuffs.add(b.api);
+        this.deliver(this.buffPrice(b, prices, C, buffs));
+      } else if (!active) {
+        this.activeBuffs.delete(b.api);
+      }
+    }
   }
 
   /**
@@ -174,6 +202,7 @@ export class EconTracker {
     }
     this.prevSlot = slot;
     this.prevStash = stash;
+    this.noteBuffs(state.hero, prices, C);
     return this.total(state, prices, C, slot, stash);
   }
 
@@ -186,11 +215,12 @@ export class EconTracker {
     const buffs = h.permanent_buffs || {};
     for (const b of CONSUMED_BUFFS) {
       const up = b.upgrade;
-      const upActive = up && (up.mods.some(m => m in buffs)
-                              || up.items.some(n => this.seenVariants.has(n)));
-      if (!b.mods.some(m => m in buffs) && !upActive) continue;
-      const id = upActive ? up.api : b.api;
-      nw += prices[id]?.cost ?? C[b.constKey] ?? 0;
+      // 门槛只看 buff 是否真的存在。物品栏历史仅用于决定价格档次——
+      // 若拿它当"buff 已生效"的依据，卷轴还在包里时会物品价和 buff 价重复计。
+      const byMod = b.mods.some(m => m in buffs);
+      const byUpMod = !!up && up.mods.some(m => m in buffs);
+      if (!byMod && !byUpMod) continue;
+      nw += this.buffPrice(b, prices, C, buffs);
     }
     return { networth: nw, gpm: p.gpm ?? 0, xpm: p.xpm ?? 0 };
   }
