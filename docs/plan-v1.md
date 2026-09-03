@@ -2,7 +2,7 @@
 
 > 逐任务执行，步骤用 checkbox（`- [ ]`）跟踪进度。
 
-**Goal:** 按设计文档 `docs/design.md` 实现 Tauri 2 桌面覆盖层：五项时钟倒计时 + 敌方塔防 + 敌方买活 + 经济面板，纯 Alt 查询交互。
+**Goal:** 按设计文档 `docs/design-v1.md` 实现 Tauri 2 桌面覆盖层：五项时钟倒计时 + 敌方塔防 + 敌方买活 + 经济面板，纯 Alt 查询交互。
 
 **Architecture:** 前端 vanilla JS + SVG，先用回放服务器（重放真实 dump）在浏览器里开发全部逻辑与样式；Rust/Tauri 壳（GSI 监听、Alt 轮询、窗口/热键/配置）最后接入。数据流：GSI 包 → 缓存池合并 → 对局管理 → 倒计时引擎/事件状态机/经济计算 → 渲染。
 
@@ -917,7 +917,7 @@ pub fn spawn(app: AppHandle) {
 ### Task 12: 进游戏联调与校准（人工，用户参与）
 
 **Files:**
-- Modify: `constants/turbo.json`（按实测）, `docs/design.md`（回填实测结论）
+- Modify: `constants/turbo.json`（按实测）, `docs/design-v1.md`（回填实测结论）
 
 - [ ] **Step 1**: Dota 启动项确认 `-gamestateintegration`；游戏内切**无边框窗口**。
 - [ ] **Step 2**: 打一局快速模式（人机即可），核对清单：

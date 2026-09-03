@@ -6,7 +6,8 @@
 > ✅ 功能已全部实现，并进游戏实测校准过：快速模式各符刷新间隔与正常模式一致；
 > 净资产口径对照回放的官方"财产总和"逐条验证（开局 600、储藏处计入、
 > 信使在途计入、中立物品不计）。
-> 设计文档见 [docs/design.md](docs/design.md)，实施计划见 [docs/plan.md](docs/plan.md)。
+> v1 设计见 [docs/design-v1.md](docs/design-v1.md)、实施计划见 [docs/plan-v1.md](docs/plan-v1.md)；
+> v2 设计见 [docs/design-v2.md](docs/design-v2.md)（眼位小地图、托盘与设置、日志与录制，尚未实施）。
 
 ## 显示什么
 
