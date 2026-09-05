@@ -34,8 +34,8 @@ ui/
 │  ├─ editor.js         # 新增（Task 9）：编辑态设置卡片
 │  ├─ render.js         # 修改：接入小地图、显示项过滤、缩放与透明度
 │  └─ main.js           # 修改：装配、前端错误转发、编辑态出入口
-├─ index.html / dev.html  # 修改（Task 9）：加 #backdrop 与 #editor
-└─ css/overlay.css      # 修改（Task 9）：backdrop 与卡片样式
+├─ index.html / dev.html  # 修改（Task 9）：加 #editor
+└─ css/overlay.css      # 修改（Task 9）：设置卡片样式
 
   ~~ui/settings.html~~ / ~~ui/js/settings-page.js~~ / ~~ui/css/settings.css~~
                         # Task 4 建，Task 9 删
@@ -1226,6 +1226,9 @@ Expected：50 行（若取消勾选前又灌了包则更多）。
 更要命的是面板平时藏着，调缩放/透明度/显示项全是盲调。
 详见 [design-v2.md §六.五](design-v2.md)。
 
+> **后续修正**：本任务原设计的第四条出口「点空白处退出」（`#backdrop`）上手后移除——
+> 摆位时易误触，且真被困住时能救场的是系统级热键而非点击。下述步骤已反映移除后的形态。
+
 **Files:**
 - Create: `ui/js/editor.js`
 - Modify: `ui/index.html`, `ui/dev.html`, `ui/css/overlay.css`, `ui/js/render.js`, `ui/js/main.js`
@@ -1245,7 +1248,6 @@ Expected：50 行（若取消勾选前又灌了包则更多）。
 `ui/index.html` 与 `ui/dev.html` 里，`<div id="panel"></div>` 前后各加一个兄弟节点：
 
 ```html
-<div id="backdrop"></div>
 <div id="panel"></div>
 <div id="editor" hidden></div>
 ```
@@ -1300,7 +1302,7 @@ export async function initEditor(cardEl, panelEl, onDone) {
       <button id="edDir" type="button">打开常数表目录</button>
     </details>
     <div class="ed-foot">
-      <span class="ed-hint">拖动面板摆放位置 · ESC 或点空白处退出</span>
+      <span class="ed-hint">拖动面板摆放位置 · 或按 ESC</span>
       <button id="edDone" type="button">完成</button>
     </div>`;
 
@@ -1367,17 +1369,15 @@ export function setEditorOpen(on) {
 删掉文件末尾 `.edit-hint` 相关全部规则，改为：
 
 ```css
-/* ── 编辑态：backdrop + 设置卡片 ─────────────────────── */
-
-/* 空白处点击 = 退出。锁定态不吃鼠标，编辑态才接管 */
-#backdrop { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
-body.editing #backdrop { pointer-events: auto; }
-
-.panel  { z-index: 2; }
-.editor { z-index: 3; }
+/* ── 编辑态：设置卡片 ───────────────────────────────── */
 
 .editor {
   position: fixed;
+  z-index: 2;                    /* 压在面板之上，拖动时不被面板边缘盖住 */
+  /* 下拉弹出层由系统绘制，不声明配色方案就是白底，而 option 继承卡片的浅色文字
+     → 白字白底看不见。只能限定在卡片内：给 :root 定配色方案会连带
+     画上背景底色，覆盖层就不透明了。 */
+  color-scheme: dark;
   width: 300px;
   padding: 12px 14px;
   background: var(--bg-lit);
@@ -1402,6 +1402,7 @@ details[open] > summary { margin-bottom: 7px; }
   min-width: 44px; text-align: right; color: var(--dim);
   font-variant-numeric: tabular-nums;
 }
+.editor option { background: #0E1319; color: var(--fg); }
 .editor select, .editor button {
   background: rgba(255, 255, 255, .08); color: var(--fg);
   border: 1px solid var(--hair); border-radius: 6px;
@@ -1432,15 +1433,13 @@ details[open] > summary { margin-bottom: 7px; }
 ```js
 const panelEl = document.getElementById("panel");
 await initEditor(document.getElementById("editor"), panelEl, exitEdit);
-document.getElementById("backdrop").addEventListener("click", exitEdit);
 ```
 
-- 编辑态状态变化时同步三处（`body.editing` 类、卡片、Rust）：
+- 编辑态状态变化时同步卡片与 Rust：
 
 ```js
 function applyEdit(on) {
   editMode = on;
-  document.body.classList.toggle("editing", on);
   setEditorOpen(on);
 }
 if (isTauri()) window.__TAURI__.event.listen("edit", e => applyEdit(e.payload === true));
@@ -1514,8 +1513,7 @@ python tools/replay.py
 - d. 把面板拖到屏幕底部 → 卡片翻到面板**上方**且完整可见
 - e. 点「完成」→ `#panel` 的 class 由 `panel on edit` 变回 `panel`，卡片隐藏
 - f. 再进编辑态，按 ESC → 同样退出
-- g. 再进编辑态，点面板与卡片以外的空白处 → 同样退出
-- h. 拖动面板后在空白处松手 → **不应**退出（`setPointerCapture` 把 `pointerup` 收回面板了）
+- g. 再进编辑态，点面板与卡片以外的空白处 → **不退出**（曾有此行为，因摆位时易误触已移除）
 
 - [ ] **Step 10: 正式版验证**
 
@@ -1528,7 +1526,7 @@ cd src-tauri && cargo build --release 2>&1 | grep -E "^error|Finished"
 - a. 托盘右键只有「编辑面板」「退出」两项
 - b. 左键单击托盘图标 = 进/出编辑态
 - c. `Ctrl+Alt+F10` 与托盘交替切换，状态始终正确翻转，**不卡死**
-- d. 四条退出路径（完成 / ESC / 空白处 / 热键）都能让桌面恢复可点
+- d. 三条退出路径（完成 / ESC / 热键）都能让桌面恢复可点
 - e. 日志里 `[edit] 编辑态 = true` 与 `= false` **成对出现**
   （只有 true 没有 false 就是没真正退出，桌面会一直被覆盖层捂着）
 - f. 改设置后 `%APPDATA%\dev.dota2helper2.app\settings.json` 内容随之更新

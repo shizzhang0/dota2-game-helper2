@@ -34,7 +34,7 @@ export async function initEditor(cardEl, panelEl, onDone) {
       <button id="edDir" type="button">打开常数表目录</button>
     </details>
     <div class="ed-foot">
-      <span class="ed-hint">拖动面板摆放位置 · ESC 或点空白处退出</span>
+      <span class="ed-hint">拖动面板摆放位置 · 或按 ESC</span>
       <button id="edDone" type="button">完成</button>
     </div>`;
 

@@ -25,7 +25,7 @@ html, body {
   margin: 0;
   background: transparent;
   /* 编辑态会让整个窗口开始接收鼠标；若这里不排除，一张看不见的全屏膜会盖住桌面，
-     连托盘图标都点不到，只能靠热键逃出来。只让 .panel.edit 收点击。 */
+     连托盘图标都点不到，只能靠热键逃出来。只让面板与设置卡片收点击。 */
   pointer-events: none;
   overflow: hidden;
   font-family: Bahnschrift, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -172,17 +172,15 @@ html, body {
 .wm-t { fill: #EDF1F6; font-size: 5px; text-anchor: middle;
         paint-order: stroke; stroke: #000; stroke-width: 1.4; }
 
-/* ── 编辑态：backdrop + 设置卡片 ─────────────────────── */
-
-/* 空白处点击 = 退出。锁定态不吃鼠标，编辑态才接管 */
-#backdrop { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
-body.editing #backdrop { pointer-events: auto; }
-
-.panel  { z-index: 2; }
-.editor { z-index: 3; }
+/* ── 编辑态：设置卡片 ───────────────────────────────── */
 
 .editor {
   position: fixed;
+  z-index: 2;                    /* 压在面板之上，拖动时不被面板边缘盖住 */
+  /* 下拉弹出层由系统绘制，不声明配色方案就是白底，而 option 继承卡片的浅色文字
+     → 白字白底看不见。只能限定在卡片内：给 :root 定配色方案会连带
+     画上背景底色，覆盖层就不透明了。 */
+  color-scheme: dark;
   width: 300px;
   padding: 12px 14px;
   background: var(--bg-lit);
@@ -207,6 +205,7 @@ details[open] > summary { margin-bottom: 7px; }
   min-width: 44px; text-align: right; color: var(--dim);
   font-variant-numeric: tabular-nums;
 }
+.editor option { background: #0E1319; color: var(--fg); }
 .editor select, .editor button {
   background: rgba(255, 255, 255, .08); color: var(--fg);
   border: 1px solid var(--hair); border-radius: 6px;
