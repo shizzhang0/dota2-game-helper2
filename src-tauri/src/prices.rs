@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
+use crate::log::Level;
+use crate::logf;
 
 const URL: &str = "https://api.opendota.com/api/constants/items";
 /// 兜底快照：断网且无磁盘缓存时用它，保证净资产永远有数
@@ -35,7 +37,7 @@ pub fn spawn_refresh(app: tauri::AppHandle) {
         {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("[prices] 客户端构建失败: {e}");
+                logf!(Level::Error, "[prices] 客户端构建失败: {e}");
                 return;
             }
         };
@@ -46,14 +48,14 @@ pub fn spawn_refresh(app: tauri::AppHandle) {
         let v = match value {
             Ok(v) => v,
             Err(e) => {
-                println!("[prices] 拉取失败（{e}），沿用缓存或内嵌快照");
+                logf!(Level::Info, "[prices] 拉取失败（{e}），沿用缓存或内嵌快照");
                 return;
             }
         };
         let s = slim(&v);
         // 响应异常时不要用坏数据覆盖好缓存
         if s.as_object().map_or(0, |o| o.len()) < 100 {
-            eprintln!("[prices] 返回条目过少，忽略");
+            logf!(Level::Error, "[prices] 返回条目过少，忽略");
             return;
         }
         if let Some(p) = disk_path(&app) {
@@ -62,7 +64,7 @@ pub fn spawn_refresh(app: tauri::AppHandle) {
             }
             let _ = std::fs::write(&p, s.to_string());
         }
-        println!("[prices] 已从 OpenDota 更新 {} 条", s.as_object().map_or(0, |o| o.len()));
+        logf!(Level::Info, "[prices] 已从 OpenDota 更新 {} 条", s.as_object().map_or(0, |o| o.len()));
         *CACHE.lock().unwrap() = Some(s);
     });
 }

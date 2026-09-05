@@ -2,6 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 use winreg::enums::HKEY_CURRENT_USER;
 use winreg::RegKey;
+use crate::log::Level;
+use crate::logf;
 
 const CFG_NAME: &str = "gamestate_integration_helper2.cfg";
 const CFG: &str = r#""dota2-game-helper2"
@@ -54,7 +56,7 @@ fn libraries(steam: &PathBuf) -> Vec<PathBuf> {
 /// （用户可以手动放，程序其余部分照常工作）。
 pub fn ensure_cfg() {
     let Some(steam) = steam_path() else {
-        eprintln!("[gsicfg] 注册表里没找到 Steam，请手动放置 {CFG_NAME}");
+        logf!(Level::Error, "[gsicfg] 注册表里没找到 Steam，请手动放置 {CFG_NAME}");
         return;
     };
     for lib in libraries(&steam) {
@@ -70,19 +72,19 @@ pub fn ensure_cfg() {
         }
         let dir = cfg_dir.join("gamestate_integration");
         if let Err(e) = fs::create_dir_all(&dir) {
-            eprintln!("[gsicfg] 建目录失败: {e}");
+            logf!(Level::Error, "[gsicfg] 建目录失败: {e}");
             return;
         }
         let file = dir.join(CFG_NAME);
         if fs::read_to_string(&file).map(|s| s == CFG).unwrap_or(false) {
-            println!("[gsicfg] 配置已是最新: {}", file.display());
+            logf!(Level::Info, "[gsicfg] 配置已是最新: {}", file.display());
             return;
         }
         match fs::write(&file, CFG) {
-            Ok(()) => println!("[gsicfg] 已写入 {}", file.display()),
-            Err(e) => eprintln!("[gsicfg] 写入失败: {e}"),
+            Ok(()) => logf!(Level::Info, "[gsicfg] 已写入 {}", file.display()),
+            Err(e) => logf!(Level::Error, "[gsicfg] 写入失败: {e}"),
         }
         return;
     }
-    eprintln!("[gsicfg] 未找到 Dota 2 安装目录，请手动放置 {CFG_NAME}");
+    logf!(Level::Error, "[gsicfg] 未找到 Dota 2 安装目录，请手动放置 {CFG_NAME}");
 }

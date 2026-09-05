@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 use tauri::Manager;
+use crate::log::Level;
+use crate::logf;
 
 // 编译期内嵌一份默认值，仅用于首次播种和读取失败时兜底
 const NORMAL: &str = include_str!("../../constants/normal.json");
@@ -25,7 +27,7 @@ fn dir(app: &tauri::AppHandle) -> Option<PathBuf> {
 pub fn seed(app: &tauri::AppHandle) {
     let Some(d) = dir(app) else { return };
     if let Err(e) = std::fs::create_dir_all(&d) {
-        eprintln!("[constants] 建目录失败: {e}");
+        logf!(Level::Error, "[constants] 建目录失败: {e}");
         return;
     }
     for name in NAMES {
@@ -34,7 +36,7 @@ pub fn seed(app: &tauri::AppHandle) {
             let _ = std::fs::write(&p, embedded(name));
         }
     }
-    println!("[constants] 常数表目录：{}（可直接编辑，重启生效）", d.display());
+    logf!(Level::Info, "[constants] 常数表目录：{}（可直接编辑，重启生效）", d.display());
 }
 
 #[tauri::command]
@@ -45,7 +47,7 @@ pub fn get_constants(app: tauri::AppHandle, name: String) -> serde_json::Value {
         if let Ok(s) = std::fs::read_to_string(d.join(format!("{name}.json"))) {
             match serde_json::from_str::<serde_json::Value>(&s) {
                 Ok(v) => return v,
-                Err(e) => eprintln!("[constants] {name}.json 解析失败（用内置默认值）: {e}"),
+                Err(e) => logf!(Level::Error, "[constants] {name}.json 解析失败（用内置默认值）: {e}"),
             }
         }
     }

@@ -24,6 +24,9 @@
 html, body {
   margin: 0;
   background: transparent;
+  /* 编辑态会让整个窗口开始接收鼠标；若这里不排除，一张看不见的全屏膜会盖住桌面，
+     连托盘图标都点不到，只能靠热键逃出来。只让 .panel.edit 收点击。 */
+  pointer-events: none;
   overflow: hidden;
   font-family: Bahnschrift, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
@@ -38,7 +41,8 @@ html, body {
   position: fixed;
   left: 50%;
   top: 14px;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--panel-scale, 1));
+  transform-origin: top center;
   display: flex;
   align-items: stretch;
   gap: 10px;
@@ -52,7 +56,7 @@ html, body {
   transition: opacity .12s linear, visibility 0s linear .12s;
 }
 .panel.on {
-  opacity: 1;
+  opacity: var(--panel-opacity, 1);
   visibility: visible;
   transition: opacity .12s linear;
 }
@@ -64,6 +68,10 @@ html, body {
   opacity: 1;
   visibility: visible;
 }
+
+/* .cell 的 display:flex 会盖过浏览器默认的 [hidden]{display:none}，
+   隐藏显示项时必须显式声明，否则设置里关掉的格子照样显示 */
+[hidden] { display: none !important; }
 
 .grp { display: flex; align-items: flex-start; gap: 6px; }
 .sep { width: 1px; background: var(--hair); align-self: stretch; }
@@ -147,3 +155,72 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .panel, .ring-fg { transition: none; }
 }
+
+/* ── 眼位小地图 ─────────────────────────────────────── */
+.cell.wardmap { width: 116px; }
+.wardmap { width: 108px; height: 108px; display: block; }
+.wm-bg { fill: rgba(0, 0, 0, .35); }
+.wm-tower { fill: #9AA6B4; opacity: .55; }
+.wm-tower[data-team="2"] { fill: #66BB6A; }
+.wm-tower[data-team="3"] { fill: #E57373; }
+.wm-tower.dead { fill: #5A6470; opacity: .3; }
+.wm-ward { stroke: rgba(0, 0, 0, .85); stroke-width: .6; }
+.wm-ward.own { fill: #65D9F7; }
+.wm-ward.own.soon { fill: #FFC24B; }
+.wm-ward.enemy { fill: #AA3333; }
+.wm-ward.killed { fill: #FF4D4D; }
+.wm-t { fill: #EDF1F6; font-size: 5px; text-anchor: middle;
+        paint-order: stroke; stroke: #000; stroke-width: 1.4; }
+
+/* ── 编辑态：backdrop + 设置卡片 ─────────────────────── */
+
+/* 空白处点击 = 退出。锁定态不吃鼠标，编辑态才接管 */
+#backdrop { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+body.editing #backdrop { pointer-events: auto; }
+
+.panel  { z-index: 2; }
+.editor { z-index: 3; }
+
+.editor {
+  position: fixed;
+  width: 300px;
+  padding: 12px 14px;
+  background: var(--bg-lit);
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
+  pointer-events: auto;
+  font-size: 13px;
+}
+.ed-sec { margin-bottom: 12px; }
+.ed-sec h3, .ed-sec summary {
+  font-size: 11px; color: var(--dim); font-weight: 600;
+  margin: 0 0 7px; cursor: default;
+}
+.ed-sec summary { cursor: pointer; margin-bottom: 0; }
+details[open] > summary { margin-bottom: 7px; }
+.ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
+.ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
+.ed-row { margin-bottom: 7px; }
+.editor input[type="range"] { flex: 1; min-width: 0; }
+.editor output {
+  min-width: 44px; text-align: right; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.editor select, .editor button {
+  background: rgba(255, 255, 255, .08); color: var(--fg);
+  border: 1px solid var(--hair); border-radius: 6px;
+  padding: 3px 10px; font: inherit;
+}
+.editor button { cursor: pointer; }
+.editor button:hover { background: rgba(255, 255, 255, .14); }
+.ed-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 4px;
+}
+.ed-hint { color: var(--dim); font-size: 11px; }
+.ed-foot button {
+  background: var(--k-chance); color: #06202B; border: 0;
+  font-weight: 600; padding: 4px 16px;
+}
+.ed-foot button:hover { background: var(--k-chance); filter: brightness(1.12); }

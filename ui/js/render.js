@@ -1,3 +1,5 @@
+import { initWardMap, renderWardMap } from "./wardmap.js";
+
 // Alt 面板渲染。DOM 只在 initPanel 建一次，render 仅改文本/类名/CSS 变量，避免每帧重建。
 const SLOT_COLORS = ["#3375FF", "#66FFBF", "#BF00BF", "#F3F00B", "#FF6B00",
                      "#FE86C2", "#A1B447", "#65D9F7", "#008321", "#A46900"];
@@ -18,7 +20,7 @@ function ring(id) {
   </div>`;
 }
 
-export function initPanel(el) {
+export function initPanel(el, towers) {
   root = el;
   root.className = "panel";
   root.removeAttribute("hidden");
@@ -35,12 +37,14 @@ export function initPanel(el) {
     </div>
     <div class="sep"></div>
     <div class="grp">
-      <div class="cell wide econ">
+      <div class="cell wide econ" data-cell="econ">
         <div class="nw">--</div>
         <div class="rate"><span class="gpm">--</span><span class="xpm">--</span></div>
         <div class="lab">净资产</div>
       </div>
-    </div>`;
+    </div>
+    <div class="sep" data-sep="wardmap"></div>
+    <div class="grp"><div class="cell wide wardmap" data-cell="wardmap"></div></div>`;
 
   els = { cells: {}, dots: [...root.querySelectorAll(".dot")].map(d => ({
             root: d, span: d.querySelector("span") })),
@@ -51,6 +55,7 @@ export function initPanel(el) {
     els.cells[c.dataset.cell] = { root: c, num: c.querySelector(".num"),
       lab: c.querySelector(".lab"), fg: c.querySelector(".ring-fg") };
   }
+  initWardMap(root.querySelector('[data-cell="wardmap"]'), towers);
   prev = {};
 }
 
@@ -71,6 +76,20 @@ export function render(m) {
   if (!root) return;
   root.classList.toggle("on", !!m.visible);
   root.classList.toggle("edit", !!m.editMode);
+
+  // 缩放与整体透明度都走合成器，不触发重排
+  const cfg = m.settings || {};
+  const show = cfg.show || {};
+  root.style.setProperty("--panel-scale", cfg.scale ?? 1);
+  root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
+  for (const [id, cell] of Object.entries(els.cells)) {
+    cell.root.hidden = show[id] === false;
+  }
+  const wmOff = show.wardmap === false;
+  for (const sep of root.querySelectorAll(".sep")) {
+    const grp = sep.nextElementSibling;
+    sep.hidden = !grp || ![...grp.querySelectorAll(".cell")].some(c => !c.hidden);
+  }
 
   for (const t of m.timers || []) {
     const c = els.cells[t.id];
@@ -120,6 +139,8 @@ export function render(m) {
   set(els.nw, "e.nw", e.networth.toLocaleString("en-US"));
   set(els.gpm, "e.gpm", `${e.gpm} GPM`);
   set(els.xpm, "e.xpm", `${e.xpm} XPM`);
+
+  if (!wmOff) renderWardMap(m.wardmap || { wards: null, dead: [] });
 }
 
 // 编辑态拖拽：只改 left/top，松手回调保存
@@ -135,7 +156,7 @@ export function enableDrag(onDrop) {
     if (!dragging) return;
     root.style.left = `${ox + ev.clientX - sx}px`;
     root.style.top = `${oy + ev.clientY - sy}px`;
-    root.style.transform = "none";
+    root.style.transform = "scale(var(--panel-scale, 1))";   // 只去掉居中，保留缩放
   });
   root.addEventListener("pointerup", (ev) => {
     if (!dragging) return;
@@ -149,5 +170,5 @@ export function applyLayout(pos) {
   if (!root || !pos || typeof pos.x !== "number") return;
   root.style.left = `${pos.x}px`;
   root.style.top = `${pos.y}px`;
-  root.style.transform = "none";
+  root.style.transform = "scale(var(--panel-scale, 1))";     // 同上
 }

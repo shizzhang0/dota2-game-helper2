@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """回放服务器：静态服务 ui/ 与 constants/，SSE 重放 dump。用法：python tools/replay.py"""
-import json, time, mimetypes
+import gzip, json, os, time, mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -8,6 +8,18 @@ from urllib.parse import urlparse, parse_qs
 ROOT = Path(__file__).resolve().parent.parent
 DUMP = ROOT.parent / "dota2_gsi_dump" / "dump"
 PORT = 8000
+
+
+def _tolerant(fh):
+    """逐行读取，遇到 gzip 截断就正常收尾而不是抛异常。"""
+    while True:
+        try:
+            line = fh.readline()
+        except (EOFError, OSError):
+            return
+        if not line:
+            return
+        yield line
 
 
 class H(BaseHTTPRequestHandler):
@@ -34,15 +46,23 @@ class H(BaseHTTPRequestHandler):
         speed = float(q.get("speed", ["8"])[0])
         path = DUMP / name
         if not path.is_file():
-            self.send_error(404, f"no dump {name}"); return
+            # 也在程序自己录的目录里找
+            alt = Path(os.environ.get("APPDATA", "")) / "dev.dota2helper2.app" / "records" / name
+            if alt.is_file():
+                path = alt
+            else:
+                self.send_error(404, f"no dump {name}"); return
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         prev_ts = None
         try:
-            with open(path, encoding="utf-8") as fh:
-                for line in fh:
+            opener = gzip.open if path.suffix == ".gz" else open
+            with opener(path, "rt", encoding="utf-8") as fh:
+                # 被强杀的录制文件没有 gzip 结尾标记，读到末尾会抛 EOFError，
+                # 但此前 flush 过的内容都是好的，照读不误
+                for line in _tolerant(fh):
                     line = line.strip()
                     if not line: continue
                     ts = None

@@ -14,5 +14,9 @@
   "buybackCooldown": 480,
   "aghsShardValue": 1400,
   "aghsScepterValue": 4200,
-  "moonShardValue": 4000
+  "moonShardValue": 4000,
+  "wardObserverDuration": 366,
+  "wardSentryDuration": 426,
+  "wardKilledGrace": 5,
+  "enemyWardMemory": 366
 }

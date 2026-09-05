@@ -2,9 +2,11 @@
 
 > 逐任务执行，步骤用 checkbox（`- [ ]`）跟踪进度。
 
-**Goal:** 按 [design-v2.md](design-v2.md) 实现：眼位小地图、托盘与设置窗口、文件日志、对局录制。
+**Goal:** 按 [design-v2.md](design-v2.md) 实现：眼位小地图、托盘与编辑态、文件日志、对局录制。
 
-**Architecture:** 前端新增两个模块（minimap 解析与眼位状态、SVG 小地图渲染）并接入现有 render 管线；Rust 新增四个模块（settings / log / record / tray）与第二个窗口。设置存 `settings.json`，保存后 emit 事件让覆盖层实时生效。
+**Architecture:** 前端新增三个模块（minimap 解析与眼位状态、SVG 小地图渲染、编辑态设置卡片）并接入现有 render 管线；Rust 新增四个模块（settings / log / record / tray）。设置存 `settings.json`，保存后 emit 事件让覆盖层实时生效。
+
+> **Task 4/6 已返工**：设置最初做成独立窗口（Task 4）、托盘分「设置」与「调整面板位置」两项（Task 6），上手后推翻，合并为单一编辑态。**最终形态以 [Task 9](#task-9-设置窗口并入编辑态返工) 为准**，Task 4/6 保留作为过程记录。
 
 **Tech Stack:** 与 v1 相同（Tauri 2 / vanilla JS + SVG / Python 开发工具），新增 Rust 依赖 `flate2`（gzip）与 `tauri` 的 `tray-icon` feature。
 
@@ -28,19 +30,22 @@ ui/
 ├─ js/
 │  ├─ minimap.js        # 新增：minimap 段解析 + 眼位状态跟踪
 │  ├─ wardmap.js        # 新增：小地图 SVG 渲染
-│  ├─ settings.js       # 新增：设置读写（覆盖层与设置页共用）
-│  ├─ settings-page.js  # 新增：设置窗口的交互
+│  ├─ settings.js       # 新增：设置读写（Rust 与浏览器双通道）
+│  ├─ editor.js         # 新增（Task 9）：编辑态设置卡片
 │  ├─ render.js         # 修改：接入小地图、显示项过滤、缩放与透明度
-│  └─ main.js           # 修改：装配、前端错误转发
-├─ settings.html        # 新增：设置窗口页面
-└─ css/settings.css     # 新增：设置窗口样式
+│  └─ main.js           # 修改：装配、前端错误转发、编辑态出入口
+├─ index.html / dev.html  # 修改（Task 9）：加 #backdrop 与 #editor
+└─ css/overlay.css      # 修改（Task 9）：backdrop 与卡片样式
+
+  ~~ui/settings.html~~ / ~~ui/js/settings-page.js~~ / ~~ui/css/settings.css~~
+                        # Task 4 建，Task 9 删
 
 src-tauri/src/
 ├─ settings.rs          # 新增：settings.json 读写 + 命令 + 变更广播
 ├─ log.rs               # 新增：分级文件日志 + 前端错误转发命令
 ├─ record.rs            # 新增：对局录制（gzip jsonl）
-├─ tray.rs              # 新增：托盘图标与菜单
-└─ main.rs              # 修改：装配、第二窗口、编辑态抽公共函数
+├─ tray.rs              # 新增：托盘图标与菜单（Task 9 收敛为两项）
+└─ main.rs              # 修改：装配、编辑态抽公共函数
 
 constants/normal.json, constants/turbo.json   # 修改：加 4 个眼位常数
 tools/replay.py                               # 修改：支持读 .jsonl.gz
@@ -478,6 +483,9 @@ Expected：程序正常启动与退出、日志/控制台无 panic。
 
 ### Task 4: 设置窗口
 
+> ⚠️ **本任务已被 [Task 9](#task-9-设置窗口并入编辑态返工) 返工。**
+> 独立窗口与 `settings-page.js` 已删除；仅 `ui/js/settings.js`（Step 1）保留至今。
+
 **Files:**
 - Create: `ui/settings.html`, `ui/css/settings.css`, `ui/js/settings.js`, `ui/js/settings-page.js`
 - Modify: `src-tauri/tauri.conf.json`, `src-tauri/capabilities/default.json`, `src-tauri/src/main.rs`
@@ -815,6 +823,10 @@ Expected：莲花格与净资产格消失、整块面板放大约 1.3 倍并淡�
 
 ### Task 6: 托盘
 
+> ⚠️ **菜单部分已被 [Task 9](#task-9-设置窗口并入编辑态返工) 返工**（四项收敛为两项）。
+> `toggle_edit` 抽公共函数（Step 2）保留，但函数体已按 Task 9 修正——
+> 见下方 Step 2 的「事后修正」。
+
 **Files:**
 - Create: `src-tauri/src/tray.rs`
 - Modify: `src-tauri/Cargo.toml`, `src-tauri/src/main.rs`
@@ -846,6 +858,13 @@ pub fn toggle_edit(app: &tauri::AppHandle) {
 ```
 
 热键回调体改为只调用 `toggle_edit(app);`。
+
+> **事后修正（实测）**：上面这个版本后来拆成 `set_edit(app, on)` + `toggle_edit(app)`，
+> 因为托盘、热键、卡片上的「完成」按钮都要能**设定**而不只是翻转。
+> 并且进入编辑态时要 `w.set_focus()`，否则前端收不到 ESC 的 keydown。
+> **`set_edit` 内绝不能调 `global_shortcut` 的 register/unregister**——
+> 它会从热键回调里被调用，而插件派发回调时持有内部锁，在回调里再动注册直接死锁，
+> 实测整个程序卡死。
 
 > 注：`logf!` 由 Task 7 引入。若先做本任务，此行暂用 `println!("[hotkey] 编辑态 = {on}");`，
 > 到 Task 7 统一替换。
@@ -1200,8 +1219,325 @@ Expected：50 行（若取消勾选前又灌了包则更多）。
 
 ---
 
+### Task 9: 设置窗口并入编辑态（返工）
+
+**Why:** 设置窗口必须 `alwaysOnTop`（否则被覆盖层压住，实测"打开后看不见"），
+而面板默认在屏幕顶部正中、弹窗在屏幕中央，**两个都置顶必然互相遮**；
+更要命的是面板平时藏着，调缩放/透明度/显示项全是盲调。
+详见 [design-v2.md §六.五](design-v2.md)。
+
+**Files:**
+- Create: `ui/js/editor.js`
+- Modify: `ui/index.html`, `ui/dev.html`, `ui/css/overlay.css`, `ui/js/render.js`, `ui/js/main.js`
+- Modify: `src-tauri/src/tray.rs`, `src-tauri/src/main.rs`, `src-tauri/tauri.conf.json`, `src-tauri/capabilities/default.json`
+- Delete: `ui/settings.html`, `ui/js/settings-page.js`, `ui/css/settings.css`
+
+**Interfaces:**
+- Consumes: `ui/js/settings.js` 的 `SHOW_ITEMS` / `loadSettings` / `saveSettings`（Task 4 Step 1，不改）
+- Consumes: Task 3 的 `get_settings` / `set_settings` / `open_constants_dir`
+- Produces: `ui/js/editor.js` 导出 `initEditor(cardEl, panelEl, onDone)`、`setEditorOpen(on)`
+- Removes: `open_settings` 命令、`settings` 窗口
+
+---
+
+- [ ] **Step 1: 两个页面加容器**
+
+`ui/index.html` 与 `ui/dev.html` 里，`<div id="panel"></div>` 前后各加一个兄弟节点：
+
+```html
+<div id="backdrop"></div>
+<div id="panel"></div>
+<div id="editor" hidden></div>
+```
+
+顺序即 z 序。`#editor` 必须与 `#panel` **平级**——做成子节点会跟着
+`--panel-scale` 一起缩到 2× 或 0.8×，都没法用。
+
+- [ ] **Step 2: `render.js` 摘掉 `.edit-hint`**
+
+- `initPanel` 的 `innerHTML` 末尾删掉整行 `<div class="edit-hint">…</div>`
+- 删掉 `els.done = root.querySelector('#editDone');`
+- 删掉导出的 `onEditDone` 函数
+- `enableDrag` 里删掉 `if (ev.target.closest(".edit-hint")) return;`
+  —— 卡片已不在面板内，拖拽监听根本看不到它的事件，这个守卫失去意义
+
+- [ ] **Step 3: 写 `ui/js/editor.js`**
+
+```js
+import { SHOW_ITEMS, loadSettings, saveSettings } from "./settings.js";
+import { isTauri } from "./source.js";
+
+// 编辑态的设置卡片。与 .panel 平级而非其子节点——面板受 --panel-scale 缩放，
+// 卡片跟着缩到 2× 或 0.8× 都没法用。
+const GAP = 10;                 // 卡片与面板的间距
+let card = null, panel = null, raf = 0;
+
+export async function initEditor(cardEl, panelEl, onDone) {
+  card = cardEl; panel = panelEl;
+  const s = await loadSettings();
+  card.className = "editor";
+  card.innerHTML = `
+    <div class="ed-sec"><h3>显示项</h3>
+      <div class="ed-grid">${SHOW_ITEMS.map(([k, label]) =>
+        `<label class="ed-chk"><input type="checkbox" data-show="${k}"${
+          s.show?.[k] !== false ? " checked" : ""}>${label}</label>`).join("")}</div>
+    </div>
+    <div class="ed-sec"><h3>面板</h3>
+      <label class="ed-row">缩放
+        <input id="edScale" type="range" min="0.8" max="2" step="0.05">
+        <output id="edScaleOut"></output></label>
+      <label class="ed-row">透明度
+        <input id="edOpacity" type="range" min="0.3" max="1" step="0.05">
+        <output id="edOpacityOut"></output></label>
+    </div>
+    <details class="ed-sec"><summary>开发</summary>
+      <label class="ed-row">日志级别
+        <select id="edLog">
+          <option value="error">error</option><option value="warn">warn</option>
+          <option value="info">info</option><option value="debug">debug（全量）</option>
+        </select></label>
+      <label class="ed-row"><input id="edRecord" type="checkbox">记录对局数据（gzip，一局约 4MB）</label>
+      <button id="edDir" type="button">打开常数表目录</button>
+    </details>
+    <div class="ed-foot">
+      <span class="ed-hint">拖动面板摆放位置 · ESC 或点空白处退出</span>
+      <button id="edDone" type="button">完成</button>
+    </div>`;
+
+  const $ = (id) => card.querySelector("#" + id);
+  const scale = $("edScale"), opacity = $("edOpacity"),
+        log = $("edLog"), record = $("edRecord");
+  scale.value = s.scale ?? 1;
+  opacity.value = s.opacity ?? 1;
+  log.value = s.logLevel ?? "debug";
+  record.checked = !!s.recordMatches;
+
+  const sync = () => {
+    $("edScaleOut").textContent = Number(scale.value).toFixed(2) + "×";
+    $("edOpacityOut").textContent = Math.round(Number(opacity.value) * 100) + "%";
+  };
+  const collect = () => ({
+    show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
+      .map(el => [el.dataset.show, el.checked])),
+    scale: Number(scale.value),
+    opacity: Number(opacity.value),
+    logLevel: log.value,
+    recordMatches: record.checked,
+  });
+
+  sync();
+  for (const el of card.querySelectorAll("input, select")) {
+    el.addEventListener("input", () => { sync(); saveSettings(collect()); });
+  }
+  $("edDir").addEventListener("click", () => {
+    if (isTauri()) window.__TAURI__.core.invoke("open_constants_dir");
+  });
+  $("edDone").addEventListener("click", onDone);
+}
+
+/** 锚在面板下方并跟随；下方放不下就翻到上方，两侧钳在视口内 */
+function place() {
+  const r = panel.getBoundingClientRect();
+  const w = card.offsetWidth, h = card.offsetHeight;
+  let y = r.bottom + GAP;
+  if (y + h > innerHeight - 8) y = Math.max(8, r.top - GAP - h);
+  const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  card.style.left = `${Math.round(x)}px`;
+  card.style.top = `${Math.round(y)}px`;
+}
+
+export function setEditorOpen(on) {
+  if (!card) return;
+  card.hidden = !on;
+  if (on) place();   // 先同步定位一次，不能只靠下面的 rAF
+  // rAF 只负责拖动时的逐帧跟随，且只在编辑态跑——平时一帧都不该浪费。
+  // 注意 rAF 在窗口被遮挡/最小化时不触发，所以初次定位必须走上面那行同步调用，
+  // 否则卡片会停在 (0,0)。实测：隐藏的浏览器面板里 600ms 内 0 帧。
+  if (on && !raf) {
+    const tick = () => { place(); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+  } else if (!on && raf) {
+    cancelAnimationFrame(raf); raf = 0;
+  }
+}
+```
+
+- [ ] **Step 4: `ui/css/overlay.css` 换掉 `.edit-hint` 一节**
+
+删掉文件末尾 `.edit-hint` 相关全部规则，改为：
+
+```css
+/* ── 编辑态：backdrop + 设置卡片 ─────────────────────── */
+
+/* 空白处点击 = 退出。锁定态不吃鼠标，编辑态才接管 */
+#backdrop { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+body.editing #backdrop { pointer-events: auto; }
+
+.panel  { z-index: 2; }
+.editor { z-index: 3; }
+
+.editor {
+  position: fixed;
+  width: 300px;
+  padding: 12px 14px;
+  background: var(--bg-lit);
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
+  pointer-events: auto;
+  font-size: 13px;
+}
+.ed-sec { margin-bottom: 12px; }
+.ed-sec h3, .ed-sec summary {
+  font-size: 11px; color: var(--dim); font-weight: 600;
+  margin: 0 0 7px; cursor: default;
+}
+.ed-sec summary { cursor: pointer; margin-bottom: 0; }
+details[open] > summary { margin-bottom: 7px; }
+.ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
+.ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
+.ed-row { margin-bottom: 7px; }
+.editor input[type="range"] { flex: 1; min-width: 0; }
+.editor output {
+  min-width: 44px; text-align: right; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.editor select, .editor button {
+  background: rgba(255, 255, 255, .08); color: var(--fg);
+  border: 1px solid var(--hair); border-radius: 6px;
+  padding: 3px 10px; font: inherit;
+}
+.editor button { cursor: pointer; }
+.editor button:hover { background: rgba(255, 255, 255, .14); }
+.ed-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 4px;
+}
+.ed-hint { color: var(--dim); font-size: 11px; }
+.ed-foot button {
+  background: var(--k-chance); color: #06202B; border: 0;
+  font-weight: 600; padding: 4px 16px;
+}
+.ed-foot button:hover { background: var(--k-chance); filter: brightness(1.12); }
+```
+
+> `.panel` 已有的 `pointer-events`、`transform`、`.panel.edit` 描边规则**不动**。
+
+- [ ] **Step 5: `ui/js/main.js` 装配**
+
+- import 改为 `import { initPanel, render, enableDrag, applyLayout } from "./render.js";`
+  （去掉 `onEditDone`），并新增 `import { initEditor, setEditorOpen } from "./editor.js";`
+- `initPanel(...)` 之后加：
+
+```js
+const panelEl = document.getElementById("panel");
+await initEditor(document.getElementById("editor"), panelEl, exitEdit);
+document.getElementById("backdrop").addEventListener("click", exitEdit);
+```
+
+- 编辑态状态变化时同步三处（`body.editing` 类、卡片、Rust）：
+
+```js
+function applyEdit(on) {
+  editMode = on;
+  document.body.classList.toggle("editing", on);
+  setEditorOpen(on);
+}
+if (isTauri()) window.__TAURI__.event.listen("edit", e => applyEdit(e.payload === true));
+
+function exitEdit() {
+  applyEdit(false);
+  if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
+}
+```
+
+- 开发页的 `e` 键改成 `applyEdit(!editMode)`；`ESC` 监听保持不变（不判 `editMode`：
+  锁定态窗口穿透且无焦点，压根收不到 keydown）
+
+> **声明顺序**：`exitEdit` 与 `applyEdit` 用 `function` 声明，
+> 会被提升，可以在上面的 `initEditor(...)` 调用中直接引用。
+
+- [ ] **Step 6: `tray.rs` 菜单收敛为两项**
+
+```rust
+pub fn setup(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let edit = MenuItem::with_id(app, "edit", "编辑面板", true, None::<&str>)?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&edit, &sep, &quit])?;
+
+    TrayIconBuilder::with_id("main")
+        .icon(app.default_window_icon().unwrap().clone())
+        .tooltip("dota2-game-helper2")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, ev| match ev.id.as_ref() {
+            "edit" => crate::toggle_edit(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, ev| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, .. } = ev {
+                crate::toggle_edit(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+```
+
+`show_settings` 整个函数删掉，`use tauri::Manager;` 若因此不再被用到也一并删。
+
+- [ ] **Step 7: Rust 侧清理第二窗口**
+
+- `main.rs`：删掉 `open_settings` 函数与 `invoke_handler` 里的 `open_settings,`
+- `tauri.conf.json`：删掉 `windows` 数组里 label 为 `settings` 的整个对象
+- `capabilities/default.json`：`windows` 改为 `["overlay"]`
+
+- [ ] **Step 8: 删除旧文件**
+
+```bash
+rm ui/settings.html ui/js/settings-page.js ui/css/settings.css
+```
+
+- [ ] **Step 9: 浏览器验证（dev.html）**
+
+```bash
+python tools/replay.py
+```
+
+浏览器开 `http://127.0.0.1:8000/dev.html`，按 `e` 进编辑态。Expected：
+
+- a. 面板下方出现设置卡片，虚线描边在面板上
+- b. 勾掉「眼位小地图」→ 面板立刻变窄，卡片跟着重新居中对齐
+- c. 拖缩放到 2× → 面板变大而**卡片尺寸不变**（关键：证明卡片没被 `--panel-scale` 波及）
+- d. 把面板拖到屏幕底部 → 卡片翻到面板**上方**且完整可见
+- e. 点「完成」→ `#panel` 的 class 由 `panel on edit` 变回 `panel`，卡片隐藏
+- f. 再进编辑态，按 ESC → 同样退出
+- g. 再进编辑态，点面板与卡片以外的空白处 → 同样退出
+- h. 拖动面板后在空白处松手 → **不应**退出（`setPointerCapture` 把 `pointerup` 收回面板了）
+
+- [ ] **Step 10: 正式版验证**
+
+```bash
+cd src-tauri && cargo build --release 2>&1 | grep -E "^error|Finished"
+```
+
+启动 `.\src-tauri\target\release\dota2-game-helper2.exe`。Expected：
+
+- a. 托盘右键只有「编辑面板」「退出」两项
+- b. 左键单击托盘图标 = 进/出编辑态
+- c. `Ctrl+Alt+F10` 与托盘交替切换，状态始终正确翻转，**不卡死**
+- d. 四条退出路径（完成 / ESC / 空白处 / 热键）都能让桌面恢复可点
+- e. 日志里 `[edit] 编辑态 = true` 与 `= false` **成对出现**
+  （只有 true 没有 false 就是没真正退出，桌面会一直被覆盖层捂着）
+- f. 改设置后 `%APPDATA%\dev.dota2helper2.app\settings.json` 内容随之更新
+
+---
+
 ## Self-Review 记录
 
 - **设计覆盖**：眼位小地图（Task 1/2）✓ 我方眼倒计时与被排检测（Task 1）✓ 敌方眼只标位置（Task 1/2）✓ 底图只画塔、推掉的画灰点（Task 1 `deadTowers` + Task 2）✓ 九个显示开关（Task 4/5）✓ 面板缩放（Task 4/5）✓ 面板整体透明度（Task 4/5）✓ 打开常数表目录（Task 3/4）✓ 托盘四项菜单含退出（Task 6）✓ 分级文件日志（Task 7）✓ 前端错误转发（Task 7）✓ 录制 gzip 且 replay 兼容（Task 8）✓ 4 个眼位常数外置（Task 1）✓ 设计文档「明确不做」三项均未进计划 ✓
 - **一致性**：`WardTracker.list()` 的返回结构在 Task 1 定义、Task 2/5 消费，字段名一致；`settings` 事件名与 `show` 各键名（含 `wardmap`）在 Task 3/4/5 全文一致；编辑态由 `toggle_edit` 单点管理，热键与托盘共用（Task 6 Step 2）；`logf!`/`Level` 在 Task 7 定义，Task 6/8 引用时已注明先后顺序。
+- **返工记录**：Task 4/6 的「独立设置窗口 + 托盘四项」上手后推翻，由 Task 9 合并为单一编辑态；理由（双置顶必互遮 + 面板平时藏着导致盲调）已写入 design-v2.md 六.五。Task 4 Step 1 的 settings.js 是唯一存活至今的产物。
 - **已知妥协**（有意为之）：敌方眼不做倒计时（无法得知插放时间，设计文档第五节已论证）；中途启动时已存在的我方眼只画点不画倒计时；录制以 100 包为粒度响应开关（最多延迟约 10 秒，换取不必每包读盘）。
