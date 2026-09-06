@@ -7,6 +7,8 @@ use crate::logf;
 const URL: &str = "https://api.opendota.com/api/constants/items";
 /// 兜底快照：断网且无磁盘缓存时用它，保证净资产永远有数
 const EMBEDDED: &str = include_str!("../../constants/item_prices.json");
+/// 覆盖表兜底：配置目录里的那份被删了也不能让修正失效
+const EMBEDDED_OVERRIDES: &str = include_str!("../../constants/item_price_overrides.json");
 
 static CACHE: Mutex<Option<serde_json::Value>> = Mutex::new(None);
 
@@ -69,19 +71,54 @@ pub fn spawn_refresh(app: tauri::AppHandle) {
     });
 }
 
-/// 三层回退：内存 → 磁盘缓存 → 内嵌快照
+/// 套用本地覆盖表。OpenDota 的价格会落后于游戏版本（实测龙心 5100 而游戏收 5200），
+/// 而游戏自己的价格在 VPK 包里、要自己写解析且格式随版本变，不划算。
+/// 覆盖表走 constants/ 那套：改 JSON 重启生效，不必重新编译。
+fn apply_overrides(app: &tauri::AppHandle, mut base: serde_json::Value) -> serde_json::Value {
+    let Some(dir) = app.path().app_config_dir().ok() else { return base };
+    let path = dir.join("constants").join("item_price_overrides.json");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|_| EMBEDDED_OVERRIDES.to_string());
+    let Ok(ov) = serde_json::from_str::<serde_json::Value>(&text) else {
+        logf!(Level::Error, "[prices] 覆盖表解析失败，忽略：{}", path.display());
+        return base;
+    };
+    let (Some(ov), Some(obj)) = (ov.as_object(), base.as_object_mut()) else { return base };
+    for (name, want) in ov {
+        if name.starts_with('_') {
+            continue; // 下划线开头的键是注释
+        }
+        let Some(want) = want.as_i64() else { continue };
+        let had = obj.get(name).and_then(|v| v["cost"].as_i64());
+        if had == Some(want) {
+            logf!(Level::Info, "[prices] 覆盖 {name}={want} 与上游已一致，可以从覆盖表里删掉");
+        } else {
+            logf!(Level::Info, "[prices] 覆盖 {name}: {} -> {want}",
+                  had.map_or("(无)".into(), |c| c.to_string()));
+        }
+        obj.insert(name.clone(), serde_json::json!({ "cost": want }));
+    }
+    base
+}
+
+/// 三层回退：内存 → 磁盘缓存 → 内嵌快照。覆盖表在最后统一套用，
+/// 因此三条回退路径拿到的价格是一致的。
 #[tauri::command]
 pub fn get_item_prices(app: tauri::AppHandle) -> serde_json::Value {
-    if let Some(v) = CACHE.lock().unwrap().clone() {
-        return v;
-    }
-    if let Some(p) = disk_path(&app) {
-        if let Ok(s) = std::fs::read_to_string(&p) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
-                *CACHE.lock().unwrap() = Some(v.clone());
-                return v;
-            }
-        }
-    }
-    serde_json::from_str(EMBEDDED).unwrap_or_else(|_| serde_json::json!({}))
+    // 必须先把值取出来单独成一条语句：写成 `if let Some(v) = CACHE.lock()...clone()`
+    // 时，MutexGuard 这个临时量会活到整个 if/else 链结束，else 分支里再 lock 一次
+    // 就是自死锁（std 的 Mutex 不可重入）——首次调用 CACHE 必为 None，必然踩中，
+    // 表现为前端 await loadPrices() 永不返回、整个面板起不来。
+    let cached = CACHE.lock().unwrap().clone();
+    let base = if let Some(v) = cached {
+        v
+    } else if let Some(v) = disk_path(&app)
+        .and_then(|p| std::fs::read_to_string(&p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+    {
+        *CACHE.lock().unwrap() = Some(v.clone());
+        v
+    } else {
+        serde_json::from_str(EMBEDDED).unwrap_or_else(|_| serde_json::json!({}))
+    };
+    apply_overrides(&app, base)
 }

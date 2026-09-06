@@ -7,13 +7,15 @@ use crate::logf;
 const NORMAL: &str = include_str!("../../constants/normal.json");
 const TURBO: &str = include_str!("../../constants/turbo.json");
 const TOWERS: &str = include_str!("../../constants/towers.json");
+const PRICE_OVERRIDES: &str = include_str!("../../constants/item_price_overrides.json");
 
-const NAMES: [&str; 3] = ["normal", "turbo", "towers"];
+const NAMES: [&str; 4] = ["normal", "turbo", "towers", "item_price_overrides"];
 
 fn embedded(name: &str) -> &'static str {
     match name {
         "turbo" => TURBO,
         "towers" => TOWERS,
+        "item_price_overrides" => PRICE_OVERRIDES,
         _ => NORMAL,
     }
 }
