@@ -1076,7 +1076,7 @@ Expected：新增的行里不再出现 `[INFO]` 与 `[DEBUG]`。验证完改回 
 **Interfaces:**
 - Consumes: Task 3 的 `settings::load`（读 `recordMatches`）、Task 7 的 `logf!`
 - Produces: `record::Recorder`，方法 `new(app)`、`write(&str)`、`refresh(app)`
-- Produces: 录制文件 `<配置目录>/records/raw_<时间戳>.jsonl.gz`，与 `tools/gsi_dump.py` 同格式
+- Produces: 录制文件 `<配置目录>/records/raw_<时间戳>.jsonl.gz`，每包一行紧凑 JSON，与 `tools/gsi_dump.py` 同格式
 
 - [ ] **Step 1: Cargo.toml 加 flate2**
 
@@ -1156,27 +1156,76 @@ impl Recorder {
         let mut n: u32 = 0;
 ```
 
-在循环体内，读完 `body`、回完 200 之后，解析 JSON 之前加：
+在循环体内，读完 `body`、回完 200 之后：
 
 ```rust
-            rec.write(&body);          // 写原始文本，保证与 gsi_dump.py 完全同格式
             n = n.wrapping_add(1);
             if n % 100 == 0 { rec.refresh(&app); }   // 让设置开关不重启也能生效
+            match serde_json::from_str::<serde_json::Value>(&body) {
+                Ok(v) => {
+                    // 压成一行再写。Dota 推来的 body 是带缩进的多行 JSON，
+                    // 原样落盘就不是 JSONL，replay.py 按行读一条都解析不出来。
+                    rec.write(&v.to_string());
+                    let _ = app.emit("gsi", v);
+                }
+                Err(e) => logf!(Level::Error, "[gsi] JSON 解析失败: {e}"),
+            }
 ```
 
-- [ ] **Step 5: `tools/replay.py` 支持 .gz**
+解析不了的 body 不写盘——反正回放也用不了，写进去只会破坏文件结构。
 
-顶部 `import json, time, mimetypes` 那行加上 `gzip`。
-把 `stream()` 里的：
+- [ ] **Step 5: `tools/replay.py` 支持 .gz，读取改为流式 JSON 解码**
+
+不要按行切——改用 `json.JSONDecoder().raw_decode` 增量扫描。这样**紧凑 JSONL 与
+历史遗留的多行格式都能读**，不必做格式判断，也顺带容忍被强杀导致的 gzip 截断：
+
+解压也**不能用 `gzip` 模块**：被强杀的录制没有结尾标记，它会在收尾时抛
+`EOFError` 并连同已缓冲的整块一起丢掉——按 1MB 分块时大文件丢尾块，
+小文件一个字节都读不出来。改用 `zlib.decompressobj(31)` 增量解压。
 
 ```python
-            with open(path, encoding="utf-8") as fh:
+def _text_chunks(path):
+    dec = codecs.getincrementaldecoder("utf-8")()
+    if path.suffix != ".gz":
+        with open(path, "rb") as fh:
+            for raw in iter(lambda: fh.read(1 << 20), b""):
+                yield dec.decode(raw)
+        return
+    z = zlib.decompressobj(31)          # 31 = 自动识别 gzip 头
+    with open(path, "rb") as fh:
+        for raw in iter(lambda: fh.read(1 << 20), b""):
+            try:
+                out = z.decompress(raw)
+            except zlib.error:
+                return                  # 数据坏了，前面的仍然有效
+            if out:
+                yield dec.decode(out)
+
+
+def _packets(path):
+    """逐个产出包。兼容紧凑 JSONL 与 Dota 原样落盘的多行 JSON。"""
+    d = json.JSONDecoder()
+    buf = ""
+    for chunk in _text_chunks(path):
+        if not chunk:
+            continue
+        buf += chunk
+        i = 0
+        while True:
+            while i < len(buf) and buf[i].isspace():
+                i += 1
+            if i >= len(buf):
+                break
+            try:
+                obj, j = d.raw_decode(buf, i)
+            except ValueError:
+                break               # 半个包，等下一块
+            yield obj
+            i = j
+        buf = buf[i:]
 ```
-改为：
-```python
-            opener = gzip.open if path.suffix == ".gz" else open
-            with opener(path, "rt", encoding="utf-8") as fh:
-```
+
+顶部 import 改为 `import codecs, json, os, time, mimetypes, zlib`（不再需要 `gzip`）。
 
 并把 `path = DUMP / name` 之后的存在性判断改为——找不到就再去配置目录的 `records/` 找：
 

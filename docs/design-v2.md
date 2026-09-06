@@ -212,8 +212,19 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 设置里一个开关，开启后把每个 GSI 包落盘，用于事后回放调试。
 **具体怎么用（自动清理、按对局分文件、导出等）等开发完再定**，本版只做最小实现。
 
-**格式**：`raw_<时间戳>.jsonl.gz`，每包一行 JSON，与现有 `tools/gsi_dump.py` 同格式，
-`tools/replay.py` 加一行判断即可直接读。
+**格式**：`raw_<时间戳>.jsonl.gz`，每包一行 JSON，与现有 `tools/gsi_dump.py` 同格式。
+
+> **必须重新序列化，不能原样写 body。** Dota 推过来的 HTTP body 是**带制表符缩进的
+> 多行 JSON**，一包摊成几十行；原样落盘就不是 JSONL 了，`replay.py` 按行读会
+> **一条都解析不出来**。`gsi_dump.py` 用的是 `json.dumps(data) + "
+"`（紧凑序列化），
+> Rust 侧对应 `serde_json::Value::to_string()`。
+>
+> 这条最初写错过：`gsi.rs` 里写着"写原始文本，保证与 gsi_dump.py 完全同格式"，
+> 实际两者根本不同格式，直到第一次真去读录制文件才发现。
+
+`replay.py` 的读取改用**流式 JSON 解码**而不是按行切：这样紧凑 JSONL 与
+历史遗留的多行格式都能读，也不必做格式判断。
 
 **全量保真，不裁字段。** 实测体积（11 分钟正常局）：
 
