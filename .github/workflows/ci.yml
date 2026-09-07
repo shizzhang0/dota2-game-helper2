@@ -1,0 +1,46 @@
+name: CI
+
+# 这个项目有个特定的失败模式：前端是编译期嵌进二进制的，ui/ 下写错一个字符，
+# 只有真正 cargo build 的时候才会暴露——而日常开发看的是回放服务器里的 dev.html，
+# 那条路根本不经过编译。所以这条流水线是唯一稳定的守门人。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    # 只在 Windows 上构建：GetAsyncKeyState、windows_subsystem、用 explorer 打开
+    # 常数表目录，全是 Win32 的东西，换平台编不过也没有意义。
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 前端语法检查
+        shell: bash
+        run: |
+          # ui/js 下是原生 ES 模块，但扩展名是 .js；node --check 只有 .mjs
+          # 才按模块解析，直接检查 .js 会在第一个 import 上报错。
+          mkdir -p .syntax-check
+          for f in ui/js/*.js; do
+            cp "$f" ".syntax-check/$(basename "${f%.js}").mjs"
+          done
+          fail=0
+          for f in .syntax-check/*.mjs; do
+            node --check "$f" || fail=1
+          done
+          exit $fail
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # release 而不是 debug：windows_subsystem = "windows" 只在 release 生效，
+      # 而 release 才是实际要跑的那个产物。
+      - name: 构建
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml
