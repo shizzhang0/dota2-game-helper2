@@ -156,8 +156,20 @@ html, body {
 }
 
 /* ── 眼位小地图 ─────────────────────────────────────── */
-.cell.wardmap { width: 116px; }
-.wardmap { width: 108px; height: 108px; display: block; }
+/* 地图整幅画在 108×108 的 viewBox 里，塔、眼点、标签全是 viewBox 单位，
+   所以改这个 CSS 尺寸就是整体等比放大，不用碰 wardmap.js 里的任何坐标。
+
+   选择器必须写成 `.cell svg.wardmap`：上面的 `.cell svg { width: 52px }` 特异度是
+   (0,1,1)，压得住 `.wardmap` 的 (0,1,0)——地图因此一直被塞在 52px 里画，
+   而不是设计里写的 108px。这是拆块时才查出来的老 bug。
+   包在外面的 div 也叫 .wardmap，只给它宽度，高度让 svg + 标签自己撑，
+   否则标签会压在地图上。 */
+.cell.wardmap { width: calc(var(--ward-size, 180px) + 8px); }
+.cell svg.wardmap {
+  width: var(--ward-size, 180px);
+  height: var(--ward-size, 180px);
+  display: block;
+}
 .wm-bg { fill: rgba(0, 0, 0, .35); }
 .wm-tower { fill: #9AA6B4; opacity: .55; }
 .wm-tower[data-team="2"] { fill: #66BB6A; }
