@@ -8,15 +8,16 @@ const NORMAL: &str = include_str!("../../constants/normal.json");
 const TURBO: &str = include_str!("../../constants/turbo.json");
 const TOWERS: &str = include_str!("../../constants/towers.json");
 const PRICE_OVERRIDES: &str = include_str!("../../constants/item_price_overrides.json");
+const ITEM_PRICES: &str = include_str!("../../constants/item_prices.json");
 
-const NAMES: [&str; 4] = ["normal", "turbo", "towers", "item_price_overrides"];
+const NAMES: [&str; 5] = ["normal", "turbo", "towers", "item_price_overrides", "item_prices"];
 
 /// 缺键即补的表。这几张里出现新键一定是版本升级带来的，补齐才是用户想要的。
 ///
 /// **`item_price_overrides` 不在其列**：那张表里"删掉某一项"是用户的明确意图
 /// （上游价格修好后就该删，程序还会在日志里提示哪些覆盖已经多余），
 /// 补回去等于跟用户对着干。
-const TOPUP: [&str; 3] = ["normal", "turbo", "towers"];
+const TOPUP: [&str; 4] = ["normal", "turbo", "towers", "item_prices"];
 
 fn embedded_value(name: &str) -> serde_json::Value {
     serde_json::from_str(embedded(name)).unwrap_or_else(|_| serde_json::json!({}))
@@ -39,6 +40,7 @@ fn embedded(name: &str) -> &'static str {
         "turbo" => TURBO,
         "towers" => TOWERS,
         "item_price_overrides" => PRICE_OVERRIDES,
+        "item_prices" => ITEM_PRICES,
         _ => NORMAL,
     }
 }

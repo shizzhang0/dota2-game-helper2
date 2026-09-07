@@ -93,7 +93,7 @@ fn main() {
             constants::seed(app.handle());
             gsi::spawn(app.handle().clone());
             altkey::spawn(app.handle().clone());
-            prices::spawn_refresh(app.handle().clone());
+            prices::drop_legacy_cache(&app.handle().clone());
             gsicfg::ensure_cfg();
             Ok(())
         })
