@@ -30,7 +30,7 @@
 | `gsi` | HTTP 服务 127.0.0.1:53000，收包立即回 200，转发前端 |
 | `altkey` | GetAsyncKeyState 轮询，状态变化时通知前端 |
 | `gsicfg` | 首次运行探测 Steam/Dota 路径，写 `gamestate_integration_*.cfg` |
-| `constants` | 常数表播种到配置目录 + 读取命令 |
+| `constants` | 常数表播种到配置目录、**补齐已存在文件缺的新键** + 读取命令 |
 | `prices` | OpenDota 价格表拉取、缓存、本地覆盖 |
 | `settings` | `settings.json` 读写 + 变更广播 |
 | `log` | 分级文件日志 + 前端错误转发 |
@@ -190,7 +190,7 @@ Rust 侧不参与：`save_layout` / `load_layout` 把它当不透明字符串收
 > 点空白处要求你能看见并点中面板以外的区域，而那正是被困场景下最不成立的前提。
 > 它没有提供任何独占覆盖，只贡献了摆位时的误触风险。
 
-### 五个必须避开的坑（都只有真机才暴露）
+### 六个必须避开的坑（都只有真机才暴露）
 
 1. **`html, body` 必须 `pointer-events: none`**，否则编辑态下一张看不见的全屏膜会盖住整个桌面，
    连托盘图标都点不到，只能靠热键逃出来。
@@ -207,7 +207,16 @@ Rust 侧不参与：`save_layout` / `load_layout` 把它当不透明字符串收
    `.ed-bar` 标题栏可拖。四个块没有这个问题，它们内部没有可点的东西。
 4. **`.block` / `.cell` 的 `display: flex` 会盖过 `[hidden] { display: none }`**，
    必须显式写 `!important`，否则设置里的显示项开关整个不起作用。
-5. **`innerWidth` 可能是 0**，而摆位的每一步都要除以它。
+5. **常数表只播种、不补齐 = 静默失效**。`constants.rs` 原本只在文件不存在时写入，
+   于是 9/1 播种的 `normal.json` 遇上 9/5 新增的 ward 常数就永远缺那几个键，
+   而 `get_constants` 把盘上文件原样返回。后果不是报错而是**静默的错**：
+   `this.C.wardSentryDuration` 是 `undefined`，`Math.ceil(x + undefined - y)` 得 NaN
+   直接画在地图上；更糟的是 `rem > undefined` 和 `clock - lastSeen > undefined` 恒为假，
+   于是**被排检测一次都没触发过、敌方眼永远不移除**，全程没有任何报错。
+   现在读盘与播种都把盘上的值盖在内置默认值之上（复用 `settings.rs` 的 `merge`）。
+   `item_price_overrides` 例外——那张表里"删掉某项"是用户的明确意图。
+
+6. **`innerWidth` 可能是 0**，而摆位的每一步都要除以它。
    实测浏览器里页面刚导航完、以及窗口被隐藏期间，`innerWidth` 会持续为 0；
    这时 `defaultLayout()` 算出的是 `(0 - 350) / 2 = -175` 这种负坐标，
    而启动流程会把结果**回存**——一次异常启动就足以把摆好的四个坐标全冲掉。
