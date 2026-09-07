@@ -8,10 +8,19 @@
   /* 面板是 fixed 定位，body 本身高度为 0，渐变会被压成零高度画不出来，需显式给高 */
   body.dev { min-height: 100vh; background: var(--devbg); background-size: cover;
              background-position: center; }
-  #hud { position: fixed; left: 8px; bottom: 8px; font-size: 12px; color: #9AA6B4;
-         text-shadow: 0 0 3px #000; pointer-events: none; }
-  #tips { position: fixed; right: 8px; bottom: 8px; font-size: 12px; color: #9AA6B4;
-          text-shadow: 0 0 3px #000; }
+  /* 六种背景（最亮的近似白天团战、最暗的近似夜间野区）都要读得清，所以不能靠
+     text-shadow 描边——浅底上那圈黑光晕会糊进字里。给一块实底最稳。 */
+  #hud, #tips {
+    position: fixed; bottom: 8px;
+    font-size: 12px; line-height: 1.4;
+    color: #EDF1F6;
+    background: rgba(8, 10, 14, .8);
+    border-radius: 6px;
+    padding: 3px 8px;
+    pointer-events: none;
+  }
+  #hud { left: 8px; }
+  #tips { right: 8px; }
 </style>
 <body class="dev">
 <div id="panel"></div>
