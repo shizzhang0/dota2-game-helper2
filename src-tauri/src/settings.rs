@@ -19,7 +19,8 @@ fn defaults() -> serde_json::Value {
     })
 }
 
-fn merge(base: &mut serde_json::Value, over: &serde_json::Value) {
+/// 把 over 盖到 base 上（对象递归、其余整体替换）。constants.rs 也用它。
+pub(crate) fn merge(base: &mut serde_json::Value, over: &serde_json::Value) {
     let (Some(b), Some(o)) = (base.as_object_mut(), over.as_object()) else { return };
     for (k, v) in o {
         match b.get_mut(k) {
