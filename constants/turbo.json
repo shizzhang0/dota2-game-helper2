@@ -16,8 +16,8 @@
   "aghsShardValue": 1400,
   "aghsScepterValue": 4200,
   "moonShardValue": 4000,
-  "wardObserverDuration": 366,
-  "wardSentryDuration": 426,
+  "wardObserverDuration": 360,
+  "wardSentryDuration": 420,
   "wardKilledGrace": 5,
-  "sentryTrueSight": 850
+  "sentryTrueSight": 1050
 }
