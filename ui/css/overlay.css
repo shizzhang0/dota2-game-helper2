@@ -178,7 +178,11 @@ html, body {
 .wm-ward { stroke: rgba(0, 0, 0, .85); stroke-width: .6; }
 .wm-ward.own { fill: #65D9F7; }
 .wm-ward.own.soon { fill: #FFC24B; }
-.wm-ward.enemy { fill: #AA3333; }
+/* 紫而不是红：夜魇塔是 #E57373，两者都常驻（敌方眼保留到 366s），
+   在 2 个 viewBox 单位下圆和方也分不出来，撞色会把"敌方有眼"和地形混为一谈。
+   取的是调色板里强化符那支紫，不引入新色。
+   这么一改，地图上的红就只剩一个含义：我方眼刚被排掉（只闪 3 秒）。 */
+.wm-ward.enemy { fill: #A46BFF; }
 .wm-ward.killed { fill: #FF4D4D; }
 .wm-t { fill: #EDF1F6; font-size: 5px; text-anchor: middle;
         paint-order: stroke; stroke: #000; stroke-width: 1.4; }
