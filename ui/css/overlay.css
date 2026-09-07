@@ -175,15 +175,19 @@ html, body {
 .wm-tower[data-team="2"] { fill: #66BB6A; }
 .wm-tower[data-team="3"] { fill: #E57373; }
 .wm-tower.dead { fill: #5A6470; opacity: .3; }
-.wm-ward { stroke: rgba(0, 0, 0, .85); stroke-width: .6; }
-.wm-ward.own { fill: #65D9F7; }
-.wm-ward.own.soon { fill: #FFC24B; }
+.wm-ward { fill: var(--w); stroke: rgba(0, 0, 0, .85); stroke-width: .6; }
+.wm-ward.own { --w: #65D9F7; }
+.wm-ward.own.soon { --w: #FFC24B; }
 /* 紫而不是红：夜魇塔是 #E57373，两者都常驻（敌方眼保留到 366s），
    在 2 个 viewBox 单位下圆和方也分不出来，撞色会把"敌方有眼"和地形混为一谈。
    取的是调色板里强化符那支紫，不引入新色。
    这么一改，地图上的红就只剩一个含义：我方眼刚被排掉（只闪 3 秒）。 */
-.wm-ward.enemy { fill: #A46BFF; }
-.wm-ward.killed { fill: #FF4D4D; }
+.wm-ward.enemy { --w: #A46BFF; }
+.wm-ward.killed { --w: #FF4D4D; }
+/* 真眼空心、假眼实心。颜色已经背了"归属"和"快到期"两层含义，
+   再拿颜色区分类型必然糊；塔是方块，所以形状这条通道是空的，正好拿来用。
+   要写在上面几条之后——同特异度靠顺序取胜。 */
+.wm-ward.sentry { fill: none; stroke: var(--w); stroke-width: 1.3; }
 .wm-t { fill: #EDF1F6; font-size: 5px; text-anchor: middle;
         paint-order: stroke; stroke: #000; stroke-width: 1.4; }
 
@@ -228,6 +232,7 @@ html, body {
 .ed-sec summary { cursor: pointer; margin-bottom: 0; }
 details[open] > summary { margin-bottom: 7px; }
 .ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
+.ed-legend-note { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
 .ed-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
 .ed-legend span { display: flex; align-items: center; gap: 7px; }
 /* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
