@@ -54,6 +54,11 @@
 
 **前端是编译期嵌入二进制的**：改完 `ui/` 下的文件必须重新 `cargo build` 才会生效。
 
+`build.rs` 会递归遍历 `ui/`，**逐个文件**发 `cargo:rerun-if-changed`，所以改完直接
+`cargo build` 就行。不能图省事写成目录形式 `cargo:rerun-if-changed=../ui`——
+实测那样写 cargo 认不出来，会把 crate 当成永远是脏的，**每次** build 都重编一遍
+（一次 3 分半），比它要解决的问题更糟。
+
 ### 智能显隐
 
 `map.game_state` 不在 PRE_GAME / GAME_IN_PROGRESS 时整窗隐藏。

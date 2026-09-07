@@ -116,7 +116,12 @@ python tools/replay.py                                       # 回放服务器
 不必反复进游戏。`?file=` 选文件、`?speed=` 调倍速；页面内 `v` 常显、`e` 编辑态、`b` 换背景。
 录制出来的 `.jsonl.gz` 可以直接喂给它，被强杀而截断的文件也能读。
 
-**前端是编译期嵌入二进制的**，改完 `ui/` 下的文件必须重新 `cargo build` 才会生效。
+**前端是编译期嵌入二进制的**，改完 `ui/` 下的文件必须重新 `cargo build` 才会生效
+（`build.rs` 会盯着 `ui/`，不需要额外操作）。
+
+每次 push 与 PR 都会在 GitHub Actions 上跑一遍前端语法检查 + `cargo build --release`
+（见 `.github/workflows/ci.yml`）——`ui/` 下写错一个字符只有真正编译时才暴露，
+而日常开发看的是回放服务器，那条路不经过编译。
 
 实机测试用 **release** 构建：debug 版会带一个关不掉的控制台窗口
 （`windows_subsystem = "windows"` 只在 release 生效）。
