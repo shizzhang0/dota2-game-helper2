@@ -115,7 +115,8 @@ export class EconTracker {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.prevTp = null;             // 传送槽充能数
-    this.boughtTp = 0;              // 其中自己花钱买的张数
+    this.tpQueue = [];              // 每个充能是不是自己买的，先进先出
+    this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
     this.activeBuffs = new Set();   // 已经生效的吞噬类 buff
   }
 
@@ -149,19 +150,32 @@ export class EconTracker {
   /**
    * 传送卷轴：开局白送一张，**阵亡的同一秒**还会再送一张（实测三局 11 次阵亡赠送
    * 全部发生在 alive=false 的那一秒，与复活时刻无关），这些不该计入资产。
-   * 但自己买的一张确实花了 100，要算。判据就是充能增加时人是活的。
-   * 三局实测：15 次充能增加中 2 次开局、11 次阵亡赠送、2 次购买。
+   * 但自己买的确实花了 100，要算。判据就是充能增加时人是活的。
+   *
+   * **用掉哪一张按先进先出。** 传送槽是个充能堆叠，用掉的那一张没有身份，
+   * 但对账结果只有 FIFO 说得通——两局共九个官方"财产总和"取点全部吻合：
+   *   模型            旧局 8986026437   新局 8987649931
+   *   优先扣自购            7/7              1/2
+   *   优先扣白送            7/7              1/2
+   *   FIFO                 7/7              2/2
+   * 旧局三种模型打平（那局自购一直为 0，没有区分度），新局把它们分开了。
+   * 早期版本用的是"优先扣自购"，理由写的是"宁可少算不要虚高"——
+   * 结果就是系统性少算，新局末尾少了整整 100。
    */
   noteTp(items, hero, clock) {
     const tp = (items || {}).teleport0;
     const ch = tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
-    if (this.prevTp !== null && clock !== null && clock >= 0) {
+    if (this.prevTp === null) {
+      this.tpQueue = Array(ch).fill(false);          // 首次见到的都算白送
+    } else if (clock !== null && clock >= 0) {
       const d = ch - this.prevTp;
-      if (d > 0 && hero && hero.alive === true) this.boughtTp += d;
-      // 用掉时优先冲抵"已买"：买张 TP 立刻用掉是常见操作，而手里剩的那张
-      // 更可能是白送的（实测赠送 11 张 vs 购买 2 张）。宁可少算，不要虚高。
-      if (d < 0) this.boughtTp = Math.max(0, Math.min(this.boughtTp + d, ch));
+      for (let i = 0; i < d; i++) this.tpQueue.push(hero?.alive === true);
+      for (let i = 0; i < -d; i++) this.tpQueue.shift();
     }
+    // 漏包会让队列和实际充能对不上，以实际为准；补进来的一律算白送，不虚高
+    while (this.tpQueue.length > ch) this.tpQueue.shift();
+    while (this.tpQueue.length < ch) this.tpQueue.unshift(false);
+    this.boughtTp = this.tpQueue.filter(Boolean).length;
     this.prevTp = ch;
   }
 
