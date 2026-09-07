@@ -77,7 +77,7 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 
 | | |
 |---|---|
-| `constants/` | 时间常数表，改 JSON 重启生效 |
+| `constants/` | 时间常数表 + 物品价格覆盖表，改 JSON 重启生效 |
 | `settings.json` | 上述设置 |
 | `layout.json` | 面板位置 |
 | `logs/` | 运行日志 |
@@ -88,9 +88,14 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 - 壳：[Tauri 2](https://tauri.app/)（Rust），透明/无边框/置顶/鼠标穿透窗口
 - 前端：vanilla JS + SVG，无框架
 - 数据源：Dota 2 GSI（本地 HTTP 推送）
-- 物品价格：[OpenDota constants API](https://docs.opendota.com/)，本地缓存
+- 物品价格：[OpenDota constants API](https://docs.opendota.com/)，本地缓存 + 覆盖表
 
 时间常数全部外置于 `constants/*.json`（正常/快速模式两套表），版本更新只改数据不改代码。
+
+**物品价格也能自己改。** OpenDota 的价格表会落后于游戏版本（实测龙心游戏收 5200、
+它还写着 5100），所以 `constants/item_price_overrides.json` 可以按「物品名: 实际价格」
+覆盖，重启生效。发现净资产差了某件装备的钱时，往这里加一行就行——
+上游修好后删掉，程序会在日志里提示哪些覆盖已经多余。
 
 ## 使用前提
 
