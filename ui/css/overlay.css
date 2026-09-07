@@ -35,17 +35,18 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── 面板 ───────────────────────────────────────────── */
+/* ── 块 ─────────────────────────────────────────────
+   四个可独立摆位的块。位置一律由 JS 写 left/top，CSS 不给默认坐标——
+   默认摆位要按视口比例算（见 render.js 的 defaultLayout）。
+   transform-origin 是左上角：缩放时块从自己的左上角长大，存的坐标才不会失真。 */
 
-.panel {
+.block {
   position: fixed;
-  left: 50%;
-  top: 14px;
-  transform: translateX(-50%) scale(var(--panel-scale, 1));
-  transform-origin: top center;
+  transform: scale(var(--panel-scale, 1));
+  transform-origin: top left;
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 6px;
   padding: 8px 12px;
   background: var(--bg);
   border: 1px solid var(--hair);
@@ -55,12 +56,12 @@ html, body {
   visibility: hidden;
   transition: opacity .12s linear, visibility 0s linear .12s;
 }
-.panel.on {
+.block.on {
   opacity: var(--panel-opacity, 1);
   visibility: visible;
   transition: opacity .12s linear;
 }
-.panel.edit {
+.block.edit {
   pointer-events: auto;
   cursor: grab;
   outline: 1px dashed var(--k-chance);
@@ -68,13 +69,11 @@ html, body {
   opacity: 1;
   visibility: visible;
 }
+.block.edit:active { cursor: grabbing; }
 
-/* .cell 的 display:flex 会盖过浏览器默认的 [hidden]{display:none}，
+/* .block 与 .cell 的 display:flex 会盖过浏览器默认的 [hidden]{display:none}，
    隐藏显示项时必须显式声明，否则设置里关掉的格子照样显示 */
 [hidden] { display: none !important; }
-
-.grp { display: flex; align-items: flex-start; gap: 6px; }
-.sep { width: 1px; background: var(--hair); align-self: stretch; }
 
 /* ── 格子 ───────────────────────────────────────────── */
 
@@ -153,7 +152,7 @@ html, body {
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel, .ring-fg { transition: none; }
+  .block, .ring-fg { transition: none; }
 }
 
 /* ── 眼位小地图 ─────────────────────────────────────── */
