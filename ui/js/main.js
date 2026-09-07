@@ -29,18 +29,37 @@ initPanel(document.getElementById("panel"), towers);
 
 // ── 面板位置：Tauri 存配置文件，浏览器开发时存 localStorage ──
 async function loadLayout() {
+  let raw = null;
   try {
-    if (isTauri()) return JSON.parse(await window.__TAURI__.core.invoke("load_layout"));
-    return JSON.parse(localStorage.getItem("layout") || "{}");
-  } catch { return {}; }
+    raw = isTauri() ? JSON.parse(await window.__TAURI__.core.invoke("load_layout"))
+                    : JSON.parse(localStorage.getItem("layout") || "{}");
+  } catch { raw = null; }
+  // 老格式是整块面板的单坐标 {x, y}。沿用为 timers 的位置，其余三块取默认值——
+  // 不迁的话用户已经摆好的位置会直接丢。
+  if (raw && typeof raw.x === "number") return { timers: { x: raw.x, y: raw.y } };
+  return raw;
 }
-function saveLayout(pos) {
-  const s = JSON.stringify(pos);
+function saveLayout(all) {
+  const s = JSON.stringify(all);
   if (isTauri()) window.__TAURI__.core.invoke("save_layout", { layout: s });
   else localStorage.setItem("layout", s);
 }
-applyLayout(await loadLayout());
-enableDrag(saveLayout);
+const savedLayout = await loadLayout();
+let layout = applyLayout(savedLayout, cfg.scale ?? 1);
+// 迁移与钳位的结果要落盘，否则每次启动都要重算一遍。但只在结果确实变了时才写——
+// applyLayout 返回 null 表示视口还没量出来、这次没摆，那更不能写。
+if (layout && JSON.stringify(layout) !== JSON.stringify(savedLayout)) saveLayout(layout);
+enableDrag((id, pos) => { layout[id] = pos; saveLayout(layout); });
+
+// 视口尺寸变了要重新钳位（换分辨率、拔掉副屏）；同时兜住"启动时视口还没量出来"，
+// 那种情况下上面这次 applyLayout 什么都没做，得靠这里补上。
+addEventListener("resize", () => {
+  const next = applyLayout(layout || savedLayout, cfg.scale ?? 1);
+  if (!next) return;
+  const changed = JSON.stringify(next) !== JSON.stringify(layout);
+  layout = next;
+  if (changed) saveLayout(layout);
+});
 
 function applyEdit(on) {
   editMode = on;
@@ -54,7 +73,14 @@ function exitEdit() {
   applyEdit(false);
   if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
 }
-await initEditor(document.getElementById("editor"), document.getElementById("panel"), exitEdit);
+// 四块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
+function resetLayout() {
+  const next = applyLayout(null, cfg.scale ?? 1);
+  if (!next) return;                     // 视口没准备好，别把负坐标写进去
+  layout = next;
+  saveLayout(layout);
+}
+await initEditor(document.getElementById("editor"), exitEdit, resetLayout);
 // 不判断 editMode：锁定态窗口穿透且没有焦点，压根收不到 keydown，
 // 只有编辑态才会走到这里；靠本地状态位反而可能因事件漏收而彻底失灵。
 addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });

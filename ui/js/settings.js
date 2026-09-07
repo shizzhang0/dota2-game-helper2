@@ -8,7 +8,7 @@ export const SHOW_ITEMS = [
 
 const DEFAULTS = {
   show: Object.fromEntries(SHOW_ITEMS.map(([k]) => [k, true])),
-  scale: 1.0, opacity: 1.0, logLevel: "debug", recordMatches: false,
+  scale: 1.0, opacity: 1.0, wardSize: 180, logLevel: "debug", recordMatches: false,
 };
 
 export async function loadSettings() {
