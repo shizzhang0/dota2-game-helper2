@@ -122,6 +122,12 @@ python tools/replay.py                                       # 回放服务器
 出问题先看 `%APPDATA%\dev.dota2helper2.app\logs\`——正式版没有控制台，
 也开不出 devtools，前端异常会转发给 Rust 一起写进日志。
 
+## 许可
+
+[MIT](LICENSE)
+
+本项目与 Valve 无关联。Dota 2 是 Valve Corporation 的商标。
+
 ## 参考
 
 - [nocamles/dota2_amount_plugins](https://github.com/nocamles/dota2_amount_plugins) — GSI 缓存池与净资产计算思路
