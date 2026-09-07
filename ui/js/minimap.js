@@ -82,9 +82,22 @@ export class WardTracker {
     }
     this.killed = this.killed.filter(k => clock - k.at < 3);
 
-    // 敌方眼记忆到期：保留"它最长还可能活着"的时间，也就是该类型的寿命本身。
-    // 必须按类型分——原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
+    // 我方真眼此刻的位置。用本包看到的而不是 this.own：真眼要是同一刻也没了，
+    // 就不该再拿它当"真视还在"的凭据。
+    const sentries = seen.filter(w => w.kind === "sentry" &&
+                                      info.myTeam !== null && w.team === info.myTeam);
+    const covered = (x, y) => sentries.some(
+      s => Math.hypot(x - s.x, y - s.y) <= this.C.sentryTrueSight);
+
     for (const [key, w] of [...this.enemy]) {
+      // 本包还看得见的不动——它就在真视范围内，covered() 必然为真，会被误删
+      if (seenKeys.has(key)) continue;
+      // 消失的那一刻仍被我方真视覆盖 = 它是真没了（被排或到期），立刻移除。
+      // GSI 没有击杀眼的事件，这是唯一能判定的途径：敌方眼平时每局几十次进出
+      // 视野，"从数据里消失"本身完全不能说明问题，但"在我方真视底下消失"可以。
+      if (covered(w.x, w.y)) { this.enemy.delete(key); continue; }
+      // 否则只能当作真视断了，按该类型的寿命兜底保留。必须按类型分——
+      // 原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
       const memory = w.kind === "sentry" ? this.C.wardSentryDuration
                                          : this.C.wardObserverDuration;
       if (clock - w.lastSeen > memory) this.enemy.delete(key);
