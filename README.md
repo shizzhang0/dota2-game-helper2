@@ -3,12 +3,18 @@
 基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
 在游戏中按住 **Alt** 显示 Dota Plus 才有的那几个倒计时。
 
-> ✅ v1 + v2 功能均已实现。进游戏实测校准过：快速模式各符刷新间隔与正常模式一致；
-> 净资产口径对照回放的官方"财产总和"逐条验证（开局 600、储藏处计入、
-> 信使在途计入、中立物品不计）；眼的实际存续按三局 dump 测得（假眼 366s、真眼 426s）。
+> **开发中，尚未发布。** 下面列出的功能都已实现，但仍在逐项进游戏核对，
+> 版本号停在 `0.1.0`，还没有打过 tag。
 >
-> 设计与实施计划：v1 [design](docs/design-v1.md) · [plan](docs/plan-v1.md)，
-> v2 [design](docs/design-v2.md) · [plan](docs/plan-v2.md)。
+> 已核对：快速模式各符刷新间隔与正常模式一致；净资产口径对照回放的官方"财产总和"
+> 逐点验证（2026-09-07 取七个时间点全部吻合）；敌方塔防状态机 16/16 回归通过。
+> **眼位小地图尚未在真实对局里验证过**，它是靠三局 dump 离线开发的。
+>
+> 设计文档按主题组织在 [docs/design/](docs/design/)：
+> [倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
+> [眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
+> [开发工具](docs/design/dev-tools.md)。
+> 待验证事项见 [docs/verify-checklist.md](docs/verify-checklist.md)。
 
 ## 显示什么
 
