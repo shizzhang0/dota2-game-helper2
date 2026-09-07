@@ -14,7 +14,8 @@
 > [倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
 > [眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
 > [开发工具](docs/design/dev-tools.md)。
-> 待验证事项见 [docs/verify-checklist.md](docs/verify-checklist.md)。
+> 待验证事项见 [docs/verify-checklist.md](docs/verify-checklist.md)，
+> 未完成事项见 [docs/backlog.md](docs/backlog.md)。
 
 ## 显示什么
 
