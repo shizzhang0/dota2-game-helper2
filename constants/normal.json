@@ -17,6 +17,5 @@
   "moonShardValue": 4000,
   "wardObserverDuration": 366,
   "wardSentryDuration": 426,
-  "wardKilledGrace": 5,
-  "enemyWardMemory": 366
+  "wardKilledGrace": 5
 }

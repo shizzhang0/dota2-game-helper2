@@ -82,9 +82,12 @@ export class WardTracker {
     }
     this.killed = this.killed.filter(k => clock - k.at < 3);
 
-    // 敌方眼记忆到期（保留一个假眼寿命 = 最长可能还活着的时间）
+    // 敌方眼记忆到期：保留"它最长还可能活着"的时间，也就是该类型的寿命本身。
+    // 必须按类型分——原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
     for (const [key, w] of [...this.enemy]) {
-      if (clock - w.lastSeen > this.C.enemyWardMemory) this.enemy.delete(key);
+      const memory = w.kind === "sentry" ? this.C.wardSentryDuration
+                                         : this.C.wardObserverDuration;
+      if (clock - w.lastSeen > memory) this.enemy.delete(key);
     }
   }
 

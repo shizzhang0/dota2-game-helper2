@@ -13,10 +13,12 @@ let card = null;
 // 图例。刻意复用地图自己的 wm-ward / wm-tower class 画色块——
 // 另写一套颜色迟早会和地图对不上。只在编辑态可见，游戏中不占任何屏幕空间。
 const LEGEND = [
-  [`<circle class="wm-ward own" cx="5" cy="5" r="3.4"/>`,        "我方眼"],
-  [`<circle class="wm-ward own soon" cx="5" cy="5" r="3.4"/>`,   "60 秒内到期"],
-  [`<circle class="wm-ward enemy" cx="5" cy="5" r="3.4"/>`,      "敌方眼"],
-  [`<circle class="wm-ward killed" cx="5" cy="5" r="3.4"/>`,     "刚被排掉"],
+  [`<circle class="wm-ward own" cx="5" cy="5" r="3.4"/>`,          "我方假眼"],
+  [`<circle class="wm-ward own sentry" cx="5" cy="5" r="3.1"/>`,   "我方真眼"],
+  [`<circle class="wm-ward enemy" cx="5" cy="5" r="3.4"/>`,        "敌方假眼"],
+  [`<circle class="wm-ward enemy sentry" cx="5" cy="5" r="3.1"/>`, "敌方真眼"],
+  [`<circle class="wm-ward own soon" cx="5" cy="5" r="3.4"/>`,     "60 秒内到期"],
+  [`<circle class="wm-ward killed" cx="5" cy="5" r="3.4"/>`,       "刚被排掉"],
   [`<rect class="wm-tower" data-team="2" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "天辉塔"],
   [`<rect class="wm-tower" data-team="3" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "夜魇塔"],
   [`<rect class="wm-tower dead" x="1.6" y="1.6" width="6.8" height="6.8"/>`,          "已推掉"],
@@ -48,6 +50,7 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
       <div class="ed-row"><button id="edReset" type="button">恢复默认摆位</button></div>
     </div>
     <details class="ed-sec"><summary>眼位地图图例</summary>
+      <div class="ed-legend-note">实心＝假眼　空心＝真眼</div>
       <div class="ed-legend">${legendHTML()}</div>
     </details>
     <details class="ed-sec"><summary>开发</summary>
