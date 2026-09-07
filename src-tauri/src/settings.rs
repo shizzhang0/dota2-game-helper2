@@ -13,6 +13,7 @@ fn defaults() -> serde_json::Value {
                   "wardmap": true },
         "scale": 1.0,
         "opacity": 1.0,
+        "wardSize": 180,
         "logLevel": "debug",
         "recordMatches": false
     })

@@ -96,6 +96,7 @@ export function render(m) {
   // CSS 变量沿 DOM 树继承，设在容器上四个块都吃得到；缩放与透明度都走合成器，不触发重排
   root.style.setProperty("--panel-scale", scale);
   root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
+  root.style.setProperty("--ward-size", `${cfg.wardSize ?? 180}px`);
   for (const [id, cell] of Object.entries(els.cells)) {
     cell.root.hidden = show[id] === false;
   }
@@ -105,8 +106,8 @@ export function render(m) {
     el.classList.toggle("on", !!m.visible);
     el.classList.toggle("edit", !!m.editMode);
   }
-
   const wmOff = show.wardmap === false;
+
   for (const t of m.timers || []) {
     const c = els.cells[t.id];
     if (!c) continue;

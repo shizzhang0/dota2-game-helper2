@@ -201,6 +201,21 @@ html, body {
   pointer-events: auto;
   font-size: 13px;
 }
+/* 卡片的拖拽把手。负 margin 把它顶到卡片内边距之外，视觉上占满整个顶边。
+   只有这条能拖——卡片其余部分全是要点的控件，见 editor.js 顶部的注释。 */
+.ed-bar {
+  margin: -12px -14px 10px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--hair);
+  border-radius: 10px 10px 0 0;
+  background: rgba(255, 255, 255, .05);
+  font-size: 11px;
+  color: var(--dim);
+  cursor: grab;
+  user-select: none;
+}
+.ed-bar:active { cursor: grabbing; }
+
 .ed-sec { margin-bottom: 12px; }
 .ed-sec h3, .ed-sec summary {
   font-size: 11px; color: var(--dim); font-weight: 600;
@@ -209,6 +224,10 @@ html, body {
 .ed-sec summary { cursor: pointer; margin-bottom: 0; }
 details[open] > summary { margin-bottom: 7px; }
 .ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
+.ed-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
+.ed-legend span { display: flex; align-items: center; gap: 7px; }
+/* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
+.ed-legend svg { width: 11px; height: 11px; flex: none; display: block; overflow: visible; }
 .ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
 .ed-row { margin-bottom: 7px; }
 .editor input[type="range"] { flex: 1; min-width: 0; }

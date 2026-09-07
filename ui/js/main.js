@@ -73,7 +73,14 @@ function exitEdit() {
   applyEdit(false);
   if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
 }
-await initEditor(document.getElementById("editor"), document.getElementById("panel"), exitEdit);
+// 四块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
+function resetLayout() {
+  const next = applyLayout(null, cfg.scale ?? 1);
+  if (!next) return;                     // 视口没准备好，别把负坐标写进去
+  layout = next;
+  saveLayout(layout);
+}
+await initEditor(document.getElementById("editor"), exitEdit, resetLayout);
 // 不判断 editMode：锁定态窗口穿透且没有焦点，压根收不到 keydown，
 // 只有编辑态才会走到这里；靠本地状态位反而可能因事件漏收而彻底失灵。
 addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });
