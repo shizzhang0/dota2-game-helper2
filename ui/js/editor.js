@@ -56,6 +56,9 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
       <label class="ed-row">透明度
         <input id="edOpacity" type="range" min="0.3" max="1" step="0.05">
         <output id="edOpacityOut"></output></label>
+      <label class="ed-row">底板
+        <input id="edBg" type="range" min="0" max="1" step="0.02">
+        <output id="edBgOut"></output></label>
       <label class="ed-row">眼位地图
         <input id="edWard" type="range" min="108" max="360" step="4">
         <output id="edWardOut"></output></label>
@@ -81,10 +84,11 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
 
   const $ = (id) => card.querySelector("#" + id);
   const scale = $("edScale"), opacity = $("edOpacity"), ward = $("edWard"),
-        log = $("edLog"), record = $("edRecord");
+        bg = $("edBg"), log = $("edLog"), record = $("edRecord");
   scale.value = s.scale ?? 1;
   opacity.value = s.opacity ?? 1;
   ward.value = s.wardSize ?? 180;
+  bg.value = s.panelBg ?? 0.72;
   log.value = s.logLevel ?? "debug";
   record.checked = !!s.recordMatches;
 
@@ -92,6 +96,7 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
     $("edScaleOut").textContent = Number(scale.value).toFixed(2) + "×";
     $("edOpacityOut").textContent = Math.round(Number(opacity.value) * 100) + "%";
     $("edWardOut").textContent = ward.value + "px";
+    $("edBgOut").textContent = Math.round(Number(bg.value) * 100) + "%";
   };
   const collect = () => ({
     show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
@@ -99,6 +104,7 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
     scale: Number(scale.value),
     opacity: Number(opacity.value),
     wardSize: Number(ward.value),
+    panelBg: Number(bg.value),
     logLevel: log.value,
     recordMatches: record.checked,
   });

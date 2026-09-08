@@ -48,8 +48,11 @@ html, body {
   align-items: stretch;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--bg);
-  border: 1px solid var(--hair);
+  /* 底板可以一路调到全透明。描边跟着一起淡出——底板没了却留一圈白线，
+     会变成一个空的方框浮在画面上。系数 0.14 是让默认的 .72 正好落回 --hair 的 .10。
+     注意这和「整体透明度」不是一回事：那条会把文字图标一起调淡，这条只动底板。 */
+  background: rgba(8, 10, 14, var(--block-bg, .72));
+  border: 1px solid rgba(255, 255, 255, calc(var(--block-bg, .72) * .14));
   border-radius: 10px;
   pointer-events: none;          /* 锁定态整窗穿透 */
   opacity: 0;
