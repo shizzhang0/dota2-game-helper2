@@ -102,28 +102,80 @@ html, body {
 }
 .cell[data-urgency="now"] .ring-fg { stroke-width: 6; }
 
+/* 数字在环下面、图标压在环里——两者的位置是对调过的。
+   min-height 不能省：塔防 ready 态数字为空，不留高度那一格会比旁边矮、整行跳。 */
 .num {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 52px;
+  margin-top: 2px;
+  min-height: 21px;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; font-weight: 600; letter-spacing: .2px;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
 }
 .cell[data-urgency="now"] .num { color: var(--accent); }
 
-.lab {
-  margin-top: 1px;
-  font-size: 11px;
-  color: var(--dim);
-  white-space: nowrap;
-  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+/* 有圆环的格子：图标压在环中央（环内径 48px，放得下 24px）。
+   放大到 24px 顺带解决了描边过细的风险——0.8× 时描边从 0.79px 变成 1.36px。
+   颜色直接取 --accent，让整格读成一个有颜色的整体。 */
+.cell:not(.wide) .lab {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
 }
-.cell[data-urgency="now"] .lab { color: var(--fg); }
+.cell:not(.wide) .lab svg.ico { width: 24px; height: 24px; }
+
+/* 净资产：图标和金额同一行、放左边。成立是因为它只有**一个值**——
+   币 + 数字读起来就是"金钱：7319"。 */
+.inline-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.cell.wide .lab { display: flex; align-items: center; justify-content: center; flex: none; }
+
+/* 买活不能照搬：它是**五个值**，图标摆进那一行就成了"第六个东西"，
+   混进数据里了。所以它的图标回到下方当标签——而且这样正好和塔防的倒计时
+   落在同一水平线上，两格反而对齐了。 */
+[data-cell="buyback"] .lab { margin-top: 2px; min-height: 21px; }
+/* 圆点原本什么容器都没有，旁边塔防却有个很重的圆环，两边一比就"飘"。
+   给它一个圆角框——那是圆环在这种形态下的对应物。
+
+   框**撑满格子高度**，把塔防"环 + 倒计时"的结构镜像一遍：框顶对齐圆环顶、
+   框底对齐倒计时底，圆点居中到圆环那一带、箭头落到倒计时那一行。
+   曾试过让框贴着内容再垂直居中，结果和圆环、倒计时两边都没对齐。 */
+.bb-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  /* 边框取 --k-chance（#65D9F7，"敌方缺失 = 机会"）的 32%，和框里的图标同色系。
+     不用满强度：框是容器不是数据，太亮会和旁边塔防那个红色进度环抢，
+     也会让人误以为它自己在表达某种状态。 */
+  border: 1px solid rgba(101, 217, 247, .32);
+  border-radius: 10px;
+  padding: 0 8px;
+}
+/* 框宽 = 圆点 5×16 + 间距 4×5 + 内边距 16 + 边框 2 = 118，格子必须比它宽，
+   否则框会溢出格子、顶到块的内边距上 */
+/* 圆点吃掉箭头以外的全部高度并居中——它的中心因此落在圆环中心那条线上 */
+[data-cell="buyback"] .dots { flex: 1; height: auto; }
+/* 塔防和买活是两种不同形态的格子，6px 的通用间距太挤，会读成一组 */
+[data-cell="buyback"] { margin-left: 8px; }
+
+/* 必须写成 `.cell .lab svg`：上面那条 `.cell svg { width: 52px }` 是给圆环用的，
+   特异度 (0,1,1) 会把图标撑成 52px——就是眼位地图踩过的同一个坑。
+   这条是 (0,2,1)，压得住。
+   **面板上的图标尺寸一律由 CSS 决定**，icon() 的 size 参数在这里会被覆盖；
+   那个参数只对卡片里的图例有效（.ed-ico 没有设宽高）。 */
+.cell .lab svg.ico {
+  width: 16px;
+  height: 16px;
+  display: block;
+  overflow: visible;
+  /* 描边图标在明亮的团战画面上容易糊，给一点深色底衬，和数字的处理一致 */
+  filter: drop-shadow(0 0 2px #000);
+}
 
 /* 宽度写死：净资产从 4 位涨到 5 位时若让宽度自适应，居中面板会整体横移，读数时抖动 */
 .cell.wide { justify-content: space-between; opacity: 1; }
-.cell[data-cell="buyback"] { width: 104px; }
+.cell[data-cell="buyback"] { width: 122px; }   /* 容得下 .bb-box 的 118px，见下 */
 .cell.econ { width: 116px; }
 
 /* ── 敌方买活 ────────────────────────────────────────── */
@@ -148,7 +200,27 @@ html, body {
 .nw {
   font-size: 22px; font-weight: 600; color: #FFD76A;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
+  /* 钉住宽度：图标在左边之后，数字从 4 位涨到 5 位会把币往左推。
+     这和"格子宽度写死防抖动"是同一个理由，只是尺度小了一层。 */
+  min-width: 68px;
+  text-align: left;
 }
+.econ .lab { color: #FFD76A; }
+[data-cell="buyback"] .lab { color: var(--k-chance); }
+/* 比净资产那个大：它下方没有别的东西，而旁边塔防同一水平线上是 18px 的倒计时，
+   16px 的描边图标在旁边显得轻飘。
+   **必须写在上面那条 `.cell .lab svg.ico` 之后**——两条特异度都是 (0,3,1)，
+   靠顺序取胜。这个文件里同类的坑已经出现三次了（圆环压图标、真眼空心、这条）。 */
+[data-cell="buyback"] .lab svg.ico { width: 20px; height: 20px; }
+
+/* 塔防 ready：盾填实。数字位这时是空的（数字位永远只放数字），
+   光靠"环画满"不够显眼，而填实是个不用文字的状态差——
+   放 READY 会在刚清空的面板上重新塞回一个要翻译的词。 */
+[data-cell="glyph"][data-urgency="now"] .lab svg.ico {
+  fill: currentColor;
+  fill-opacity: .3;
+}
+
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -238,6 +310,10 @@ details[open] > summary { margin-bottom: 7px; }
 /* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
 .ed-legend svg { width: 11px; height: 11px; flex: none; display: block; overflow: visible; }
 .ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
+/* 九个显示项前面的图标，和面板上用的是同一份 icons.js，形状永远不会脱节。
+   眼位那一行是两个图标，所以用 flex 而不是写死宽度。 */
+.ed-ico { display: flex; align-items: center; gap: 3px; color: var(--dim); flex: none; }
+.ed-ico svg.ico { display: block; overflow: visible; }
 .ed-row { margin-bottom: 7px; }
 .editor input[type="range"] { flex: 1; min-width: 0; }
 .editor output {
