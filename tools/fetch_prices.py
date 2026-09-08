@@ -16,7 +16,11 @@ req = urllib.request.Request(URL, headers={"User-Agent": "dota2-game-helper2/0.1
 raw = json.load(urllib.request.urlopen(req))
 
 def entry(v):
+    # id 是给 GSI 的购买事件用的：CHAT_MESSAGE_ITEM_PURCHASE 只给物品 id，
+    # 没有这张映射就没法知道买的是什么（眼架里装了几个眼全靠它推）
     e = {"cost": v["cost"]}
+    if isinstance(v.get("id"), int):
+        e["id"] = v["id"]
     if v.get("qual") == "consumable":
         e["consumable"] = True
     ch = v.get("charges")
