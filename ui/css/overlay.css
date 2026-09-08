@@ -142,7 +142,10 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  border: 1px solid var(--hair);
+  /* 边框取 --k-chance（#65D9F7，"敌方缺失 = 机会"）的 32%，和框里的图标同色系。
+     不用满强度：框是容器不是数据，太亮会和旁边塔防那个红色进度环抢，
+     也会让人误以为它自己在表达某种状态。 */
+  border: 1px solid rgba(101, 217, 247, .32);
   border-radius: 10px;
   padding: 6px 8px 4px;
 }
