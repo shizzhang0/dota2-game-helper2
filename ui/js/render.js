@@ -41,9 +41,11 @@ const INNER = {
   timers: () => TIMER_IDS.map(ring).join(""),
   enemy: () => ring("glyph") + `
     <div class="cell wide" data-cell="buyback">
-      <div class="dots">${[0, 1, 2, 3, 4].map(i =>
-        `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
-      <div class="lab">${icon("buyback")}</div>
+      <div class="bb-box">
+        <div class="dots">${[0, 1, 2, 3, 4].map(i =>
+          `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
+        <div class="lab">${icon("buyback")}</div>
+      </div>
     </div>`,
   econ: () => `
     <div class="cell wide econ" data-cell="econ">
