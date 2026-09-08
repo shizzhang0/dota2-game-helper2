@@ -32,8 +32,8 @@ function ring(id) {
       <circle class="ring-fg" cx="30" cy="30" r="${R}"
               stroke-dasharray="${CIRC}" stroke-dashoffset="0"/>
     </svg>
-    <div class="num">--</div>
     <div class="lab"></div>
+    <div class="num">--</div>
   </div>`;
 }
 
@@ -41,15 +41,19 @@ const INNER = {
   timers: () => TIMER_IDS.map(ring).join(""),
   enemy: () => ring("glyph") + `
     <div class="cell wide" data-cell="buyback">
-      <div class="dots">${[0, 1, 2, 3, 4].map(i =>
-        `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
-      <div class="lab">${icon("buyback")}</div>
+      <div class="inline-row">
+        <div class="lab">${icon("buyback", 16)}</div>
+        <div class="dots">${[0, 1, 2, 3, 4].map(i =>
+          `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
+      </div>
     </div>`,
   econ: () => `
     <div class="cell wide econ" data-cell="econ">
-      <div class="nw">--</div>
+      <div class="inline-row">
+        <div class="lab">${icon("coin", 16)}</div>
+        <div class="nw">--</div>
+      </div>
       <div class="rate"><span class="gpm">--</span><span class="xpm">--</span></div>
-      <div class="lab">${icon("coin")}</div>
     </div>`,
   wardmap: () => `<div class="cell wide wardmap" data-cell="wardmap"></div>`,
 };
