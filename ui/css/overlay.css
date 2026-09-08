@@ -64,12 +64,15 @@ html, body {
   visibility: visible;
   transition: opacity .12s linear;
 }
+/* 编辑态**不要**写 opacity: 1。它会盖掉上面 .block.on 的 var(--panel-opacity)，
+   而透明度滑块只能在编辑态里够到——结果就是"拖了没反应"，永远看不到效果。
+   把设置并进编辑态本来就是为了不盲调，这条却一直漏在外面。
+   透明度下限是 0.3，编辑态下仍然看得见、拖得动。 */
 .block.edit {
   pointer-events: auto;
   cursor: grab;
   outline: 1px dashed var(--k-chance);
   outline-offset: 3px;
-  opacity: 1;
   visibility: visible;
 }
 .block.edit:active { cursor: grabbing; }
