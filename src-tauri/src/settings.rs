@@ -16,7 +16,8 @@ fn defaults() -> serde_json::Value {
         "panelBg": 0.72,
         "wardSize": 180,
         "logLevel": "debug",
-        "recordMatches": false
+        "recordMatches": false,
+        "lang": crate::lang::system_default()
     })
 }
 
@@ -60,6 +61,8 @@ pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
         }
         let _ = std::fs::write(&p, serde_json::to_string_pretty(&merged).unwrap_or_default());
     }
+    // 托盘菜单在 Rust 侧，前端那份 emit 管不到它——切语言要两边都动
+    crate::tray::apply_lang(&app);
     let _ = app.emit("settings", merged); // 覆盖层监听后实时生效
 }
 
