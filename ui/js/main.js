@@ -98,7 +98,8 @@ connectSource(async (pkt) => {
   wards.C = C;
   wards.update(st, info);
   if (info.newMatch) econ.reset();
-  last = { st, info, econ: econ.update(st, prices, C, info.clock) };
+  // 插眼数要在 wards.update 之后取：净资产靠它把眼架里的存货扣掉
+  last = { st, info, econ: econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
 });
 
 onAltChange((d) => { alt = d; });

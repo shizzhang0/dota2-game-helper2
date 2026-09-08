@@ -38,6 +38,14 @@ export function deadTowers(state, towers) {
     o.team === t.team && Math.abs(o.xpos - t.x) <= tol && Math.abs(o.ypos - t.y) <= tol));
 }
 
+/** 眼是不是插在自己英雄脚下。hero.xpos/ypos 与 minimap 用的是同一套世界坐标。 */
+const PLACE_RADIUS = 700;
+function nearMe(state, w) {
+  const h = state.hero;
+  if (!h || typeof h.xpos !== "number" || typeof h.ypos !== "number") return false;
+  return Math.hypot(w.x - h.xpos, w.y - h.ypos) <= PLACE_RADIUS;
+}
+
 export class WardTracker {
   constructor(C) { this.C = C; this.reset(); }
   reset() {
@@ -46,10 +54,12 @@ export class WardTracker {
     this.killed = [];          // [{x, y, kind, at}]
     this.lastClock = null;
     this.joined = false;       // 是否已处理过本局第一包
+    this.newOwnSentries = 0;   // 本包新出现的己方真眼数，净资产拿它扣眼架库存
   }
 
   update(state, info) {
     const clock = info.clock;
+    this.newOwnSentries = 0;
     if (clock === null) return;
     // 时钟倒流 = 换局/重开，旧状态作废（号角前 clock 本就不单调）
     if (this.lastClock !== null && clock < this.lastClock - 5) this.reset();
@@ -64,6 +74,11 @@ export class WardTracker {
           // 本局第一包里就存在的眼，插放时间未知，倒计时显示为未知
           this.own.set(w.key, { x: w.x, y: w.y, kind: w.kind,
                                 firstSeen: this.joined ? clock : null });
+          // 刚插下的己方真眼，且**插在自己英雄脚下**——净资产拿它扣眼架库存。
+          // minimap 的眼条目只有 team、没有玩家 id，也没有"插眼"事件，
+          // 所以队友的眼只能靠距离排除：真眼施法距离 500，取 700 留余量。
+          // 见 design/networth.md 的眼架一节。
+          if (this.joined && w.kind === "sentry" && nearMe(state, w)) this.newOwnSentries++;
         }
       } else {
         this.enemy.set(w.key, { x: w.x, y: w.y, kind: w.kind, lastSeen: clock });
