@@ -12,11 +12,12 @@ import { icon, CELL_ICON } from "./icons.js";
 let card = null;
 
 /** 显示项那九行前面的图标——卡片因此同时是设置和图例，一份数据两用。
-    中路符取它的首个阶段（赏金币堆）；眼位那一行是**眼 + 塔**两个，
-    因为那块地图画的就是这两类东西，而面板上那一格是没有标签的。 */
+    每行一个图标，眼位也不例外：曾经放过"眼 + 塔"两个（想表达那块地图画了哪两类
+    东西），但九行里只有它是两个，反而不齐。塔图标仍留在 icons.js 里，
+    将来眼位图例那一节要用。 */
 function showIcon(k) {
-  if (k === "mid") return icon("bounty", 13);
-  if (k === "wardmap") return icon("eye", 13) + icon("tower", 13);
+  if (k === "mid") return icon("bounty", 13);   // 中路符取它的首个阶段
+  if (k === "wardmap") return icon("eye", 13);
   return icon(CELL_ICON[k], 13);
 }
 

@@ -139,7 +139,9 @@ html, body {
 
 /* 必须写成 `.cell .lab svg`：上面那条 `.cell svg { width: 52px }` 是给圆环用的，
    特异度 (0,1,1) 会把图标撑成 52px——就是眼位地图踩过的同一个坑。
-   这条是 (0,2,1)，压得住。 */
+   这条是 (0,2,1)，压得住。
+   **面板上的图标尺寸一律由 CSS 决定**，icon() 的 size 参数在这里会被覆盖；
+   那个参数只对卡片里的图例有效（.ed-ico 没有设宽高）。 */
 .cell .lab svg.ico {
   width: 16px;
   height: 16px;
@@ -183,6 +185,11 @@ html, body {
 }
 .econ .lab { color: #FFD76A; }
 [data-cell="buyback"] .lab { color: var(--k-chance); }
+/* 比净资产那个大：它下方没有别的东西，而旁边塔防同一水平线上是 18px 的倒计时，
+   16px 的描边图标在旁边显得轻飘。
+   **必须写在上面那条 `.cell .lab svg.ico` 之后**——两条特异度都是 (0,3,1)，
+   靠顺序取胜。这个文件里同类的坑已经出现三次了（圆环压图标、真眼空心、这条）。 */
+[data-cell="buyback"] .lab svg.ico { width: 20px; height: 20px; }
 
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 

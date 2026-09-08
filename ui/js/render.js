@@ -43,12 +43,12 @@ const INNER = {
     <div class="cell wide" data-cell="buyback">
       <div class="dots">${[0, 1, 2, 3, 4].map(i =>
         `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
-      <div class="lab">${icon("buyback", 16)}</div>
+      <div class="lab">${icon("buyback")}</div>
     </div>`,
   econ: () => `
     <div class="cell wide econ" data-cell="econ">
       <div class="inline-row">
-        <div class="lab">${icon("coin", 16)}</div>
+        <div class="lab">${icon("coin")}</div>
         <div class="nw">--</div>
       </div>
       <div class="rate"><span class="gpm">--</span><span class="xpm">--</span></div>
