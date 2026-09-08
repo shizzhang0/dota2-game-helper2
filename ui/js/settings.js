@@ -1,15 +1,15 @@
 import { isTauri } from "./source.js";
 
-export const SHOW_ITEMS = [
-  ["mid", "中路符"], ["bounty", "赏金"], ["lotus", "莲花"],
-  ["wisdom", "智慧"], ["stack", "堆野"], ["glyph", "敌塔防"],
-  ["buyback", "敌买活"], ["econ", "净资产"], ["wardmap", "眼位小地图"],
-];
+// 只有键，显示名在语言包的 show.* 里。顺序就是卡片上九个勾的顺序。
+export const SHOW_KEYS = ["mid", "bounty", "lotus", "wisdom", "stack",
+                          "glyph", "buyback", "econ", "wardmap"];
 
+// lang 缺省给中文：Rust 侧的 defaults() 会按系统语言填好这个字段，
+// 这份只在浏览器开发时用得上。
 export const DEFAULTS = {
-  show: Object.fromEntries(SHOW_ITEMS.map(([k]) => [k, true])),
+  show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
   scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
-  logLevel: "debug", recordMatches: false,
+  logLevel: "debug", recordMatches: false, lang: "zh-CN",
 };
 
 export async function loadSettings() {

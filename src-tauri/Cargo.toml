@@ -21,7 +21,7 @@ winreg = "0.52"
 
 [dependencies.windows]
 version = "0.58"
-features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"]
+features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Globalization"]
 
 [profile.release]
 opt-level = "s"

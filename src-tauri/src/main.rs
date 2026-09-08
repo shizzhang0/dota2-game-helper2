@@ -4,6 +4,7 @@ mod altkey;
 mod constants;
 mod gsi;
 mod gsicfg;
+mod lang;
 mod log;
 mod prices;
 mod record;
