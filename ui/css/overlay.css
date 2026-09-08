@@ -248,7 +248,9 @@ html, body {
   height: var(--ward-size, 180px);
   display: block;
 }
-.wm-bg { fill: rgba(0, 0, 0, .35); }
+/* 地图自己的底跟着「底板」滑块一起淡——写死 .35 的话，底板拉到 0 时四个块都透了，
+   只剩这一块灰方块浮在画面中间。系数 .5 让默认的 .72 落回 .36，和原来同一档。 */
+.wm-bg { fill: rgba(0, 0, 0, calc(var(--block-bg, .72) * .5)); }
 .wm-tower { fill: #9AA6B4; opacity: .55; }
 .wm-tower[data-team="2"] { fill: #66BB6A; }
 .wm-tower[data-team="3"] { fill: #E57373; }

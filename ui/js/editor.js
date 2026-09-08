@@ -1,4 +1,4 @@
-import { SHOW_ITEMS, loadSettings, saveSettings } from "./settings.js";
+import { SHOW_ITEMS, DEFAULTS, loadSettings, saveSettings } from "./settings.js";
 import { isTauri } from "./source.js";
 import { icon, CELL_ICON } from "./icons.js";
 
@@ -37,7 +37,7 @@ const LEGEND = [
 const legendHTML = () => LEGEND.map(([shape, label]) =>
   `<span><svg viewBox="0 0 10 10" aria-hidden="true">${shape}</svg>${label}</span>`).join("");
 
-export async function initEditor(cardEl, onDone, onResetLayout) {
+export async function initEditor(cardEl, onDone, onReset) {
   card = cardEl;
   const s = await loadSettings();
   card.className = "editor";
@@ -62,7 +62,7 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
       <label class="ed-row">眼位地图
         <input id="edWard" type="range" min="108" max="360" step="4">
         <output id="edWardOut"></output></label>
-      <div class="ed-row"><button id="edReset" type="button">恢复默认摆位</button></div>
+      <div class="ed-row"><button id="edReset" type="button">重置</button></div>
     </div>
     <details class="ed-sec"><summary>眼位地图图例</summary>
       <div class="ed-legend-note">实心＝假眼　空心＝真眼</div>
@@ -117,7 +117,20 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
     if (isTauri()) window.__TAURI__.core.invoke("open_constants_dir");
   });
   $("edDone").addEventListener("click", onDone);
-  $("edReset").addEventListener("click", onResetLayout);
+  // 「重置」把这张卡片管的外观一次还原：九个勾 + 四条滑块 + 四块摆位。
+  // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
+  // 摆位要按**新的**缩放重算，而 main.js 里的 cfg 靠 settings 事件异步刷新、
+  // 这会儿还是旧值，所以把 scale 直接传过去，别让它自己去读。
+  $("edReset").addEventListener("click", () => {
+    for (const el of card.querySelectorAll("[data-show]")) el.checked = DEFAULTS.show[el.dataset.show];
+    scale.value = DEFAULTS.scale;
+    opacity.value = DEFAULTS.opacity;
+    bg.value = DEFAULTS.panelBg;
+    ward.value = DEFAULTS.wardSize;
+    sync();
+    saveSettings(collect());
+    onReset(DEFAULTS.scale);
+  });
 
   const bar = card.querySelector(".ed-bar");
   let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false;

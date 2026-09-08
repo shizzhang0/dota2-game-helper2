@@ -6,7 +6,7 @@ export const SHOW_ITEMS = [
   ["buyback", "敌买活"], ["econ", "净资产"], ["wardmap", "眼位小地图"],
 ];
 
-const DEFAULTS = {
+export const DEFAULTS = {
   show: Object.fromEntries(SHOW_ITEMS.map(([k]) => [k, true])),
   scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
   logLevel: "debug", recordMatches: false,

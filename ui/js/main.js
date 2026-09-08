@@ -74,8 +74,9 @@ function exitEdit() {
   if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
 }
 // 四块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
-function resetLayout() {
-  const next = applyLayout(null, cfg.scale ?? 1);
+// scale 由调用方传入：卡片刚把设置存下去，cfg 要等 settings 事件回来才更新。
+function resetLayout(scale = cfg.scale ?? 1) {
+  const next = applyLayout(null, scale);
   if (!next) return;                     // 视口没准备好，别把负坐标写进去
   layout = next;
   saveLayout(layout);
