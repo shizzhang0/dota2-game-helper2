@@ -93,16 +93,35 @@ def png(size, rgba):
             + chunk(b"IEND", b""))
 
 
-def ico(pngs):
-    """Vista 以后的 ICO 可以直接内嵌 PNG，不必再存 BMP + 掩码那一套。"""
-    head = struct.pack("<HHH", 0, 1, len(pngs))
-    off = len(head) + 16 * len(pngs)
-    entries, blobs = b"", b""
-    for size, data in pngs:
-        entries += struct.pack("<BBBBHHII", size % 256, size % 256, 0, 0, 1, 32, len(data), off)
+def dib(size, rgba):
+    """ICO 里的传统位图条目：BITMAPINFOHEADER + 自下而上的 BGRA + AND 掩码。
+
+    **256 以下必须用它，不能用 PNG。** PNG 压缩的图标条目微软只保证 256×256
+    这一档；更小的尺寸，资源管理器在有些路径上认不出来，于是回退到别的条目或
+    干脆用缓存里的旧图——表现就是"exe 图标换不掉"，看着像缓存问题。
+    """
+    hdr = struct.pack("<IiiHHIIiiII", 40, size, size * 2, 1, 32, 0, 0, 0, 0, 0, 0)
+    xor = bytearray()
+    for y in range(size - 1, -1, -1):                 # 位图自下而上存
+        for x in range(size):
+            r, g, b, a = rgba[(y * size + x) * 4:(y * size + x) * 4 + 4]
+            xor += bytes((b, g, r, a))                # BGRA，非预乘
+    # AND 掩码：32 位图靠 alpha 决定透明，掩码全 0 即可，但**必须在**，
+    # 且每行按 4 字节对齐，否则整张图会错位
+    stride = ((size + 31) // 32) * 4
+    return bytes(hdr) + bytes(xor) + bytes(stride * size)
+
+
+def ico(entries):
+    """entries: [(size, data)]，data 已经是该条目在 ICO 里的原始字节。"""
+    head = struct.pack("<HHH", 0, 1, len(entries))
+    off = len(head) + 16 * len(entries)
+    table, blobs = b"", b""
+    for size, data in entries:
+        table += struct.pack("<BBBBHHII", size % 256, size % 256, 0, 0, 1, 32, len(data), off)
         blobs += data
         off += len(data)
-    return head + entries + blobs
+    return head + table + blobs
 
 
 def icns(entries):
@@ -123,16 +142,22 @@ ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 ICNS = [(b"ic11", 32), (b"ic12", 64), (b"ic07", 128), (b"ic13", 256), (b"ic14", 512)]
 
 if __name__ == "__main__":
-    cache = {}
+    raw, cache = {}, {}
+    def pixels(s):
+        if s not in raw:
+            raw[s] = render(s)
+        return raw[s]
     def get(s):
         if s not in cache:
-            cache[s] = png(s, render(s))
+            cache[s] = png(s, pixels(s))
         return cache[s]
 
     for name, s in sorted(NAMED.items(), key=lambda kv: kv[1]):
         open(os.path.join(OUT, name), "wb").write(get(s))
         print(f"{name:<24} {s}px")
-    open(os.path.join(OUT, "icon.ico"), "wb").write(ico([(s, get(s)) for s in ICO_SIZES]))
-    print(f"{'icon.ico':<24} {ICO_SIZES}")
+    # 256 用 PNG（那一档就是为它设计的，也省体积），其余全用 DIB
+    entries = [(s, get(s) if s >= 256 else dib(s, pixels(s))) for s in ICO_SIZES]
+    open(os.path.join(OUT, "icon.ico"), "wb").write(ico(entries))
+    print(f"{'icon.ico':<24} {ICO_SIZES}  (<256 用 DIB，256 用 PNG)")
     open(os.path.join(OUT, "icon.icns"), "wb").write(icns([(t, get(s)) for t, s in ICNS]))
     print(f"{'icon.icns':<24} {[s for _, s in ICNS]}")
