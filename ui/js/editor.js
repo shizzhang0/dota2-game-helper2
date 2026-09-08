@@ -53,7 +53,7 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
       <label class="ed-row">缩放
         <input id="edScale" type="range" min="0.8" max="2" step="0.05">
         <output id="edScaleOut"></output></label>
-      <label class="ed-row">透明度
+      <label class="ed-row">整体
         <input id="edOpacity" type="range" min="0.3" max="1" step="0.05">
         <output id="edOpacityOut"></output></label>
       <label class="ed-row">底板
