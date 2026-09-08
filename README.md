@@ -1,144 +1,191 @@
 <h1><img src="src-tauri/icons/64x64.png" width="28" height="28" align="absmiddle" alt=""> dota2-game-helper2</h1>
 
-基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
-在游戏中按住 **Alt** 显示 Dota Plus 才有的那几个倒计时。
+**English** · [简体中文](README.zh-CN.md)
 
-> **开发中，尚未发布。** 下面列出的功能都已实现，但仍在逐项进游戏核对，
-> 版本号停在 `0.1.0`，还没有打过 tag。
+A desktop overlay built on Dota 2's official GSI (Game State Integration) interface.
+Hold **Alt** in game to see the timers that otherwise require Dota Plus.
+
+> **In development, not yet released.** Everything listed below is implemented, but
+> still being checked against live games one item at a time. The version is `0.1.0`
+> and no tag has been cut.
 >
-> 已核对：快速模式各符刷新间隔与正常模式一致；净资产口径对照回放的官方"财产总和"
-> 逐点验证（2026-09-07 取七个时间点全部吻合）；敌方塔防状态机 16/16 回归通过；
-> 眼位小地图的主体（我方眼倒计时、被排检测、敌方眼、塔的灰点）与智慧神符、莲花、
-> 敌方买活冷却均已在实战中核对（2026-09-08）。
+> Verified so far: turbo rune intervals match normal mode; net worth reconciled
+> point-by-point against the game's official "Net Worth" in replays
+> (13 checkpoints across two matches, 2026-09-07 and 09-08); the enemy glyph state
+> machine passes 16/16 regression; the ward map (own-ward countdowns, deward
+> detection, enemy wards, greyed-out towers) plus the Wisdom rune, Lotus and enemy
+> buyback cooldown all confirmed in real matches.
 >
-> 设计文档按主题组织在 [docs/design/](docs/design/)：
-> [倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
-> [眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
-> [开发工具](docs/design/dev-tools.md)。
-> 待验证事项见 [docs/verify-checklist.md](docs/verify-checklist.md)，
-> 未完成事项见 [docs/backlog.md](docs/backlog.md)。
+> Design notes live in [docs/design/](docs/design/), organised by topic:
+> [timers](docs/design/timers.md) · [net worth](docs/design/networth.md) ·
+> [ward map](docs/design/wards.md) · [app shell](docs/design/overlay.md) ·
+> [dev tools](docs/design/dev-tools.md). Open verification items are in
+> [docs/verify-checklist.md](docs/verify-checklist.md); unfinished work is in
+> [docs/backlog.md](docs/backlog.md). Those files are development notes and are
+> kept in Chinese only.
 
-## 显示什么
+## What it shows
 
-| 项目 | 说明 |
+| Item | Detail |
 |---|---|
-| 中路符时间线 | 0:00 赏金 → 2:00 / 4:00 圣水 → 6:00 起每 2 分钟强化符 |
-| 赏金符 | 每 3 分钟 |
-| 智慧神符 | 7:00 起每 7 分钟 |
-| 莲花 | 3:00 起每 3 分钟 |
-| 堆野窗口 | 野怪每整分钟刷新，倒数提醒 |
-| 敌方塔防 | 冷却/就绪状态，含"丢首座 T1/T2/T3/近战兵营即刷新"的完整规则 |
-| 敌方买活 | 各敌方玩家的买活冷却（480s），游戏只播报瞬间、这里保留状态 |
-| 经济面板 | 自己的净资产（近似）/ GPM / XPM |
-| 眼位小地图 | 我方眼的到期倒计时与被排提示；敌方眼只标位置 |
+| Mid rune timeline | 0:00 Bounty → 2:00 / 4:00 Water → Power runes every 2 min from 6:00 |
+| Bounty runes | Every 3 minutes |
+| Wisdom rune | Every 7 minutes from 7:00 |
+| Lotus | Every 3 minutes from 3:00 |
+| Stack window | Neutrals spawn each full minute; counts down to the stacking window |
+| Enemy glyph | Cooldown / ready, including the full "resets on losing the first T1/T2/T3/melee barracks" rule |
+| Enemy buyback | Each enemy player's buyback cooldown (480s) — the game only announces the moment, this keeps the state |
+| Economy | Your own net worth (approximate) / GPM / XPM |
+| Ward map | Expiry countdown and deward alerts for your wards; enemy wards show position only |
 
-游戏中交互只有一种：**按住 Alt 显示，松开隐藏**。平时屏幕上什么都没有。
+In game there is exactly one interaction: **hold Alt to show, release to hide.**
+The rest of the time the screen is untouched.
 
-每项都能在设置里单独关掉。
+Every item can be switched off individually in settings.
 
-### 关于敌方眼为什么不带倒计时
+### Why enemy wards have no countdown
 
-只有真眼照到的那十几秒里才看得见敌方的眼，**根本无从得知它是什么时候插的**——
-可能刚插，也可能还剩十秒。一个可能虚高五分钟的倒计时会误导决策，
-而"那里有眼"这一条信息本身就够用了（别从这走 / 去排掉它）。
+An enemy ward is only visible during the seconds a sentry lights it up, so **there is
+no way to know when it was placed** — it might be brand new, or ten seconds from
+expiring. A countdown that can be five minutes too high misleads decisions, while
+"there is a ward there" is already enough to act on (don't walk through / go dewarders).
 
-## 为什么这是安全的
+## Why this is safe
 
-本项目是**纯接收器**：
+This project is a **pure receiver**:
 
-- ❌ 不读游戏内存、不修改游戏文件、不注入进程、不 hook 图形 API、不模拟任何输入
-- ✅ 只接收游戏通过 GSI **主动推送**的、**本来就对你可见**的数据
+- ❌ Does not read game memory, modify game files, inject into the process, hook
+  graphics APIs, or simulate any input
+- ✅ Only receives data the game **pushes on its own** through GSI — data that is
+  **already visible to you**
 
-GSI 是 Valve 官方暴露的接口（罗技、雷蛇驱动用的同一套机制），
-对局中只推送玩家本人的数据，设计上就无法用于获取隐藏信息。
-Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
+GSI is an interface Valve exposes officially (the same mechanism Logitech and Razer
+drivers use). During a match it only pushes the local player's own data, so by design
+it cannot be used to obtain hidden information. Alt detection passively polls keyboard
+state; it registers no hotkey and intercepts no keystrokes.
 
-## 设置
+## Settings
 
-程序常驻通知区（托盘），右键菜单只有两项：
+The app lives in the notification area (system tray). Its right-click menu has two
+entries only:
 
 ```
-编辑面板      ← 左键单击图标同样是这个
+Edit panel      ← left-clicking the icon does the same
 ──────────
-退出
+Quit
 ```
 
-**「编辑面板」进入编辑态**（快捷键 `Ctrl+Alt+F10`）：四个块——**倒计时 / 敌方 / 净资产 /
-眼位地图**——强制常显、各自可以拖到想要的位置，同时浮出一张设置卡片：
-显示项开关、面板缩放、整体透明度、眼位地图大小、恢复默认摆位、眼位地图图例、
-日志级别、对局录制开关。
-改动即时生效，不需重启。卡片自己也能拖，抓它顶部的标题栏。
+**"Edit panel" enters edit mode** (hotkey `Ctrl+Alt+F10`): the four blocks — **timers /
+enemy / net worth / ward map** — are forced visible and can each be dragged where you
+want them, and a settings card floats up alongside: display toggles, language, panel
+scale, overall opacity, backdrop opacity, ward map size, reset, ward map legend, log
+level, and match recording. Changes apply immediately, no restart. The card itself can
+be dragged too — grab its title bar.
 
-设置和摆位放在同一个状态里是有原因的：面板平时藏着，
-如果设置做成独立窗口，调缩放和透明度就成了盲调。
+Settings and layout share one mode for a reason: the panel is normally hidden, so if
+settings were a separate window, adjusting scale and opacity would be flying blind.
 
-编辑态下覆盖层会接管整屏鼠标（否则拖不动块），所以退出留了三条路：
-**卡片上的「完成」按钮 · ESC · 再按一次 `Ctrl+Alt+F10`**。
+In edit mode the overlay takes over the whole screen for mouse input (otherwise the
+blocks could not be dragged), so there are three ways out: **the "Done" button on the
+card · ESC · pressing `Ctrl+Alt+F10` again**.
 
-> ESC 是前端监听的，没有注册成全局热键——那样会劫持游戏内的菜单键。
+> ESC is handled by the frontend rather than registered as a global hotkey — that
+> would hijack the in-game menu key.
 
-配置文件都在 `%APPDATA%\dev.dota2helper2.app\`：
+Config files all live in `%APPDATA%\dev.dota2helper2.app\`:
 
 | | |
 |---|---|
-| `constants/` | 时间常数表 + 物品价格表 + 价格覆盖表，改 JSON 重启生效 |
-| `settings.json` | 上述设置 |
-| `layout.json` | 四个块各自的位置 |
-| `logs/` | 运行日志 |
-| `records/` | 对局录制（默认关闭） |
+| `constants/` | Timing tables, item prices, price overrides, language packs — edit the JSON and restart |
+| `settings.json` | The settings above |
+| `layout.json` | Position of each of the four blocks |
+| `logs/` | Runtime logs |
+| `records/` | Match recordings (off by default) |
 
-## 技术栈
+### Uninstalling
 
-- 壳：[Tauri 2](https://tauri.app/)（Rust），透明/无边框/置顶/鼠标穿透窗口
-- 前端：vanilla JS + SVG，无框架
-- 数据源：Dota 2 GSI（本地 HTTP 推送）
-- 物品价格：本地常数表（快照取自 [OpenDota](https://docs.opendota.com/)）+ 覆盖表，**运行时不联网**
+There is no installer, so there is nothing to uninstall — delete three things:
 
-时间常数全部外置于 `constants/*.json`（正常/快速模式两套表），版本更新只改数据不改代码。
+1. `dota2-game-helper2.exe`
+2. the config directory `%APPDATA%\dev.dota2helper2.app\`
+3. `gamestate_integration_helper2.cfg` in Dota's
+   `game\dota\cfg\gamestate_integration\` directory
 
-**物品价格也能自己改。** 价格表是本地常数（`constants/item_prices.json`，
-跑 `python tools/fetch_prices.py` 随版本更新），程序运行时不发任何网络请求。
-而 OpenDota 的价格会落后于游戏版本（实测龙心游戏收 5200、
-它还写着 5100），所以 `constants/item_price_overrides.json` 可以按「物品名: 实际价格」
-覆盖，重启生效。发现净资产差了某件装备的钱时，往这里加一行就行——
-上游修好后删掉，程序会在日志里提示哪些覆盖已经多余。
+## Tech stack
 
-## 使用前提
+- Shell: [Tauri 2](https://tauri.app/) (Rust) — transparent, undecorated, always-on-top,
+  click-through window
+- Frontend: vanilla JS + SVG, no framework
+- Data source: Dota 2 GSI (local HTTP push)
+- Item prices: local constants (snapshot from [OpenDota](https://docs.opendota.com/))
+  plus an override table — **no network access at runtime**
 
-- Dota 2 启动项加 `-gamestateintegration`（首次运行会自动写入 GSI 配置文件）
-- 游戏需使用**无边框窗口**模式（独占全屏下任何非注入类悬浮层都无法显示，这是系统级限制）
+All timing constants live outside the binary in `constants/*.json` (one table each for
+normal and turbo), so a game patch means editing data, not code.
 
-## 开发
+**Item prices are editable too.** The price table is a local constant
+(`constants/item_prices.json`, refreshed per patch with `python tools/fetch_prices.py`)
+and the program makes no network requests while running. Since OpenDota lags behind the
+game (measured: the game charges 5200 for Heart while OpenDota still says 5100),
+`constants/item_price_overrides.json` lets you override any item as
+`"item name": actual price`, effective on restart. When net worth is off by exactly one
+item's cost, add a line there — delete it once upstream catches up, and the log will
+point out which overrides have become redundant.
+
+## Requirements
+
+- Add `-gamestateintegration` to Dota 2's launch options (the GSI config file is
+  written automatically on first run)
+- The game must run in **borderless windowed** mode — under exclusive fullscreen no
+  non-injecting overlay can display at all, which is a system-level limitation
+
+## Development
 
 ```bash
-cargo build --release --manifest-path src-tauri/Cargo.toml   # 构建
-python tools/replay.py                                       # 回放服务器
+cargo build --release --manifest-path src-tauri/Cargo.toml   # build
+python tools/replay.py                                       # replay server
 ```
 
-回放服务器起好后打开 <http://127.0.0.1:8000/dev.html>，用真实 dump 驱动前端，
-不必反复进游戏。`?file=` 选文件、`?speed=` 调倍速；页面内 `v` 常显、`e` 编辑态、`b` 换背景。
-录制出来的 `.jsonl.gz` 可以直接喂给它，被强杀而截断的文件也能读。
+With the replay server up, open <http://127.0.0.1:8000/dev.html> to drive the frontend
+from a real dump instead of repeatedly launching the game. `?file=` picks the file,
+`?speed=` changes playback rate; in the page, `v` forces the panel visible, `e` toggles
+edit mode, `b` cycles the background. Recorded `.jsonl.gz` files can be fed straight in,
+including ones truncated by a hard kill.
 
-**前端是编译期嵌入二进制的**，改完 `ui/` 下的文件必须重新 `cargo build` 才会生效
-（`build.rs` 会盯着 `ui/`，不需要额外操作）。
+**The frontend is embedded into the binary at compile time**, so changes under `ui/`
+require a fresh `cargo build` to take effect (`build.rs` watches `ui/` and `icons/`, so
+nothing else is needed).
 
-每次 push 与 PR 都会在 GitHub Actions 上跑一遍前端语法检查 + `cargo build --release`
-（见 `.github/workflows/ci.yml`）——`ui/` 下写错一个字符只有真正编译时才暴露，
-而日常开发看的是回放服务器，那条路不经过编译。
+Every push and PR runs a frontend syntax check plus `cargo build --release` on GitHub
+Actions (see `.github/workflows/ci.yml`) — a typo under `ui/` only surfaces at compile
+time, and day-to-day development goes through the replay server, which never compiles.
 
-实机测试用 **release** 构建：debug 版会带一个关不掉的控制台窗口
-（`windows_subsystem = "windows"` 只在 release 生效）。
+Test on real hardware with a **release** build: debug builds carry a console window
+that cannot be closed (`windows_subsystem = "windows"` only applies in release).
 
-出问题先看 `%APPDATA%\dev.dota2helper2.app\logs\`——正式版没有控制台，
-也开不出 devtools，前端异常会转发给 Rust 一起写进日志。
+When something goes wrong, start with `%APPDATA%\dev.dota2helper2.app\logs\` — release
+builds have no console and cannot open devtools, so frontend exceptions are forwarded
+to Rust and written into the same log.
 
-## 许可
+## Icon
+
+The app icon is generated by [`tools/make_icons.py`](tools/make_icons.py) — shape as
+code, no binary assets to hand-edit. Change a constant and re-run it to regenerate all
+15 PNGs plus the `.ico` and `.icns`. The machine had no Pillow / cairosvg / ImageMagick,
+so the script carries a tiny rasteriser of its own: every shape is analytically
+testable (polygon, rounded rect, ring with a gap), 4×4 supersampling, PNG written with
+zlib.
+
+## Licence
 
 [MIT](LICENSE)
 
-本项目与 Valve 无关联。Dota 2 是 Valve Corporation 的商标。
+This project is not affiliated with Valve. Dota 2 is a trademark of Valve Corporation.
 
-## 参考
+## References
 
-- [nocamles/dota2_amount_plugins](https://github.com/nocamles/dota2_amount_plugins) — GSI 缓存池与净资产计算思路
-- 前作 [dota2-game-helper](https://github.com/shizzhang0/dota2-game-helper)（已归档）— 语音提示方案与常数硬编码的教训来源
+- [nocamles/dota2_amount_plugins](https://github.com/nocamles/dota2_amount_plugins) —
+  GSI cache pool and net worth approach
+- The predecessor [dota2-game-helper](https://github.com/shizzhang0/dota2-game-helper)
+  (archived) — source of the voice-prompt approach and of the lesson about hardcoding
+  constants
