@@ -9,7 +9,7 @@ export const SHOW_KEYS = ["mid", "bounty", "lotus", "wisdom", "stack",
 export const DEFAULTS = {
   show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
   scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
-  logLevel: "debug", recordMatches: false, lang: "zh-CN",
+  logLevel: "info", recordMatches: false, lang: "zh-CN",
 };
 
 export async function loadSettings() {

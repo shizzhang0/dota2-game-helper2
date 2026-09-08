@@ -15,7 +15,7 @@ fn defaults() -> serde_json::Value {
         "opacity": 1.0,
         "panelBg": 0.72,
         "wardSize": 180,
-        "logLevel": "debug",
+        "logLevel": "info",
         "recordMatches": false,
         "lang": crate::lang::system_default()
     })
