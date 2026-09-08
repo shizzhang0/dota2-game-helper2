@@ -2,23 +2,31 @@
 
 [English](README.md) · **简体中文**
 
+[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+
 基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
 在游戏中按住 **Alt** 显示 Dota Plus 才有的那几个倒计时。
 
-> **开发中，尚未发布。** 下面列出的功能都已实现，但仍在逐项进游戏核对，
-> 版本号停在 `0.1.0`，还没有打过 tag。
->
-> 已核对：快速模式各符刷新间隔与正常模式一致；净资产口径对照回放的官方"财产总和"
-> 逐点验证（2026-09-07 取七个时间点全部吻合）；敌方塔防状态机 16/16 回归通过；
-> 眼位小地图的主体（我方眼倒计时、被排检测、敌方眼、塔的灰点）与智慧神符、莲花、
-> 敌方买活冷却均已在实战中核对（2026-09-08）。
->
-> 设计文档按主题组织在 [docs/design/](docs/design/)：
-> [倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
-> [眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
-> [开发工具](docs/design/dev-tools.md)。
-> 待验证事项见 [docs/verify-checklist.md](docs/verify-checklist.md)，
-> 未完成事项见 [docs/backlog.md](docs/backlog.md)。
+**为什么会有这个项目**：赏金符、莲花、智慧神符、敌方塔防和买活的计时，
+Dota Plus 订阅者能直接看到，其他人只能靠记。这些信息本来就在游戏推给你的数据里，
+只是界面上不显示——那就把它显示出来。不读内存、不改文件、不模拟输入，
+只接收游戏主动推送的、本来就对你可见的数据（[为什么这是安全的](#为什么这是安全的)）。
+
+## 快速开始
+
+1. 在 [Releases](https://github.com/shizzhang0/dota2-game-helper2/releases) 下载
+   压缩包，解压到任意目录（没有安装程序，就一个 exe）
+2. 给 Dota 2 的启动项加上 `-gamestateintegration`
+3. 游戏用**无边框窗口**模式（独占全屏下任何非注入类悬浮层都无法显示，系统级限制）
+4. 双击 `dota2-game-helper2.exe`，它会常驻通知区。首次运行自动写入 GSI 配置文件
+5. 进对局，**按住 Alt** 就能看到面板
+
+想调位置、大小、显示哪几项：右键通知区图标 →「编辑面板」（或按 `Ctrl+Alt+F10`）。
+
+> 首次运行后如果面板一直不出现，先确认第 2、3 步；再看
+> `%APPDATA%\dev.dota2helper2.app\logs\` 里的日志。
 
 ## 显示什么
 
@@ -83,11 +91,20 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 
 | | |
 |---|---|
-| `constants/` | 时间常数表 + 物品价格表 + 价格覆盖表，改 JSON 重启生效 |
+| `constants/` | 时间常数表 + 物品价格表 + 价格覆盖表 + 语言包，改 JSON 重启生效 |
 | `settings.json` | 上述设置 |
 | `layout.json` | 四个块各自的位置 |
 | `logs/` | 运行日志 |
 | `records/` | 对局录制（默认关闭） |
+
+### 卸载
+
+没有安装包，也就没有卸载程序——删三样东西即可：
+
+1. `dota2-game-helper2.exe`
+2. 配置目录 `%APPDATA%\dev.dota2helper2.app\`
+3. Dota 的 `game\dota\cfg\gamestate_integration\` 里那个
+   `gamestate_integration_helper2.cfg`
 
 ## 技术栈
 
@@ -105,11 +122,6 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 覆盖，重启生效。发现净资产差了某件装备的钱时，往这里加一行就行——
 上游修好后删掉，程序会在日志里提示哪些覆盖已经多余。
 
-## 使用前提
-
-- Dota 2 启动项加 `-gamestateintegration`（首次运行会自动写入 GSI 配置文件）
-- 游戏需使用**无边框窗口**模式（独占全屏下任何非注入类悬浮层都无法显示，这是系统级限制）
-
 ## 开发
 
 ```bash
@@ -122,7 +134,7 @@ python tools/replay.py                                       # 回放服务器
 录制出来的 `.jsonl.gz` 可以直接喂给它，被强杀而截断的文件也能读。
 
 **前端是编译期嵌入二进制的**，改完 `ui/` 下的文件必须重新 `cargo build` 才会生效
-（`build.rs` 会盯着 `ui/`，不需要额外操作）。
+（`build.rs` 会盯着 `ui/` 和 `icons/`，不需要额外操作）。
 
 每次 push 与 PR 都会在 GitHub Actions 上跑一遍前端语法检查 + `cargo build --release`
 （见 `.github/workflows/ci.yml`）——`ui/` 下写错一个字符只有真正编译时才暴露，
@@ -133,6 +145,45 @@ python tools/replay.py                                       # 回放服务器
 
 出问题先看 `%APPDATA%\dev.dota2helper2.app\logs\`——正式版没有控制台，
 也开不出 devtools，前端异常会转发给 Rust 一起写进日志。
+
+## 图标
+
+程序图标由 [`tools/make_icons.py`](tools/make_icons.py) 生成——形状即代码，
+没有需要手工编辑的二进制素材。改一个常量重新跑一次，15 张 PNG 加 `.ico`、`.icns`
+全部重出。开发机上没有 Pillow / cairosvg / ImageMagick，所以脚本自带一个极小的
+光栅化器：形状全是可解析判定的（多边形、圆角矩形、带缺口的圆环），4×4 超采样，
+PNG 用 zlib 手写。
+
+## 项目状态与路线图
+
+功能已经全部实现，仍在逐项进游戏核对。
+
+**已核对**：快速模式各符刷新间隔与正常模式一致；净资产口径对照回放的官方"财产总和"
+逐点验证（两局共十三个时间点全部吻合）；敌方塔防状态机 16/16 回归通过；
+眼位小地图的主体（我方眼倒计时、被排检测、敌方眼、塔的灰点）与智慧神符、莲花、
+敌方买活冷却均已在实战中核对。
+
+**还没做的**（理由都写在 [docs/backlog.md](docs/backlog.md)，这里只列条目）：
+
+- [ ] 触发键可配（现在写死 Alt 与 `Ctrl+Alt+F10`）
+- [ ] 常显模式（不按 Alt 也显示，作为兜底）
+- [ ] 价格表未加载时的提示（现在会静默退到内嵌快照）
+- [ ] 敌方英雄失踪计时（数据可行，卡在"怎么表达才不吵"）
+
+明确**不做**的也记在同一份文件里（开机自启、语音提示、白天黑夜与肉山计时——
+游戏原生已有、任何输入模拟）。待验证事项见
+[docs/verify-checklist.md](docs/verify-checklist.md)。
+
+设计文档按主题组织在 [docs/design/](docs/design/)：
+[倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
+[眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
+[开发工具](docs/design/dev-tools.md)。
+
+## 参与
+
+自用项目，没有单独的贡献指南。发现 bug 或口径对不上，
+开 [Issue](https://github.com/shizzhang0/dota2-game-helper2/issues) 时带上大概时间和
+官方数字最容易定位；想改代码直接 Fork 开 PR 就行。
 
 ## 许可
 

@@ -2,27 +2,37 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+
 A desktop overlay built on Dota 2's official GSI (Game State Integration) interface.
 Hold **Alt** in game to see the timers that otherwise require Dota Plus.
 
-> **In development, not yet released.** Everything listed below is implemented, but
-> still being checked against live games one item at a time. The version is `0.1.0`
-> and no tag has been cut.
->
-> Verified so far: turbo rune intervals match normal mode; net worth reconciled
-> point-by-point against the game's official "Net Worth" in replays
-> (13 checkpoints across two matches, 2026-09-07 and 09-08); the enemy glyph state
-> machine passes 16/16 regression; the ward map (own-ward countdowns, deward
-> detection, enemy wards, greyed-out towers) plus the Wisdom rune, Lotus and enemy
-> buyback cooldown all confirmed in real matches.
->
-> Design notes live in [docs/design/](docs/design/), organised by topic:
-> [timers](docs/design/timers.md) · [net worth](docs/design/networth.md) ·
-> [ward map](docs/design/wards.md) · [app shell](docs/design/overlay.md) ·
-> [dev tools](docs/design/dev-tools.md). Open verification items are in
-> [docs/verify-checklist.md](docs/verify-checklist.md); unfinished work is in
-> [docs/backlog.md](docs/backlog.md). Those files are development notes and are
-> kept in Chinese only.
+**Why this exists**: bounty runes, Lotus, the Wisdom rune, enemy glyph and enemy
+buyback timers are shown to Dota Plus subscribers and left to memory for everyone
+else. That information is already in the data the game pushes to you — it just isn't
+drawn on screen. So draw it. No memory reading, no file changes, no simulated input;
+only data the game pushes on its own, that you can already see
+([why this is safe](#why-this-is-safe)).
+
+## Quick start
+
+1. Download the archive from
+   [Releases](https://github.com/shizzhang0/dota2-game-helper2/releases) and unpack it
+   anywhere — there is no installer, just an exe
+2. Add `-gamestateintegration` to Dota 2's launch options
+3. Run the game in **borderless windowed** mode (under exclusive fullscreen no
+   non-injecting overlay can display at all — a system-level limitation)
+4. Double-click `dota2-game-helper2.exe`; it sits in the notification area. The GSI
+   config file is written automatically on first run
+5. Get into a match and **hold Alt**
+
+To move things around, resize, or turn items off: right-click the tray icon →
+"Edit panel" (or press `Ctrl+Alt+F10`).
+
+> If the panel never appears, re-check steps 2 and 3 first, then look at the logs in
+> `%APPDATA%\dev.dota2helper2.app\logs\`.
 
 ## What it shows
 
@@ -132,13 +142,6 @@ game (measured: the game charges 5200 for Heart while OpenDota still says 5100),
 item's cost, add a line there — delete it once upstream catches up, and the log will
 point out which overrides have become redundant.
 
-## Requirements
-
-- Add `-gamestateintegration` to Dota 2's launch options (the GSI config file is
-  written automatically on first run)
-- The game must run in **borderless windowed** mode — under exclusive fullscreen no
-  non-injecting overlay can display at all, which is a system-level limitation
-
 ## Development
 
 ```bash
@@ -175,6 +178,44 @@ code, no binary assets to hand-edit. Change a constant and re-run it to regenera
 so the script carries a tiny rasteriser of its own: every shape is analytically
 testable (polygon, rounded rect, ring with a gap), 4×4 supersampling, PNG written with
 zlib.
+
+## Status and roadmap
+
+Everything is implemented; it is still being checked against live games one item at a
+time.
+
+**Verified**: turbo rune intervals match normal mode; net worth reconciled
+point-by-point against the game's official "Net Worth" in replays (13 checkpoints
+across two matches); the enemy glyph state machine passes 16/16 regression; the ward
+map (own-ward countdowns, deward detection, enemy wards, greyed-out towers) plus the
+Wisdom rune, Lotus and enemy buyback cooldown all confirmed in real matches.
+
+**Not done yet** (reasons are all in [docs/backlog.md](docs/backlog.md); this is just
+the list):
+
+- [ ] Configurable trigger key (Alt and `Ctrl+Alt+F10` are hardcoded)
+- [ ] Always-visible mode, as a fallback
+- [ ] A warning when the price table failed to load (it currently falls back silently)
+- [ ] Enemy hero missing-timer (data is there; the open question is how to show it
+      without being noisy)
+
+The same file records what will deliberately **not** be built (launch on boot, voice
+prompts, day/night and Roshan timers — the game already shows those, any input
+simulation). Open verification items are in
+[docs/verify-checklist.md](docs/verify-checklist.md).
+
+Design notes live in [docs/design/](docs/design/), organised by topic:
+[timers](docs/design/timers.md) · [net worth](docs/design/networth.md) ·
+[ward map](docs/design/wards.md) · [app shell](docs/design/overlay.md) ·
+[dev tools](docs/design/dev-tools.md). **Those files are development notes and are
+kept in Chinese only.**
+
+## Contributing
+
+This is a personal tool, so there is no separate contributing guide. For a bug or a
+net-worth mismatch, an [issue](https://github.com/shizzhang0/dota2-game-helper2/issues)
+with the approximate game time and the official number is the easiest thing to act on.
+For code, fork and open a PR.
 
 ## Licence
 
