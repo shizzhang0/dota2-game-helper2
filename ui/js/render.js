@@ -110,6 +110,7 @@ export function render(m) {
   root.style.setProperty("--panel-scale", scale);
   root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
   root.style.setProperty("--ward-size", `${cfg.wardSize ?? 180}px`);
+  root.style.setProperty("--block-bg", cfg.panelBg ?? 0.72);
   for (const [id, cell] of Object.entries(els.cells)) {
     cell.root.hidden = show[id] === false;
   }

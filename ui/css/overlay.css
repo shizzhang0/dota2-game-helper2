@@ -48,8 +48,11 @@ html, body {
   align-items: stretch;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--bg);
-  border: 1px solid var(--hair);
+  /* 底板可以一路调到全透明。描边跟着一起淡出——底板没了却留一圈白线，
+     会变成一个空的方框浮在画面上。系数 0.14 是让默认的 .72 正好落回 --hair 的 .10。
+     注意这和「整体透明度」不是一回事：那条会把文字图标一起调淡，这条只动底板。 */
+  background: rgba(8, 10, 14, var(--block-bg, .72));
+  border: 1px solid rgba(255, 255, 255, calc(var(--block-bg, .72) * .14));
   border-radius: 10px;
   pointer-events: none;          /* 锁定态整窗穿透 */
   opacity: 0;
@@ -61,12 +64,15 @@ html, body {
   visibility: visible;
   transition: opacity .12s linear;
 }
+/* 编辑态**不要**写 opacity: 1。它会盖掉上面 .block.on 的 var(--panel-opacity)，
+   而透明度滑块只能在编辑态里够到——结果就是"拖了没反应"，永远看不到效果。
+   把设置并进编辑态本来就是为了不盲调，这条却一直漏在外面。
+   透明度下限是 0.3，编辑态下仍然看得见、拖得动。 */
 .block.edit {
   pointer-events: auto;
   cursor: grab;
   outline: 1px dashed var(--k-chance);
   outline-offset: 3px;
-  opacity: 1;
   visibility: visible;
 }
 .block.edit:active { cursor: grabbing; }
@@ -242,7 +248,9 @@ html, body {
   height: var(--ward-size, 180px);
   display: block;
 }
-.wm-bg { fill: rgba(0, 0, 0, .35); }
+/* 地图自己的底跟着「底板」滑块一起淡——写死 .35 的话，底板拉到 0 时四个块都透了，
+   只剩这一块灰方块浮在画面中间。系数 .5 让默认的 .72 落回 .36，和原来同一档。 */
+.wm-bg { fill: rgba(0, 0, 0, calc(var(--block-bg, .72) * .5)); }
 .wm-tower { fill: #9AA6B4; opacity: .55; }
 .wm-tower[data-team="2"] { fill: #66BB6A; }
 .wm-tower[data-team="3"] { fill: #E57373; }
