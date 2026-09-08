@@ -107,7 +107,7 @@ onAltChange((d) => { alt = d; });
 // 若等到有数据才渲染，没开 Dota 时面板根本不出现，也就无从拖动。
 const IDLE = {
   st: {},
-  info: { matchid: null, clock: null, gameState: null, inMatch: false,
+  info: { matchid: null, clock: null, gameState: null, inMatch: false, spectating: false,
           myTeam: null, mode: null, modeOrDefault: "turbo", paused: false, newMatch: false },
   econ: { networth: 0, gpm: 0, xpm: 0 },
 };
