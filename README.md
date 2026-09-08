@@ -1,4 +1,4 @@
-# dota2-game-helper2
+<h1><img src="src-tauri/icons/64x64.png" width="28" height="28" align="absmiddle" alt=""> dota2-game-helper2</h1>
 
 基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
 在游戏中按住 **Alt** 显示 Dota Plus 才有的那几个倒计时。

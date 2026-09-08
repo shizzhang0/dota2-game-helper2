@@ -288,6 +288,15 @@ Dota 各语言版本通用的缩写，等于在刚清空的面板上重新放回
 > **借的是画法，不是身份。** 实心方块 + 挖空图形 + 粗糙手绘边是通用作图技术，
 > 也正是 16px 下唯一有效的那条路；那个"D"和它的整体识别特征不碰。
 
+> **换了图标却只变了一半：`build.rs` 必须监视 `icons/`。**
+> **一旦发出任何 `cargo:rerun-if-changed`，cargo 就不再监视整个包目录**，
+> 只认声明过的那几个；而 tauri-build 自己只声明 `tauri.conf.json` 和 `capabilities`，
+> `icons/` 谁都没管。结果是换图标后**托盘变了、exe 在资源管理器里的图标没变**——
+> 前者走 `generate_context!` 宏，跟着 crate 重编一起展开；后者是 `build.rs` 里
+> tauri-winres 编出来的 `resource.lib`，`build.rs` 不跑就永远是旧的。
+> 看起来像"Windows 图标缓存没刷新"，其实是根本没重新生成。
+> 查法：解 PE 的资源表，把 RT_ICON 的字节和 `icons/icon.ico` 逐条比。
+
 本机没有 Pillow / cairosvg / ImageMagick，所以 `make_icons.py` 自带一个极小的
 光栅化器：形状全可解析判定（多边形、圆角矩形、带缺口的圆环），4×4 超采样，
 PNG 用 zlib 手写。**边缘的颜色按覆盖到的子样本平均、透明度按覆盖率，两者分开算**——
