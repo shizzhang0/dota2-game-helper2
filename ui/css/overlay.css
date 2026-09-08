@@ -125,9 +125,17 @@ html, body {
 }
 .cell:not(.wide) .lab svg.ico { width: 24px; height: 24px; }
 
-/* 没有圆环的格子（净资产、买活）：图标和内容同一行，放在左边 */
+/* 净资产：图标和金额同一行、放左边。成立是因为它只有**一个值**——
+   币 + 数字读起来就是"金钱：7319"。 */
 .inline-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
-.cell.wide .lab { display: flex; align-items: center; flex: none; }
+.cell.wide .lab { display: flex; align-items: center; justify-content: center; flex: none; }
+
+/* 买活不能照搬：它是**五个值**，图标摆进那一行就成了"第六个东西"，
+   混进数据里了。所以它的图标回到下方当标签——而且这样正好和塔防的倒计时
+   落在同一水平线上，两格反而对齐了。 */
+[data-cell="buyback"] .lab { margin-top: 2px; min-height: 21px; }
+/* 塔防和买活是两种不同形态的格子，6px 的通用间距太挤，会读成一组 */
+[data-cell="buyback"] { margin-left: 8px; }
 
 /* 必须写成 `.cell .lab svg`：上面那条 `.cell svg { width: 52px }` 是给圆环用的，
    特异度 (0,1,1) 会把图标撑成 52px——就是眼位地图踩过的同一个坑。
@@ -175,8 +183,7 @@ html, body {
 }
 .econ .lab { color: #FFD76A; }
 [data-cell="buyback"] .lab { color: var(--k-chance); }
-/* 买活那一行要和旁边的圆环等高，否则两块的基线对不齐 */
-[data-cell="buyback"] .inline-row { height: 52px; }
+
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 
 @media (prefers-reduced-motion: reduce) {
