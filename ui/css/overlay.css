@@ -112,14 +112,29 @@ html, body {
 }
 .cell[data-urgency="now"] .num { color: var(--accent); }
 
+/* 标签位现在放图标而不是文字。高度写死：不同图标的实际占高不一样，
+   不定高会让格子高度随图标切换而抖动（中路符的图标是随阶段变的）。 */
 .lab {
   margin-top: 1px;
-  font-size: 11px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--dim);
-  white-space: nowrap;
-  text-shadow: 0 0 3px #000, 0 1px 2px #000;
 }
-.cell[data-urgency="now"] .lab { color: var(--fg); }
+.cell[data-urgency="now"] .lab { color: var(--accent); }
+
+/* 必须写成 `.cell .lab svg`：上面那条 `.cell svg { width: 52px }` 是给圆环用的，
+   特异度 (0,1,1) 会把 14px 的图标撑成 52px——就是眼位地图踩过的同一个坑。
+   这条是 (0,2,1)，压得住。 */
+.cell .lab svg.ico {
+  width: 14px;
+  height: 14px;
+  display: block;
+  overflow: visible;
+  /* 描边图标在明亮的团战画面上容易糊，给一点深色底衬，和数字/文字的处理一致 */
+  filter: drop-shadow(0 0 2px #000);
+}
 
 /* 宽度写死：净资产从 4 位涨到 5 位时若让宽度自适应，居中面板会整体横移，读数时抖动 */
 .cell.wide { justify-content: space-between; opacity: 1; }
@@ -238,6 +253,10 @@ details[open] > summary { margin-bottom: 7px; }
 /* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
 .ed-legend svg { width: 11px; height: 11px; flex: none; display: block; overflow: visible; }
 .ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
+/* 九个显示项前面的图标，和面板上用的是同一份 icons.js，形状永远不会脱节。
+   眼位那一行是两个图标，所以用 flex 而不是写死宽度。 */
+.ed-ico { display: flex; align-items: center; gap: 3px; color: var(--dim); flex: none; }
+.ed-ico svg.ico { display: block; overflow: visible; }
 .ed-row { margin-bottom: 7px; }
 .editor input[type="range"] { flex: 1; min-width: 0; }
 .editor output {

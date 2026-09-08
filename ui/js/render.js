@@ -1,4 +1,5 @@
 import { initWardMap, renderWardMap } from "./wardmap.js";
+import { icon, CELL_ICON } from "./icons.js";
 
 // Alt 面板渲染。DOM 只在 initPanel 建一次，render 仅改文本/类名/CSS 变量，避免每帧重建。
 const SLOT_COLORS = ["#3375FF", "#66FFBF", "#BF00BF", "#F3F00B", "#FF6B00",
@@ -32,7 +33,7 @@ function ring(id) {
               stroke-dasharray="${CIRC}" stroke-dashoffset="0"/>
     </svg>
     <div class="num">--</div>
-    <div class="lab">--</div>
+    <div class="lab"></div>
   </div>`;
 }
 
@@ -42,13 +43,13 @@ const INNER = {
     <div class="cell wide" data-cell="buyback">
       <div class="dots">${[0, 1, 2, 3, 4].map(i =>
         `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
-      <div class="lab">敌买活</div>
+      <div class="lab">${icon("buyback")}</div>
     </div>`,
   econ: () => `
     <div class="cell wide econ" data-cell="econ">
       <div class="nw">--</div>
       <div class="rate"><span class="gpm">--</span><span class="xpm">--</span></div>
-      <div class="lab">净资产</div>
+      <div class="lab">${icon("coin")}</div>
     </div>`,
   wardmap: () => `<div class="cell wide wardmap" data-cell="wardmap"></div>`,
 };
@@ -79,6 +80,14 @@ function set(node, key, value) {           // 只在变化时写 DOM
   if (prev[key] === value) return;
   prev[key] = value;
   node.textContent = value;
+}
+
+// 图标要整段替换 SVG，走不了上面那个 textContent 的路子。
+// 同样只在变化时才动 DOM——渲染是 250ms 一轮，每帧重建 SVG 太浪费。
+function setHtml(node, key, html) {
+  if (prev[key] === html) return;
+  prev[key] = html;
+  node.innerHTML = html;
 }
 
 function fmt(sec) {
@@ -112,7 +121,9 @@ export function render(m) {
     const c = els.cells[t.id];
     if (!c) continue;
     set(c.num, t.id + ".n", fmt(t.remaining));
-    set(c.lab, t.id + ".l", t.id === "mid" ? `中·${t.label}` : t.label);
+    // 中路符的图标随阶段变（kind 就是 bounty/water/power），其余按格子 id 取；
+    // 赏金格子刻意用钱袋而不是币堆，否则 0:00 时会和中路符一模一样
+    setHtml(c.lab, t.id + ".l", icon(t.id === "mid" ? t.kind : CELL_ICON[t.id]));
     const u = urgency(t.remaining);
     if (prev[t.id + ".u"] !== u) { prev[t.id + ".u"] = u; c.root.dataset.urgency = u; }
     if (prev[t.id + ".k"] !== t.kind) {
@@ -126,8 +137,9 @@ export function render(m) {
 
   // 敌方塔防：ready 是威胁态，点亮；冷却中压暗并显示剩余
   const g = els.cells.glyph, gm = m.glyph || { ready: true, remaining: 0 };
-  set(g.num, "g.n", gm.ready ? "可用" : fmt(gm.remaining));
-  set(g.lab, "g.l", "敌塔防");
+  // 数字位永远只放数字：ready 时留空，靠环画满 + 盾点亮表达
+  set(g.num, "g.n", gm.ready ? "" : fmt(gm.remaining));
+  setHtml(g.lab, "g.l", icon("glyph"));
   const gu = gm.ready ? "now" : "far";
   if (prev["g.u"] !== gu) { prev["g.u"] = gu; g.root.dataset.urgency = gu; }
   if (prev["g.k"] !== 1) { prev["g.k"] = 1; g.root.style.setProperty("--accent", "var(--k-threat)"); }

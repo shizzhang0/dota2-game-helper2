@@ -18,8 +18,7 @@ export function initWardMap(container, towers) {
        <rect class="wm-bg" x="0" y="0" width="${SIZE}" height="${SIZE}" rx="4"/>
        <g class="wm-towers"></g>
        <g class="wm-wards"></g>
-     </svg>
-     <div class="lab">眼位</div>`;
+     </svg>`;
   root = container;
   towerLayer = container.querySelector(".wm-towers");
   wardLayer = container.querySelector(".wm-wards");

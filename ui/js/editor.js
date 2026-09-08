@@ -1,5 +1,6 @@
 import { SHOW_ITEMS, loadSettings, saveSettings } from "./settings.js";
 import { isTauri } from "./source.js";
+import { icon, CELL_ICON } from "./icons.js";
 
 // 编辑态的设置卡片。与 .block 平级而非其子节点——块受 --panel-scale 缩放，
 // 卡片跟着缩到 2× 或 0.8× 都没法用。
@@ -9,6 +10,15 @@ import { isTauri } from "./source.js";
 // 整块可拖会打死「完成」按钮、九个复选框、两个滑块和下拉框——
 // 「完成」失效等于编辑态出不去。见 design/overlay.md 的第 3 号坑。
 let card = null;
+
+/** 显示项那九行前面的图标——卡片因此同时是设置和图例，一份数据两用。
+    中路符取它的首个阶段（赏金币堆）；眼位那一行是**眼 + 塔**两个，
+    因为那块地图画的就是这两类东西，而面板上那一格是没有标签的。 */
+function showIcon(k) {
+  if (k === "mid") return icon("bounty", 13);
+  if (k === "wardmap") return icon("eye", 13) + icon("tower", 13);
+  return icon(CELL_ICON[k], 13);
+}
 
 // 图例。刻意复用地图自己的 wm-ward / wm-tower class 画色块——
 // 另写一套颜色迟早会和地图对不上。只在编辑态可见，游戏中不占任何屏幕空间。
@@ -35,7 +45,8 @@ export async function initEditor(cardEl, onDone, onResetLayout) {
     <div class="ed-sec"><h3>显示项</h3>
       <div class="ed-grid">${SHOW_ITEMS.map(([k, label]) =>
         `<label class="ed-chk"><input type="checkbox" data-show="${k}"${
-          s.show?.[k] !== false ? " checked" : ""}>${label}</label>`).join("")}</div>
+          s.show?.[k] !== false ? " checked" : ""
+        }><span class="ed-ico">${showIcon(k)}</span>${label}</label>`).join("")}</div>
     </div>
     <div class="ed-sec"><h3>面板</h3>
       <label class="ed-row">缩放
