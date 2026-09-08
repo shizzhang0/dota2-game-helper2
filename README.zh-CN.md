@@ -7,11 +7,11 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
 基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
-在游戏中按住 **Alt** 显示 Dota Plus 才有的那几个倒计时。
+在游戏中按住 **Alt** 显示游戏界面上没有画出来的那几个倒计时。
 
 **为什么会有这个项目**：赏金符、莲花、智慧神符、敌方塔防和买活的计时，
-Dota Plus 订阅者能直接看到，其他人只能靠记。这些信息本来就在游戏推给你的数据里，
-只是界面上不显示——那就把它显示出来。不读内存、不改文件、不模拟输入，
+客户端里哪儿都不显示，只能靠自己记。但这些信息**本来就在游戏推给你的数据里**，
+只是没画在屏幕上——那就把它画出来。不读内存、不改文件、不模拟输入，
 只接收游戏主动推送的、本来就对你可见的数据（[为什么这是安全的](#为什么这是安全的)）。
 
 ![覆盖层实拍](docs/images/overlay.png)
@@ -34,7 +34,7 @@ Dota Plus 订阅者能直接看到，其他人只能靠记。这些信息本来�
 > 首次运行后如果面板一直不出现，先确认第 2、3 步；再看
 > `%APPDATA%\dev.dota2helper2.app\logs\` 里的日志。
 
-## 显示什么
+## 功能
 
 | 项目 | 说明 |
 |---|---|
@@ -139,6 +139,13 @@ python tools/replay.py                                       # 回放服务器
 不必反复进游戏。`?file=` 选文件、`?speed=` 调倍速；页面内 `v` 常显、`e` 编辑态、`b` 换背景。
 录制出来的 `.jsonl.gz` 可以直接喂给它，被强杀而截断的文件也能读。
 
+设计文档按主题组织在 [docs/design/](docs/design/)：
+[倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
+[眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
+[开发工具](docs/design/dev-tools.md)；未完成事项见
+[docs/backlog.md](docs/backlog.md)，待验证事项见
+[docs/verify-checklist.md](docs/verify-checklist.md)。这些是开发笔记，只有中文。
+
 **前端是编译期嵌入二进制的**，改完 `ui/` 下的文件必须重新 `cargo build` 才会生效
 （`build.rs` 会盯着 `ui/` 和 `icons/`，不需要额外操作）。
 
@@ -151,39 +158,6 @@ python tools/replay.py                                       # 回放服务器
 
 出问题先看 `%APPDATA%\dev.dota2helper2.app\logs\`——正式版没有控制台，
 也开不出 devtools，前端异常会转发给 Rust 一起写进日志。
-
-## 图标
-
-程序图标由 [`tools/make_icons.py`](tools/make_icons.py) 生成——形状即代码，
-没有需要手工编辑的二进制素材。改一个常量重新跑一次，15 张 PNG 加 `.ico`、`.icns`
-全部重出。开发机上没有 Pillow / cairosvg / ImageMagick，所以脚本自带一个极小的
-光栅化器：形状全是可解析判定的（多边形、圆角矩形、带缺口的圆环），4×4 超采样，
-PNG 用 zlib 手写。
-
-## 项目状态与路线图
-
-功能已经全部实现，仍在逐项进游戏核对。
-
-**已核对**：快速模式各符刷新间隔与正常模式一致；净资产口径对照回放的官方"财产总和"
-逐点验证（两局共十三个时间点全部吻合）；敌方塔防状态机 16/16 回归通过；
-眼位小地图的主体（我方眼倒计时、被排检测、敌方眼、塔的灰点）与智慧神符、莲花、
-敌方买活冷却均已在实战中核对。
-
-**还没做的**（理由都写在 [docs/backlog.md](docs/backlog.md)，这里只列条目）：
-
-- [ ] 触发键可配（现在写死 Alt 与 `Ctrl+Alt+F10`）
-- [ ] 常显模式（不按 Alt 也显示，作为兜底）
-- [ ] 价格表未加载时的提示（现在会静默退到内嵌快照）
-- [ ] 敌方英雄失踪计时（数据可行，卡在"怎么表达才不吵"）
-
-明确**不做**的也记在同一份文件里（开机自启、语音提示、白天黑夜与肉山计时——
-游戏原生已有、任何输入模拟）。待验证事项见
-[docs/verify-checklist.md](docs/verify-checklist.md)。
-
-设计文档按主题组织在 [docs/design/](docs/design/)：
-[倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
-[眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
-[开发工具](docs/design/dev-tools.md)。
 
 ## 许可
 
