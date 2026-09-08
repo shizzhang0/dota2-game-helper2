@@ -136,23 +136,26 @@ html, body {
 [data-cell="buyback"] .lab { margin-top: 2px; min-height: 21px; }
 /* 圆点原本什么容器都没有，旁边塔防却有个很重的圆环，两边一比就"飘"。
    给它一个圆角框——那是圆环在这种形态下的对应物。
-   框要贴着内容：圆点行原本被撑到 52px（为了和圆环对齐），
-   那样框里上下会空出一大片，看着比没框还散。改成让框自己在格子里垂直居中。 */
+
+   框**撑满格子高度**，把塔防"环 + 倒计时"的结构镜像一遍：框顶对齐圆环顶、
+   框底对齐倒计时底，圆点居中到圆环那一带、箭头落到倒计时那一行。
+   曾试过让框贴着内容再垂直居中，结果和圆环、倒计时两边都没对齐。 */
 .bb-box {
   display: flex;
   flex-direction: column;
   align-items: center;
+  flex: 1;
   /* 边框取 --k-chance（#65D9F7，"敌方缺失 = 机会"）的 32%，和框里的图标同色系。
      不用满强度：框是容器不是数据，太亮会和旁边塔防那个红色进度环抢，
      也会让人误以为它自己在表达某种状态。 */
   border: 1px solid rgba(101, 217, 247, .32);
   border-radius: 10px;
-  padding: 6px 8px 4px;
+  padding: 0 8px;
 }
-[data-cell="buyback"] { justify-content: center; }
 /* 框宽 = 圆点 5×16 + 间距 4×5 + 内边距 16 + 边框 2 = 118，格子必须比它宽，
    否则框会溢出格子、顶到块的内边距上 */
-[data-cell="buyback"] .dots { height: auto; }
+/* 圆点吃掉箭头以外的全部高度并居中——它的中心因此落在圆环中心那条线上 */
+[data-cell="buyback"] .dots { flex: 1; height: auto; }
 /* 塔防和买活是两种不同形态的格子，6px 的通用间距太挤，会读成一组 */
 [data-cell="buyback"] { margin-left: 8px; }
 
