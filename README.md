@@ -16,6 +16,13 @@ drawn on screen. So draw it. No memory reading, no file changes, no simulated in
 only data the game pushes on its own, that you can already see
 ([why this is safe](#why-this-is-safe)).
 
+![The overlay](docs/images/overlay.png)
+
+<sub>Top left: net worth / GPM / XPM. Bottom left: the ward map (cyan = yours,
+purple = enemy, hollow = sentry, amber = expiring within 60s). Top right: the timers.
+Bottom right: enemy glyph and buyback. The background is a placeholder colour from the
+replay tool, not an actual game frame.</sub>
+
 ## Quick start
 
 1. Download the archive from
@@ -209,13 +216,6 @@ Design notes live in [docs/design/](docs/design/), organised by topic:
 [ward map](docs/design/wards.md) · [app shell](docs/design/overlay.md) ·
 [dev tools](docs/design/dev-tools.md). **Those files are development notes and are
 kept in Chinese only.**
-
-## Contributing
-
-This is a personal tool, so there is no separate contributing guide. For a bug or a
-net-worth mismatch, an [issue](https://github.com/shizzhang0/dota2-game-helper2/issues)
-with the approximate game time and the official number is the easiest thing to act on.
-For code, fork and open a PR.
 
 ## Licence
 

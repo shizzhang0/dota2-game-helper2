@@ -14,6 +14,12 @@ Dota Plus 订阅者能直接看到，其他人只能靠记。这些信息本来�
 只是界面上不显示——那就把它显示出来。不读内存、不改文件、不模拟输入，
 只接收游戏主动推送的、本来就对你可见的数据（[为什么这是安全的](#为什么这是安全的)）。
 
+![覆盖层实拍](docs/images/overlay.png)
+
+<sub>左上是净资产 / GPM / XPM，左下是眼位小地图（青=我方、紫=敌方、空心=真眼、
+琥珀=60 秒内到期），右上是各类倒计时，右下是敌方塔防与买活。
+背景是回放工具里的占位色，不是真实游戏画面。</sub>
+
 ## 快速开始
 
 1. 在 [Releases](https://github.com/shizzhang0/dota2-game-helper2/releases) 下载
@@ -178,12 +184,6 @@ PNG 用 zlib 手写。
 [倒计时](docs/design/timers.md) · [净资产](docs/design/networth.md) ·
 [眼位小地图](docs/design/wards.md) · [程序外壳](docs/design/overlay.md) ·
 [开发工具](docs/design/dev-tools.md)。
-
-## 参与
-
-自用项目，没有单独的贡献指南。发现 bug 或口径对不上，
-开 [Issue](https://github.com/shizzhang0/dota2-game-helper2/issues) 时带上大概时间和
-官方数字最容易定位；想改代码直接 Fork 开 PR 就行。
 
 ## 许可
 
