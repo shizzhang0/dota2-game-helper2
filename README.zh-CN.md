@@ -97,7 +97,7 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 
 | | |
 |---|---|
-| `constants/` | 时间常数表 + 物品价格表 + 价格覆盖表 + 语言包，改 JSON 重启生效 |
+| `constants/` | 时间常数表 + 物品价格表 + 语言包，改 JSON 重启生效 |
 | `settings.json` | 上述设置 |
 | `layout.json` | 四个块各自的位置 |
 | `logs/` | 运行日志 |
@@ -117,23 +117,40 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 - 壳：[Tauri 2](https://tauri.app/)（Rust），透明/无边框/置顶/鼠标穿透窗口
 - 前端：vanilla JS + SVG，无框架
 - 数据源：Dota 2 GSI（本地 HTTP 推送）
-- 物品价格：本地常数表（快照取自 [OpenDota](https://docs.opendota.com/)）+ 覆盖表，**运行时不联网**
+- 物品价格：本地常数表（快照取自游戏本体自己的数据文件），**运行时不联网、也不读游戏文件**
 
-时间常数全部外置于 `constants/*.json`（正常/快速模式两套表），版本更新只改数据不改代码。
+所有常数都外置于 `constants/*.json`——时间表（正常/快速模式两套）、物品价格、语言包。
+版本更新只改数据不改代码，上一个项目正是死于把常数写死在代码里。
 
-**物品价格也能自己改。** 价格表是本地常数（`constants/item_prices.json`，
-跑 `python tools/fetch_prices.py` 随版本更新），程序运行时不发任何网络请求。
-而 OpenDota 的价格会落后于游戏版本（实测龙心游戏收 5200、
-它还写着 5100），所以 `constants/item_price_overrides.json` 可以按「物品名: 实际价格」
-覆盖，重启生效。发现净资产差了某件装备的钱时，往这里加一行就行——
-上游修好后删掉，程序会在日志里提示哪些覆盖已经多余。
+`constants/patch.json` 记着这份常数对齐到哪个 Dota 版本：
+
+```json
+{ "dota": "7.41e", "synced": "2026-09-09" }
+```
+
+**物品价格也能自己改。** 发现净资产差了某件装备的钱，直接改配置目录里的
+`constants/item_prices.json`，重启生效——盘上的值盖过程序内置的那份。
+（下次程序跟着 Dota 版本更新时，这张表会被整个换成新的，手改的值不保留：
+价格随补丁变，留着旧值只会盖住对的。时间表不受影响。）
+
+价格表由 `python tools/sync_constants.py` 从**游戏自己的文件**生成：价格取
+`scripts/npc/items.txt` 的 `ItemCost`，物品 id 取 `npc_ability_ids.txt`。
+这是开发机上的一步，发布出去的 exe 里没有这段解析，也不会去翻 Dota 的安装目录取价格——
+用户拿到的是一份确定的常数，出了差额我们才能知道他用的是哪一版。
 
 ## 开发
 
 ```bash
 cargo build --release --manifest-path src-tauri/Cargo.toml   # 构建
 python tools/replay.py                                       # 回放服务器
+python tools/sync_constants.py                               # 跟随 Dota 版本更新常数
 ```
+
+Dota 更新后跑一次 `sync_constants.py`：它从本机 Dota 的 VPK 里重新生成价格表、
+更新 `constants/patch.json` 的版本号，并打印两样东西——价格相对上一版的差异，
+以及这一版更新日志里命中符 / 肉山 / 塔防 / 买活 / 莲花 / 堆野等机制的条目。
+价格是自动的；那些条目要人读一遍，据此决定要不要动 `normal.json` / `turbo.json` /
+`towers.json`——符刷新间隔这类东西不在游戏的物品表里。
 
 回放服务器起好后打开 <http://127.0.0.1:8000/dev.html>，用真实 dump 驱动前端，
 不必反复进游戏。`?file=` 选文件、`?speed=` 调倍速；页面内 `v` 常显、`e` 编辑态、`b` 换背景。

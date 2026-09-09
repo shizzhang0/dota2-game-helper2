@@ -31,7 +31,7 @@
 | `altkey` | GetAsyncKeyState 轮询，状态变化时通知前端 |
 | `gsicfg` | 首次运行探测 Steam/Dota 路径，写 `gamestate_integration_*.cfg` |
 | `constants` | 常数表播种到配置目录、**补齐已存在文件缺的新键** + 读取命令 |
-| `prices` | OpenDota 价格表拉取、缓存、本地覆盖 |
+| `prices` | 读物品价格表（本地常数，见 design/networth.md 的「价格源」） |
 | `settings` | `settings.json` 读写 + 变更广播 |
 | `log` | 分级文件日志 + 前端错误转发 |
 | `record` | 对局录制 |
@@ -414,7 +414,11 @@ PNG 用 zlib 手写。**边缘的颜色按覆盖到的子样本平均、透明�
    直接画在地图上；更糟的是 `rem > undefined` 和 `clock - lastSeen > undefined` 恒为假，
    于是**被排检测一次都没触发过、敌方眼永远不移除**，全程没有任何报错。
    现在读盘与播种都把盘上的值盖在内置默认值之上（复用 `settings.rs` 的 `merge`）。
-   `item_price_overrides` 例外——那张表里"删掉某项"是用户的明确意图。
+
+   > 反过来，**`patch.json` 刻意不进这套**：它记的是"我们对齐到哪个 Dota 版本"，
+   > 每次启动无条件覆盖。"只补缺键、不改已有键"会把版本号永久钉在旧值上，
+   > 而程序正是靠它判断该不该把 `item_prices.json` 整个换掉——
+   > 价格表跟着 Dota 版本走，盘上那份旧的必须让位，否则它会盖住内嵌的新表。
 
 6. **`innerWidth` 可能是 0**，而摆位的每一步都要除以它。
    实测浏览器里页面刚导航完、以及窗口被隐藏期间，`innerWidth` 会持续为 0；
