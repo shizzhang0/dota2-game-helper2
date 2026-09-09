@@ -4,22 +4,25 @@ use crate::logf;
 
 /// 兜底：配置目录里那份被删了也不能让净资产失去价格表
 const EMBEDDED: &str = include_str!("../../constants/item_prices.json");
-/// 覆盖表兜底，同上
-const EMBEDDED_OVERRIDES: &str = include_str!("../../constants/item_price_overrides.json");
 
-/// 旧版本把 OpenDota 的响应缓存在这里。现在价格表走 constants/ 那套，
-/// 这个文件已经没用了——留着只会在排查时被误认成价格来源。
-const LEGACY_CACHE: &str = "item_prices.json";
+/// 配置目录里两份已经不起作用的旧文件，升级上来的用户盘上还留着。
+///
+/// - `item_prices.json`（配置目录根下，不是 `constants/` 里那份）：旧版本缓存 OpenDota
+///   响应的地方。写盘时只留了 cost，丢掉 consumable / charges，而消耗品折价正靠这两个字段。
+/// - `constants/item_price_overrides.json`：价格源换成游戏本体后不再读取。
+///
+/// **都得删掉，不能只是不读。** 留着比删掉更坏：排查差额时它们看上去正是价格来源，
+/// 用户改了不生效，而没有任何东西告诉他这文件已经作废了。
+const LEGACY: [&str; 2] = ["item_prices.json", "constants/item_price_overrides.json"];
 
-/// 清掉旧版遗留的价格缓存。它还有害：旧代码写盘时只留了 cost，
-/// 丢掉了 consumable / charges，而消耗品折价正靠这两个字段。
 pub fn drop_legacy_cache(app: &tauri::AppHandle) {
     let Ok(dir) = app.path().app_config_dir() else { return };
-    let p = dir.join(LEGACY_CACHE);
-    if p.exists() {
+    for rel in LEGACY {
+        let p = dir.join(rel);
+        if !p.exists() { continue; }
         match std::fs::remove_file(&p) {
-            Ok(()) => logf!(Level::Info, "[prices] 已删除旧版价格缓存 {}", p.display()),
-            Err(e) => logf!(Level::Warn, "[prices] 旧版价格缓存删除失败: {e}"),
+            Ok(()) => logf!(Level::Info, "[prices] 已删除失效的旧文件 {}", p.display()),
+            Err(e) => logf!(Level::Warn, "[prices] 旧文件 {} 删除失败: {e}", p.display()),
         }
     }
 }
@@ -37,33 +40,6 @@ fn read_constant(app: &tauri::AppHandle, name: &str, embedded: &str) -> Option<s
     }
 }
 
-/// 套用本地覆盖表。价格表整体来自 OpenDota 的快照，而它会落后于游戏版本
-/// （实测龙心 5100 而游戏收 5200）；游戏自己的价格在 VPK 包里、要写解析且格式随版本变，
-/// 不划算。覆盖表走 constants/ 那套：改 JSON 重启生效，不必重新编译。
-fn apply_overrides(app: &tauri::AppHandle, mut base: serde_json::Value) -> serde_json::Value {
-    let Some(ov) = read_constant(app, "item_price_overrides", EMBEDDED_OVERRIDES) else { return base };
-    let (Some(ov), Some(obj)) = (ov.as_object(), base.as_object_mut()) else { return base };
-    for (name, want) in ov {
-        if name.starts_with('_') {
-            continue; // 下划线开头的键是注释
-        }
-        let Some(want) = want.as_i64() else { continue };
-        let had = obj.get(name).and_then(|v| v["cost"].as_i64());
-        if had == Some(want) {
-            logf!(Level::Info, "[prices] 覆盖 {name}={want} 与上游已一致，可以从覆盖表里删掉");
-        } else {
-            logf!(Level::Info, "[prices] 覆盖 {name}: {} -> {want}",
-                  had.map_or("(无)".into(), |c| c.to_string()));
-        }
-        // 只改价格，保留 consumable / charges——消耗品折价要用
-        match obj.get_mut(name).and_then(|v| v.as_object_mut()) {
-            Some(item) => { item.insert("cost".into(), serde_json::json!(want)); }
-            None => { obj.insert(name.clone(), serde_json::json!({ "cost": want })); }
-        }
-    }
-    base
-}
-
 /// 价格表是本地常数，**不联网**。
 ///
 /// 原先每次启动都后台拉一次 OpenDota，有两个问题：
@@ -72,11 +48,17 @@ fn apply_overrides(app: &tauri::AppHandle, mut base: serde_json::Value) -> serde
 ///    这个错会一直盖住对的那份。
 /// 2. 拉取是异步的，首次进对局多半用的还是上次的缓存，价格总滞后一次启动。
 ///
-/// 而价格只随游戏版本变，本就该跟着版本走。更新方式：跑 `tools/fetch_prices.py`
-/// 重新生成 `constants/item_prices.json`，提交，重新构建。
+/// 而价格只随游戏版本变，本就该跟着版本走。
+///
+/// 数据源是游戏本体自己的 `scripts/npc/items.txt`（在 VPK 里），在开发机上解析、
+/// 结果作为快照提交：跑 `python tools/sync_constants.py`，提交，重新构建。
+/// **运行时既不联网、也不读游戏文件**——用户拿到的必须是一份确定的常数，
+/// 否则出了差额我们无从知道他手上那份价格表是哪一版。对齐的版本号见 `constants/patch.json`。
+///
+/// 曾经还有一张 `item_price_overrides.json` 盖在上面，用来修正 OpenDota 的滞后。
+/// 源头换成游戏文件之后它没有存在理由了，已删除：想手改单个价格，
+/// 直接改配置目录里的 `item_prices.json`（盘上的值本来就盖过内嵌快照），少一层就少一处对不上。
 #[tauri::command]
 pub fn get_item_prices(app: tauri::AppHandle) -> serde_json::Value {
-    let base = read_constant(&app, "item_prices", EMBEDDED)
-        .unwrap_or_else(|| serde_json::json!({}));
-    apply_overrides(&app, base)
+    read_constant(&app, "item_prices", EMBEDDED).unwrap_or_else(|| serde_json::json!({}))
 }
