@@ -5,6 +5,7 @@
 [![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+![Dota 2: 7.41e](https://img.shields.io/badge/Dota%202-7.41e-C24A34.svg)
 
 基于 Dota 2 官方 GSI（Game State Integration）接口的桌面覆盖层，
 在游戏中按住 **Alt** 显示游戏界面上没有画出来的那几个倒计时。
@@ -97,7 +98,7 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 
 | | |
 |---|---|
-| `constants/` | 时间常数表 + 物品价格表 + 语言包，改 JSON 重启生效 |
+| `constants/` | 时间常数表 + 语言包，改 JSON 重启生效（物品价格表不在这里，见下） |
 | `settings.json` | 上述设置 |
 | `layout.json` | 四个块各自的位置 |
 | `logs/` | 运行日志 |
@@ -119,24 +120,23 @@ Alt 检测采用被动轮询键盘状态，不注册热键、不拦截按键。
 - 数据源：Dota 2 GSI（本地 HTTP 推送）
 - 物品价格：本地常数表（快照取自游戏本体自己的数据文件），**运行时不联网、也不读游戏文件**
 
-所有常数都外置于 `constants/*.json`——时间表（正常/快速模式两套）、物品价格、语言包。
+常数外置于 `constants/*.json`——时间表（正常/快速模式两套）、语言包。
 版本更新只改数据不改代码，上一个项目正是死于把常数写死在代码里。
 
-`constants/patch.json` 记着这份常数对齐到哪个 Dota 版本：
+**这份常数对齐到哪个 Dota 版本，写在 `constants/patch.json` 里**，也就是顶上那枚徽章：
 
 ```json
 { "dota": "7.41e", "synced": "2026-09-09" }
 ```
 
-**物品价格也能自己改。** 发现净资产差了某件装备的钱，直接改配置目录里的
-`constants/item_prices.json`，重启生效——盘上的值盖过程序内置的那份。
-（下次程序跟着 Dota 版本更新时，这张表会被整个换成新的，手改的值不保留：
-价格随补丁变，留着旧值只会盖住对的。时间表不受影响。）
-
-价格表由 `python tools/sync_constants.py` 从**游戏自己的文件**生成：价格取
+价格表是个例外，它**不放到配置目录**，只编译进程序。价格由
+`python tools/sync_constants.py` 从**游戏自己的文件**生成：价格取
 `scripts/npc/items.txt` 的 `ItemCost`，物品 id 取 `npc_ability_ids.txt`。
 这是开发机上的一步，发布出去的 exe 里没有这段解析，也不会去翻 Dota 的安装目录取价格——
 用户拿到的是一份确定的常数，出了差额我们才能知道他用的是哪一版。
+
+所以价格不能自己改，补丁刚出而这边还没发版的那几天只能等。换来的是不会出现
+"盘上那份旧表静默盖住新表"——那比价格晚几天更难发现。时间表不受此限，仍然可改。
 
 ## 开发
 
@@ -147,7 +147,8 @@ python tools/sync_constants.py                               # 跟随 Dota 版�
 ```
 
 Dota 更新后跑一次 `sync_constants.py`：它从本机 Dota 的 VPK 里重新生成价格表、
-更新 `constants/patch.json` 的版本号，并打印两样东西——价格相对上一版的差异，
+更新 `constants/patch.json` 的版本号和两份 README 顶部的版本徽章，
+并打印两样东西——价格相对上一版的差异，
 以及这一版更新日志里命中符 / 肉山 / 塔防 / 买活 / 莲花 / 堆野等机制的条目。
 价格是自动的；那些条目要人读一遍，据此决定要不要动 `normal.json` / `turbo.json` /
 `towers.json`——符刷新间隔这类东西不在游戏的物品表里。

@@ -4,7 +4,7 @@
 做四件事：
 1. 找到 Dota 安装目录，从 `pak01_dir.vpk` 里取出几份明文 KV
 2. 重新生成 `constants/item_prices.json`，并打印它相对上一版的差异
-3. 更新 `constants/patch.json` 的版本号
+3. 更新 `constants/patch.json` 的版本号，以及两份 README 顶部那枚版本徽章
 4. 筛出这一版更新日志里与我们建模的机制有关的条目，供人工判断要不要动计时表
 
 为什么不用 OpenDota、为什么只在开发机上做：见 docs/design/networth.md 的「价格源」。
@@ -24,6 +24,30 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONSTANTS = ROOT / "constants"
+READMES = [ROOT / "README.md", ROOT / "README.zh-CN.md"]
+
+# README 顶部那枚徽章。版本号只在 patch.json 里定义，这行是它的产物——
+# 所以这里按整行替换，而不是让人手动跟着改（手动跟着改 = 版本号有了第二个出处）。
+BADGE_RE = re.compile(r'^!\[Dota 2: [^\]]*\]\(https://img\.shields\.io/badge/Dota%20\S*\)$', re.M)
+
+
+def badge(version):
+    return (f"![Dota 2: {version}]"
+            f"(https://img.shields.io/badge/Dota%202-{version}-C24A34.svg)")
+
+
+def update_badges(version):
+    """把两份 README 的徽章换成当前版本。改动过的才写盘，省得每次都让 git 看见。"""
+    for p in READMES:
+        text = p.read_text(encoding="utf-8")
+        want = badge(version)
+        new, n = BADGE_RE.subn(lambda _m: want, text, count=1)   # lambda：别让 re 解释替换串
+        if n == 0:
+            print(f"  !! {p.name} 里找不到版本徽章那一行，没改——检查一下是不是被编辑掉了")
+            continue
+        if new != text:
+            p.write_text(new, encoding="utf-8", newline="")
+            print(f"  {p.name} 徽章 -> {version}")
 
 # VPK 里要取的几份文件
 ITEMS = "scripts/npc/items.txt"
@@ -264,10 +288,18 @@ def main():
         print("\n--dry-run，没有写文件")
         return
     price_file.write_text(dump_prices(prices), encoding="utf-8")
+    # synced 记的是"这份常数哪天从游戏文件生成的"。版本和价格都没变就保留原日期——
+    # 否则每跑一次脚本都冒出一行 git 改动，看着像更新了其实什么都没更新。
+    changed = was != version or old != prices
+    synced = date.today().isoformat()
+    if not changed and patch_file.exists():
+        synced = json.loads(patch_file.read_text(encoding="utf-8")).get("synced", synced)
     patch_file.write_text(
-        json.dumps({"dota": version, "synced": date.today().isoformat()},
+        json.dumps({"dota": version, "synced": synced},
                    ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"\n已写入 {price_file.name}（{len(prices)} 项）和 {patch_file.name}")
+    print(f"\n已写入 {price_file.name}（{len(prices)} 项）和 {patch_file.name}"
+          + ("" if changed else "（无变化，保留原 synced 日期）"))
+    update_badges(version)
     print("接下来：看一遍上面的差异 -> 需要就改计时表 -> 提交 -> 重新构建")
 
 
