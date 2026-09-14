@@ -129,6 +129,10 @@ function itemValues(items, prices, player) {
  * 所以靠物品栏历史判断：见过祝福卷轴 / 祝福成品 / 肉山祝福 → 5800；
  * 什么都没见过（炼金送的）→ 4200。实测物品消失与 buff 出现是同一时刻切换，不会重复计。
  *
+ * **修饰符名会带来源后缀**，所以下面一律用前缀匹配，不能精确查表：炼金送的那根
+ * 叫 modifier_item_ultimate_scepter_consumed_alchemist。精确匹配会让这一整类静默计 0，
+ * 2026-09-14 观战对账实测每人少 4200。详见 design/networth.md。
+ *
  * 一律计入，不管自己买的、肉山掉的还是炼金送的——到手就是永久属性，
  * 和"队友让你代拿的物品"（随时能还回去，不计）不同。
  */
@@ -148,6 +152,14 @@ const CONSUMED_BUFFS = [
 
 /** 需要记进物品栏历史的物品名 */
 const TRACKED_ITEMS = CONSUMED_BUFFS.flatMap(b => b.upgrade?.items ?? []);
+
+/** buff 里有没有这几个修饰符之一。**按前缀比，不精确查表**——
+    GSI 会给修饰符名加来源后缀（炼金送的神杖是 ..._consumed_alchemist）。
+    这里前缀是安全的：..._scepter_consumed 不是 ..._scepter_2_consumed 的前缀，两档不会互吞。 */
+function hasMod(buffs, mods) {
+  const keys = Object.keys(buffs);
+  return mods.some(m => keys.some(k => k.startsWith(m)));
+}
 
 /**
  * 净资产 = 金钱 + 装备栏 + 储藏处 + 在途 + 魔晶/神杖修正。
@@ -177,7 +189,7 @@ export class EconTracker {
   /** 某个吞噬 buff 当前该按多少钱计 */
   buffPrice(b, prices, C, buffs) {
     const up = b.upgrade;
-    const byUpMod = !!up && up.mods.some(m => m in buffs);
+    const byUpMod = !!up && hasMod(buffs, up.mods);
     const upgraded = byUpMod || (!!up && up.items.some(n => this.seenVariants.has(n)));
     return prices[upgraded ? up.api : b.api]?.cost ?? C[b.constKey] ?? 0;
   }
@@ -190,8 +202,8 @@ export class EconTracker {
   noteBuffs(hero, prices, C) {
     const buffs = (hero || {}).permanent_buffs || {};
     for (const b of CONSUMED_BUFFS) {
-      const active = b.mods.some(m => m in buffs)
-                     || (!!b.upgrade && b.upgrade.mods.some(m => m in buffs));
+      const active = hasMod(buffs, b.mods)
+                     || (!!b.upgrade && hasMod(buffs, b.upgrade.mods));
       if (active && !this.activeBuffs.has(b.api)) {
         this.activeBuffs.add(b.api);
         this.deliver(this.buffPrice(b, prices, C, buffs));
@@ -333,8 +345,8 @@ export class EconTracker {
       const up = b.upgrade;
       // 门槛只看 buff 是否真的存在。物品栏历史仅用于决定价格档次——
       // 若拿它当"buff 已生效"的依据，卷轴还在包里时会物品价和 buff 价重复计。
-      const byMod = b.mods.some(m => m in buffs);
-      const byUpMod = !!up && up.mods.some(m => m in buffs);
+      const byMod = hasMod(buffs, b.mods);
+      const byUpMod = !!up && hasMod(buffs, up.mods);
       if (!byMod && !byUpMod) continue;
       nw += this.buffPrice(b, prices, C, buffs);
     }

@@ -1,40 +1,5 @@
-use tauri::Manager;
-use crate::log::Level;
-use crate::logf;
-
 /// 价格表，**程序里唯一的一份**。见下面 `get_item_prices` 说明为什么不放配置目录。
 const EMBEDDED: &str = include_str!("../../constants/item_prices.json");
-
-/// 配置目录里几份已经不起作用的旧文件，升级上来的用户盘上还留着。
-///
-/// - `item_prices.json`（配置目录根下）：更早的版本缓存 OpenDota 响应的地方。
-///   写盘时只留了 cost，丢掉 consumable / charges，而消耗品折价正靠这两个字段。
-/// - `constants/item_price_overrides.json`：价格源换成游戏本体后不再读取。
-/// - `constants/item_prices.json`：曾经播种到配置目录，现在价格只从内嵌那份读。
-///   **这一条尤其要删**：不删的话它就是那张"静默压住新表的旧表"，正是不再播种要躲开的东西。
-/// - `constants/patch.json`：1.1.0 为了判断价格表旧没旧而写的，版本号现在只在程序里。
-///
-/// **都得删掉，不能只是不读。** 留着比删掉更坏：排查差额时它们看上去正是价格来源，
-/// 用户改了不生效，而没有任何东西告诉他这文件已经作废了。
-///
-/// 按路径片段存而不是 `"constants/xxx.json"`：后者在日志里会打出
-/// `...app\constants/item_prices.json` 这种混着两种分隔符的路径，排查时看着像 bug。
-const LEGACY: [&[&str]; 4] = [&["item_prices.json"],
-                              &["constants", "item_price_overrides.json"],
-                              &["constants", "item_prices.json"],
-                              &["constants", "patch.json"]];
-
-pub fn drop_legacy_cache(app: &tauri::AppHandle) {
-    let Ok(dir) = app.path().app_config_dir() else { return };
-    for parts in LEGACY {
-        let p = parts.iter().fold(dir.clone(), |acc, part| acc.join(part));
-        if !p.exists() { continue; }
-        match std::fs::remove_file(&p) {
-            Ok(()) => logf!(Level::Info, "[prices] 已删除失效的旧文件 {}", p.display()),
-            Err(e) => logf!(Level::Warn, "[prices] 旧文件 {} 删除失败: {e}", p.display()),
-        }
-    }
-}
 
 /// 价格表是本地常数，**不联网**。
 ///
@@ -58,7 +23,11 @@ pub fn drop_legacy_cache(app: &tauri::AppHandle) {
 ///
 /// 一并消失的还有两层历史包袱：`item_price_overrides.json`（修正 OpenDota 滞后用的），
 /// 以及 1.1.0 那套"版本一变就整表覆盖"的机制——副本没了，就没有旧表要覆盖。
-/// 升级上来的用户盘上那几份由 `drop_legacy_cache` 一次性删掉。
+///
+/// 1.2.0 里还有个 `drop_legacy_cache`，启动时删掉配置目录里那几份作废文件。
+/// 现在去掉了：**那几份本来就是惰性的**——价格只从这里读，谁都不会去看盘上那份，
+/// 留着不会算错，删除动作纯粹图整洁。而唯一装过旧版本的机器早就清干净了，
+/// 这段代码只会一辈子空跑。真碰上有人从 1.1.0 直升上来，手动删掉那几个文件即可。
 #[tauri::command]
 pub fn get_item_prices() -> serde_json::Value {
     serde_json::from_str(EMBEDDED).unwrap_or_else(|_| serde_json::json!({}))

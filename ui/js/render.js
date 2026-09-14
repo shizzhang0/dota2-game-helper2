@@ -196,15 +196,21 @@ function clamp(id, p) {
 
 /** 默认摆位：timers 与 enemy 都水平居中、上下叠放；econ 与 wardmap 靠左边缘叠放。
     全部按视口比例算，不写死像素——换分辨率也成立。
-    y0 取屏高 7.5% 是为了让开 Dota 顶部计分板（1080 屏上是 81px）。 */
+    y0 取屏高 7.5% 是为了让开 Dota 顶部计分板（1080 屏上是 81px）。
+
+    **左边那列从第二行起，不从 y0 起**：与 enemy 同高。原先 econ 顶在 y0，
+    实机上偏高（2026-09-14 实测后按用户摆好的位置改，他把 econ 正好放到了
+    与 enemy 相同的 y）。写成"对齐 enemy 那一行"而不是记住那个像素值，
+    换分辨率、换缩放都还成立。 */
 function defaultLayout() {
   const W = innerWidth, H = innerHeight, y0 = Math.round(H * 0.075), GAP = 10;
   const t = box("timers"), e = box("enemy"), c = box("econ");
+  const row2 = Math.round(y0 + t.h + GAP);
   return {
     timers:  { x: Math.round((W - t.w) / 2), y: y0 },
-    enemy:   { x: Math.round((W - e.w) / 2), y: Math.round(y0 + t.h + GAP) },
-    econ:    { x: 16, y: y0 },
-    wardmap: { x: 16, y: Math.round(y0 + c.h + GAP) },
+    enemy:   { x: Math.round((W - e.w) / 2), y: row2 },
+    econ:    { x: 16, y: row2 },
+    wardmap: { x: 16, y: Math.round(row2 + c.h + GAP) },
   };
 }
 
