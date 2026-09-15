@@ -4,11 +4,27 @@ name: CI
 # 只有真正 cargo build 的时候才会暴露——而日常开发看的是回放服务器里的 dev.html，
 # 那条路根本不经过编译。所以这条流水线是唯一稳定的守门人。
 
+# 纯文档改动跳过整条流水线。实测一次跑 3 分 21 秒，其中 2 分 38 秒是
+# cargo build --release——而文档改不动二进制里的任何一个字节，等它没有意义。
+#
+# 注意 constants/ 和 tools/ **不在忽略之列**：前者是 include_str! 编译进二进制的，
+# 后者虽然不进二进制，但它生成的就是 constants/，宁可多跑一次。
+#
+# 两份清单是照抄的，不能用 YAML 锚点——**GitHub Actions 不支持 anchor/alias**，
+# 写了会解析失败。改其中一份时记得改另一份。
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
 
 jobs:
   build:
