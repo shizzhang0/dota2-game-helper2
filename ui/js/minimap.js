@@ -81,7 +81,17 @@ export class WardTracker {
           if (this.joined && w.kind === "sentry" && nearMe(state, w)) this.newOwnSentries++;
         }
       } else {
-        this.enemy.set(w.key, { x: w.x, y: w.y, kind: w.kind, lastSeen: clock });
+        const was = this.enemy.get(w.key);
+        // firstSeen 要留住：眼**不可能活过"第一次看见 + 寿命"**——我们第一次看见它时
+        // 它已经活着了，所以这是个物理上界，用它剪枝不会漏报。
+        //
+        // **但眼位是会重复使用的**，而 key 只认坐标。同一个点被重新插眼时还是同一个 key，
+        // firstSeen 若停在上一个眼那里，就会把新眼提前剪掉——实测每局漏报十来秒。
+        // 判据很干净：**过了物理上界还能看见它，那它必然是新插的**，重置即可。
+        const life = w.kind === "sentry" ? this.C.wardSentryDuration : this.C.wardObserverDuration;
+        const stale = was && clock - was.firstSeen > life;
+        this.enemy.set(w.key, { x: w.x, y: w.y, kind: w.kind, lastSeen: clock,
+                                firstSeen: (was && !stale) ? was.firstSeen : clock });
       }
     }
     this.joined = true;
@@ -115,7 +125,12 @@ export class WardTracker {
       // 原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
       const memory = w.kind === "sentry" ? this.C.wardSentryDuration
                                          : this.C.wardObserverDuration;
-      if (clock - w.lastSeen > memory) this.enemy.delete(key);
+      // 两个上界取紧的那个：从最后一次看见起算的兜底，以及"第一次看见 + 寿命"这个
+      // 物理上界。后者是新加的——原先只按 lastSeen 算，一个被反复看见的眼会被
+      // 一直往后顺延，实测能挂到五分钟。用 firstSeen 剪枝不会漏报（见上）。
+      if (clock - w.lastSeen > memory || clock - (w.firstSeen ?? w.lastSeen) > memory) {
+        this.enemy.delete(key);
+      }
     }
   }
 
@@ -130,7 +145,16 @@ export class WardTracker {
     return {
       own: [...this.own.values()].map(w => ({ x: w.x, y: w.y, kind: w.kind,
                                               remaining: this.remaining(w, clock) })),
-      enemy: [...this.enemy.values()].map(w => ({ x: w.x, y: w.y, kind: w.kind })),
+      // conf：这条线索有多新。1 = 此刻真视里确认着，0 = 已经放到寿命上限、马上要删。
+      // 敌方眼的插放时刻无从得知，能诚实表达的只有"多久没看见了"——渲染层据此淡化。
+      // 见本文件对应的 design/wards.md「敌方眼按多久没看见淡化」。
+      enemy: [...this.enemy.values()].map(w => {
+        const life = w.kind === "sentry" ? this.C.wardSentryDuration : this.C.wardObserverDuration;
+        // 用"离物理上界还剩多少"当置信度，比"多久没看见"更贴近真实剩余寿命
+        const left = life - (clock - (w.firstSeen ?? w.lastSeen));
+        const conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
+        return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)) };
+      }),
       killed: this.killed.slice(),
     };
   }
