@@ -144,7 +144,12 @@ const CONSUMED_BUFFS = [
     upgrade: {
       api: "ultimate_scepter_2",
       mods: ["modifier_item_ultimate_scepter_2_consumed"],
-      items: ["ultimate_scepter_2", "ultimate_scepter_roshan", "recipe_ultimate_scepter_2"],
+      // **必须含普通神杖 `ultimate_scepter`**：它当物品拿着时本身不会变成 buff，
+      // 所以"见过它 + buff 出现" = 升级成了祝福（5800）。只认祝福卷轴的话，
+      // 买进储藏处就地合成、卷轴从没在物品栏出现过的那种，会退回 4200——
+      // 2026-09-14 观战对账实测差 1600。详见 design/networth.md。
+      items: ["ultimate_scepter", "ultimate_scepter_2", "ultimate_scepter_roshan",
+              "recipe_ultimate_scepter_2"],
     },
   },
   { mods: ["modifier_item_moon_shard_consumed"], api: "moon_shard", constKey: "moonShardValue" },
