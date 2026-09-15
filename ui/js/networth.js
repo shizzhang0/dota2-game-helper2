@@ -12,6 +12,23 @@ export function loadPrices() {
 
 const TRANSIT_TTL = 90;   // 秒（游戏时钟）：信使飞完全图也用不了这么久
 const DISPENSER_GRACE = 20;   // 秒：眼架被信使拿着时 GSI 看不见它，别急着把价值清零
+const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来吸收同一包里的被动收入
+
+/** 储藏处少了 V，这是「卖掉了」还是「被信使取走了」？
+ *
+ * 两者在 GSI 里长得一模一样（储藏处少了、装备栏没多），但**卖出会当场到账**：
+ * 买入 10 秒内退全额、之后退半价；被信使取走时金钱纹丝不动。
+ * 不分开的话，卖掉的东西会记进在途账继续算着，而卖得的钱也算进金钱——
+ * 同一件东西算两遍，直到 TTL 超时（实测虚高整整 90 秒）。
+ *
+ * **宁可漏判**：漏判只是退回旧行为（虚高一个 TTL），误判则会丢掉真正的在途账、
+ * 反而少算。被动收入每包才 +2，而这个信号是几百金，分得很开——
+ * 传送卷轴那 100 被噪声淹掉正是反例。
+ */
+function soldFromStash(lost, dGold) {
+  if (!(dGold > 0)) return false;
+  return Math.abs(dGold - lost) <= SELL_TOL || Math.abs(dGold - lost / 2) <= SELL_TOL;
+}
 
 /**
  * 本包里"我"新买了哪些东西。GSI 的购买事件只给物品 id，靠价格表里的 id 反查名字。
@@ -185,6 +202,7 @@ export class EconTracker {
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
     this.prevWards = 0;             // 上一包散装眼的价值，用来接住"合成眼架"那一刻
     this.prevDispenser = false;
+    this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.prevTp = null;             // 传送槽充能数
     this.tpQueue = [];              // 每个充能是不是自己买的，先进先出
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
@@ -308,6 +326,7 @@ export class EconTracker {
 
   update(state, prices, C, clock, placedSentries = 0) {
     const { slot, stash, wards, dispenser } = itemValues(state.items, prices, state.player);
+    const gold = (state.player || {}).gold ?? 0;
     this.noteDispenser(state, prices, wards, dispenser, placedSentries, clock);
     this.noteVariants(state.items);
     this.noteTp(state.items, state.hero, clock);
@@ -318,6 +337,7 @@ export class EconTracker {
       this.transit = [];
       this.prevSlot = slot;
       this.prevStash = stash;
+      this.prevGold = gold;
       this.lastClock = clock;
       return this.total(state, prices, C, slot, stash);
     }
@@ -326,7 +346,7 @@ export class EconTracker {
     if (this.prevStash !== null) {
       const lost = this.prevStash - stash;      // 储藏处减少的价值
       const gained = slot - this.prevSlot;      // 装备栏增加的价值
-      if (lost > 0 && gained < lost) {
+      if (lost > 0 && gained < lost && !soldFromStash(lost, gold - this.prevGold)) {
         this.transit.push({ v: lost - Math.max(0, gained), at: clock });
       } else if (gained > 0) {
         this.deliver(gained);                   // 装备栏变多 = 在途的东西到货了
@@ -335,6 +355,7 @@ export class EconTracker {
     }
     this.prevSlot = slot;
     this.prevStash = stash;
+    this.prevGold = gold;
     this.noteBuffs(state.hero, prices, C);
     return this.total(state, prices, C, slot, stash);
   }
