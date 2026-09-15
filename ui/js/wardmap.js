@@ -48,8 +48,11 @@ export function renderWardMap(m) {
   const w = m.wards || { own: [], enemy: [], killed: [] };
   // kind 一直传进来却没用上：真假眼在图上长得一模一样，而它们该不该补、
   // 能不能反隐完全是两回事。真眼加 .sentry（画成空心），假眼保持实心。
+  // 敌方眼带 conf（这条线索有多新）：刚在真视里确认过的实心，久未确认的淡。
+  // 下限 0.3 而不是 0——线索再旧也不该消失，漏显示才是危险的那一侧。
   const dot = (o, cls) =>
     `<circle class="wm-ward ${cls}${o.kind === "sentry" ? " sentry" : ""}" ` +
+    (typeof o.conf === "number" ? `opacity="${(0.3 + 0.7 * o.conf).toFixed(2)}" ` : "") +
     `cx="${sx(o.x).toFixed(1)}" cy="${sy(o.y).toFixed(1)}" r="2.2"/>`;
   const label = o => (o.remaining === null || o.remaining > LABEL_BELOW) ? "" :
     `<text class="wm-t" x="${sx(o.x).toFixed(1)}" y="${(sy(o.y) - 3.4).toFixed(1)}">${fmt(o.remaining)}</text>`;
