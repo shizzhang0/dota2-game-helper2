@@ -253,17 +253,21 @@ html, body {
 .wm-bg { fill: rgba(0, 0, 0, calc(var(--block-bg, .72) * .5)); }
 .wm-tower { fill: #9AA6B4; opacity: .55; }
 .wm-tower[data-team="2"] { fill: #66BB6A; }
-.wm-tower[data-team="3"] { fill: #E57373; }
+/* 夜魇塔去饱和压暗。它原本是 #E57373 / .55 的阵营红，而敌方眼改红之后两者撞了——
+   尤其敌方眼还会按置信度淡到 .3，淡下去正好落进塔那一档亮度。
+   让位的是塔不是眼：塔是底图（位置固定、只有生死两态），眼才是这块的正文。
+   阵营身份靠"暖 vs 绿"保留下来，够用。 */
+.wm-tower[data-team="3"] { fill: #8C6A6A; opacity: .45; }
 .wm-tower.dead { fill: #5A6470; opacity: .3; }
 .wm-ward { fill: var(--w); stroke: rgba(0, 0, 0, .85); stroke-width: .6; }
 .wm-ward.own { --w: #65D9F7; }
 .wm-ward.own.soon { --w: #FFC24B; }
-/* 紫而不是红：夜魇塔是 #E57373，两者都常驻（敌方眼保留到 366s），
-   在 2 个 viewBox 单位下圆和方也分不出来，撞色会把"敌方有眼"和地形混为一谈。
-   取的是调色板里强化符那支紫，不引入新色。
-   这么一改，地图上的红就只剩一个含义：我方眼刚被排掉（只闪 3 秒）。 */
-.wm-ward.enemy { --w: #A46BFF; }
-.wm-ward.killed { --w: #FF4D4D; }
+/* 颜色只说归属：青 = 我方，红 = 敌方。红=威胁是不用学的，而之前那个紫是个任意约定。
+   "刚被排掉"原本占着这支红，现在挪到形状上去了（.wm-kill 那个叉），
+   颜色于是不再兼职。理由见 design/overlay.md 的「设置」第 7 条。 */
+.wm-ward.enemy { --w: #FF4D4D; }
+/* 我方眼刚被排掉：青色的叉，闪 3 秒。青说明"是我的"，叉说明"没了"。 */
+.wm-kill { stroke: #65D9F7; stroke-width: 1.3; stroke-linecap: round; fill: none; }
 /* 真眼空心、假眼实心。颜色已经背了"归属"和"快到期"两层含义，
    再拿颜色区分类型必然糊；塔是方块，所以形状这条通道是空的，正好拿来用。
    要写在上面几条之后——同特异度靠顺序取胜。 */
@@ -317,6 +321,11 @@ details[open] > summary { margin-bottom: 7px; }
 .ed-legend span { display: flex; align-items: center; gap: 7px; }
 /* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
 .ed-legend svg { width: 11px; height: 11px; flex: none; display: block; overflow: visible; }
+/* 图例里的塔按不透明画。地图上塔是**底图**，靠压低透明度往后退；图例里它背后什么都没有，
+   那点透明度不传达任何信息，只是把 11px 的色块变糊。夜魇塔去饱和之后这条成了必需——
+   #8C6A6A/.45 和「已推掉」的 #5A6470/.3 并排摆着几乎分不出来，而图例的职责正是教人分辨。
+   **只动透明度不动颜色**：色值仍然复用地图那份，不会出现两套颜色各自漂移。 */
+.ed-legend .wm-tower { opacity: 1; }
 .ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
 /* 九个显示项前面的图标，和面板上用的是同一份 icons.js，形状永远不会脱节。
    眼位那一行是两个图标，所以用 flex 而不是写死宽度。 */

@@ -54,10 +54,20 @@ export function renderWardMap(m) {
     `<circle class="wm-ward ${cls}${o.kind === "sentry" ? " sentry" : ""}" ` +
     (typeof o.conf === "number" ? `opacity="${(0.3 + 0.7 * o.conf).toFixed(2)}" ` : "") +
     `cx="${sx(o.x).toFixed(1)}" cy="${sy(o.y).toFixed(1)}" r="2.2"/>`;
+  // 被排的画叉不画点：颜色已经表示归属（青=我方），"没了"交给形状。
+  // 半径取和眼一样的 2.2，两者在图上才是同一个量级的东西。
+  const cross = (o) => {
+    const x = sx(o.x), y = sy(o.y), r = 2.2;
+    return `<g class="wm-kill">` +
+      `<line x1="${(x-r).toFixed(1)}" y1="${(y-r).toFixed(1)}" ` +
+      `x2="${(x+r).toFixed(1)}" y2="${(y+r).toFixed(1)}"/>` +
+      `<line x1="${(x+r).toFixed(1)}" y1="${(y-r).toFixed(1)}" ` +
+      `x2="${(x-r).toFixed(1)}" y2="${(y+r).toFixed(1)}"/></g>`;
+  };
   const label = o => (o.remaining === null || o.remaining > LABEL_BELOW) ? "" :
     `<text class="wm-t" x="${sx(o.x).toFixed(1)}" y="${(sy(o.y) - 3.4).toFixed(1)}">${fmt(o.remaining)}</text>`;
   wardLayer.innerHTML =
     w.enemy.map(o => dot(o, "enemy")).join("") +
     w.own.map(o => dot(o, "own" + (o.remaining !== null && o.remaining <= LABEL_BELOW ? " soon" : "")) + label(o)).join("") +
-    w.killed.map(o => dot(o, "killed")).join("");
+    w.killed.map(cross).join("");
 }

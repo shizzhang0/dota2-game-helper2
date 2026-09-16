@@ -30,7 +30,9 @@ const LEGEND = [
   [`<circle class="wm-ward enemy" cx="5" cy="5" r="3.4"/>`,        "enemyObs"],
   [`<circle class="wm-ward enemy sentry" cx="5" cy="5" r="3.1"/>`, "enemySentry"],
   [`<circle class="wm-ward own soon" cx="5" cy="5" r="3.4"/>`,     "soon"],
-  [`<circle class="wm-ward killed" cx="5" cy="5" r="3.4"/>`,       "killed"],
+  // 被排的是叉不是点——图例必须跟着地图的形状走，否则这张卡片就骗人了
+  [`<g class="wm-kill"><line x1="2.2" y1="2.2" x2="7.8" y2="7.8"/>`
+   + `<line x1="7.8" y1="2.2" x2="2.2" y2="7.8"/></g>`,           "killed"],
   [`<rect class="wm-tower" data-team="2" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "towerRadiant"],
   [`<rect class="wm-tower" data-team="3" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "towerDire"],
   [`<rect class="wm-tower dead" x="1.6" y="1.6" width="6.8" height="6.8"/>`,          "towerDead"],
