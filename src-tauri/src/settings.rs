@@ -63,6 +63,9 @@ pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
     }
     // 托盘菜单在 Rust 侧，前端那份 emit 管不到它——切语言要两边都动
     crate::tray::apply_lang(&app);
+    // 录制开关立刻生效。原先它挂在 GSI 收包循环上（每 100 包轮询一次设置），
+    // 结果没开游戏时拨动开关完全没反应——连"关掉"都停不下来。
+    crate::record::refresh(&app);
     let _ = app.emit("settings", merged); // 覆盖层监听后实时生效
 }
 
