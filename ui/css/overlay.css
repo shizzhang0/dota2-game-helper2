@@ -308,13 +308,44 @@ html, body {
 }
 .ed-bar:active { cursor: grabbing; }
 
-.ed-sec { margin-bottom: 12px; }
-.ed-sec h3, .ed-sec summary {
-  font-size: 11px; color: var(--dim); font-weight: 600;
-  margin: 0 0 7px; cursor: default;
+/* ── 页签 ────────────────────────────────────────────
+   四节内容原先竖着堆成一条，默认 475px、全展开 754px。页签把它压成
+   "最高那一页 + 外壳"，而且**只有图标没有文字**——名字显示在页签条下面那一行，
+   所以中英文卡片一样宽（英文的 Display/Panel/Legend/Developer 并排写撑得开）。
+
+   页签条**只管四页内容**：拖拽把手在它上面、「完成」在它下面，两者都不进页签。
+   编辑态下覆盖层全屏吃鼠标，桌面点不动、托盘也点不到，「完成」是三条退出路径里
+   最可靠的一条——它绝不能藏在某个没选中的页后面。 */
+.ed-tabs {
+  display: flex; gap: 4px;
+  margin: 0 -14px 0;            /* 顶到卡片内边距之外，和 .ed-bar 对齐 */
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--hair);
 }
-.ed-sec summary { cursor: pointer; margin-bottom: 0; }
-details[open] > summary { margin-bottom: 7px; }
+.ed-tab {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 5px 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--dim);
+  cursor: pointer;
+}
+.ed-tab:hover { background: rgba(255, 255, 255, .06); color: var(--fg); }
+/* 选中态同时给底色和描边：只靠颜色的话，在 11px 的图标上差别太弱 */
+.ed-tab.on {
+  background: rgba(101, 217, 247, .12);
+  border-color: rgba(101, 217, 247, .35);
+  color: var(--k-chance);
+}
+.ed-tab svg.ico { display: block; overflow: visible; }
+/* 选中页的名字。顶替了原先每节的 h3，所以没多占高度 */
+.ed-tabname {
+  font-size: 11px; color: var(--dim); font-weight: 600;
+  margin: 8px 0 7px;
+}
+.ed-pane { margin-bottom: 12px; }
 .ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
 .ed-legend-note { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
 .ed-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
