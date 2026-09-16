@@ -55,6 +55,22 @@ function versions() {
   return verOnce;
 }
 
+/** 四个页签：`[页面 id, 词条键, 图标名]`。顺序就是屏幕上的顺序。
+
+    **页签只有图标**，名字显示在页签条下面那一行。这样中英文的卡片宽度完全一致——
+    英文的 `Display / Panel / Legend / Developer` 并排写出来撑得开 329px，
+    而图标不受语言影响。这是覆盖层图标化那次的同一个收益，只是搬到了卡片上。 */
+const TABS = [
+  ["show",   "card.show",   "grid"],
+  ["panel",  "card.panel",  "sliders"],
+  ["legend", "card.legend", "legend"],
+  ["dev",    "card.dev",    "wrench"],
+];
+/** 当前页。**模块级而不是存进 settings**：它是瞬时的界面状态，不是用户的偏好，
+    存盘会让 settings.json 里多一个和外观无关的键。切语言要整卡重建，
+    靠它把选中项接回去——否则每次换语言都被踢回第一页。 */
+let activeTab = TABS[0][0];
+
 const MB = 1024 * 1024;
 /** 体积按 MB 给一位小数；不到 0.1MB 的显示 <0.1，别写成 0.0 让人以为是空的。 */
 function mb(bytes) {
@@ -108,15 +124,20 @@ export async function initEditor(cardEl, onDone, onReset) {
 async function build(s) {
   await loadLang(s.lang ?? DEFAULTS.lang);
   card.className = "editor";
+  pinnedH = 0;                // 节点要整批换掉，量过的高度作废；中英文也不一样高
   card.innerHTML = `
     <div class="ed-bar">${t("card.title")}</div>
-    <div class="ed-sec"><h3>${t("card.show")}</h3>
+    <div class="ed-tabs" role="tablist">${TABS.map(([id, key, ic]) =>
+      `<button class="ed-tab" type="button" role="tab" data-tab="${id}" title="${t(key)}"
+        aria-label="${t(key)}">${icon(ic, 15)}</button>`).join("")}</div>
+    <div class="ed-tabname" id="edTabName"></div>
+    <div class="ed-pane" data-pane="show">
       <div class="ed-grid">${SHOW_KEYS.map(k =>
         `<label class="ed-chk"><input type="checkbox" data-show="${k}"${
           s.show?.[k] !== false ? " checked" : ""
         }><span class="ed-ico">${showIcon(k)}</span>${t("show." + k)}</label>`).join("")}</div>
     </div>
-    <div class="ed-sec"><h3>${t("card.panel")}</h3>
+    <div class="ed-pane" data-pane="panel">
       <label class="ed-row">${t("card.lang")}
         <select id="edLang">${LANGS.map(([v, name]) =>
           `<option value="${v}">${name}</option>`).join("")}</select></label>
@@ -134,11 +155,11 @@ async function build(s) {
         <output id="edWardOut"></output></label>
       <div class="ed-row"><button id="edReset" type="button">${t("card.reset")}</button></div>
     </div>
-    <details class="ed-sec"><summary>${t("card.legend")}</summary>
+    <div class="ed-pane" data-pane="legend">
       <div class="ed-legend-note">${t("card.legendNote")}</div>
       <div class="ed-legend">${legendHTML()}</div>
-    </details>
-    <details class="ed-sec"><summary>${t("card.dev")}</summary>
+    </div>
+    <div class="ed-pane" data-pane="dev">
       <label class="ed-row">${t("card.logLevel")}
         <select id="edLog">
           <option value="error">error</option><option value="warn">warn</option>
@@ -152,7 +173,7 @@ async function build(s) {
       </div>
       <div class="ed-row ed-ver">${t("card.appVersion")}<b id="edAppVer">—</b></div>
       <div class="ed-row ed-ver">${t("card.dotaVersion")}<b id="edDotaVer">—</b></div>
-    </details>
+    </div>
     <div class="ed-foot">
       <span class="ed-hint">${t("card.hint")}</span>
       <button id="edDone" type="button">${t("card.done")}</button>
@@ -187,6 +208,25 @@ async function build(s) {
     lang: lang.value,
   });
 
+  // 页签切换。只改 hidden 和一个 class，不动任何控件——控件在四个页里一直都在，
+  // 切页只是把它们藏起来，所以 collect() 永远收得齐。
+  const panes = [...card.querySelectorAll(".ed-pane")];
+  const tabs = [...card.querySelectorAll(".ed-tab")];
+  const name = $("edTabName");
+  const selectTab = (id) => {
+    if (!TABS.some(([t0]) => t0 === id)) id = TABS[0][0];
+    activeTab = id;
+    for (const p of panes) p.hidden = p.dataset.pane !== id;
+    for (const b of tabs) {
+      const on = b.dataset.tab === id;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    }
+    name.textContent = t(TABS.find(([t0]) => t0 === id)[1]);
+  };
+  for (const b of tabs) b.addEventListener("click", () => selectTab(b.dataset.tab));
+  selectTab(activeTab);
+
   sync();
   // 建完再填：切语言会重建这两个节点，所以要等到这一刻才去拿它们
   versions().then(v => {
@@ -203,7 +243,7 @@ async function build(s) {
     const next = collect();
     await saveSettings(next);
     await build(next);
-    if (!card.hidden) place();     // 中英文卡片不一样宽，重新居中
+    if (!card.hidden) { pinPaneHeight(); place(); }   // 中英文卡片不一样宽也不一样高
   });
 
   // 「重置」把这张卡片管的外观一次还原：九个勾 + 四条滑块 + 四块摆位。
@@ -257,5 +297,31 @@ function place() {
 export function setEditorOpen(on) {
   if (!card) return;
   card.hidden = !on;          // 必须先取消隐藏再量尺寸，hidden 时 offsetWidth 为 0
-  if (on) place();
+  if (on) { pinPaneHeight(); place(); }
+}
+
+/** 把四页拉到同高，卡片切页时就不会忽高忽低。
+
+    **不是为了好看，是为了「完成」按钮别动。** 四页实测 270/316/282/293，
+    最大差 46px；不钉住的话每点一次页签，底部那个按钮就上下跳一次——
+    而编辑态下覆盖层全屏吃鼠标，它是三条退出路径里最可靠的一条，不该是个移动靶。
+
+    **只能在卡片显示之后量**：hidden 的时候 offsetHeight 是 0，
+    在 build() 里量到的会是一排 0（和上面 place() 那条注释同一个坑）。
+    量完缓存住，之后每次打开直接套用；切语言会重建节点并清掉缓存，重量一次。 */
+let pinnedH = 0;
+function pinPaneHeight() {
+  const panes = [...card.querySelectorAll(".ed-pane")];
+  if (!panes.length) return;
+  if (!pinnedH) {
+    const was = panes.map(p => p.hidden);
+    for (const p of panes) p.style.minHeight = "";
+    for (const p of panes) {
+      p.hidden = false;
+      pinnedH = Math.max(pinnedH, p.offsetHeight);
+      p.hidden = true;
+    }
+    panes.forEach((p, i) => { p.hidden = was[i]; });
+  }
+  for (const p of panes) p.style.minHeight = pinnedH + "px";
 }
