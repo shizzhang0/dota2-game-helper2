@@ -5,7 +5,7 @@
 [![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
-![Dota 2: 7.41e](https://img.shields.io/badge/Dota%202-7.41e-C24A34.svg)
+![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
 
 A desktop overlay built on Dota 2's official GSI (Game State Integration) interface.
 Hold **Alt** in game to see the timers the client never draws.
