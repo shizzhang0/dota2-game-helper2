@@ -92,6 +92,7 @@ fn main() {
             tray::setup(app.handle())?;
 
             constants::seed(app.handle());
+            record::init(app.handle());          // 必须在 gsi 之前：第一包来的时候它得已经在
             gsi::spawn(app.handle().clone());
             altkey::spawn(app.handle().clone());
             gsicfg::ensure_cfg();
@@ -111,6 +112,13 @@ fn main() {
             save_layout,
             load_layout
         ])
-        .run(tauri::generate_context!())
-        .expect("tauri run");
+        .build(tauri::generate_context!())
+        .expect("tauri build")
+        // 托盘退出走的是 app.exit()，析构**不会**执行——不在这里收尾，
+        // 录制缓冲区里最后没 flush 的那一段就丢了，而且毫无提示。
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                record::shutdown();
+            }
+        });
 }

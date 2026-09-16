@@ -13,21 +13,20 @@ pub fn spawn(app: AppHandle) {
             }
         };
         logf!(Level::Info, "[gsi] 监听 http://127.0.0.1:53000");
-        let mut rec = crate::record::Recorder::new(&app);
-        let mut n: u32 = 0;
         for mut req in server.incoming_requests() {
             let mut body = String::new();
             let _ = req.as_reader().read_to_string(&mut body);
             let _ = req.respond(tiny_http::Response::from_string("ok"));
-            n = n.wrapping_add(1);
-            if n % 100 == 0 { rec.refresh(&app); }   // 让设置开关不重启也能生效
+            // 这里**不再**轮询录制开关。原先是 `n % 100 == 0` 时调一次 refresh，
+            // 于是开关只在 Dota 推包时才生效——没开游戏就完全失灵。
+            // 现在 set_settings 直接通知录制器，见 record.rs 顶部的注释。
             match serde_json::from_str::<serde_json::Value>(&body) {
                 Ok(v) => {
                     // 压成一行再写。Dota 推来的 body 是带制表符缩进的多行 JSON，
                     // 原样落盘一包就摊成几十行，根本不是 JSONL——replay.py 按行读
                     // 会一条都解析不出来。gsi_dump.py 用的同样是紧凑序列化。
                     // 解析不了的 body 干脆不写：回放也用不了，只会破坏文件结构。
-                    rec.write(&v.to_string());
+                    crate::record::write(&app, &v.to_string());
                     let _ = app.emit("gsi", v);
                 }
                 Err(e) => logf!(Level::Error, "[gsi] JSON 解析失败: {e}"),
