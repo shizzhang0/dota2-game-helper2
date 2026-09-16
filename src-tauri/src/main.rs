@@ -99,10 +99,13 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             constants::get_constants,
+            constants::get_versions,
             prices::get_item_prices,
             settings::get_settings,
             settings::set_settings,
-            settings::open_constants_dir,
+            settings::open_data_dir,
+            record::records_stat,
+            record::clear_records,
             log::log_front,
             exit_edit,
             save_layout,

@@ -38,6 +38,66 @@ const LEGEND = [
 const legendHTML = () => LEGEND.map(([shape, key]) =>
   `<span><svg viewBox="0 0 10 10" aria-hidden="true">${shape}</svg>${t("legend." + key)}</span>`).join("");
 
+/** 开发区那两行版本号。只读，用户报"数字不对"时直接念给我们听——
+    价格表旧了的症状是净资产看起来正常但偏低，没有任何报错。
+
+    整个进程只取一次：切语言会重建整张卡片，而版本号在运行期不会变。
+    取不到就留着破折号，这是排查信息，**不该因为它取不到而让卡片建不出来**。 */
+let verOnce = null;
+function versions() {
+  if (!verOnce) {
+    verOnce = (isTauri()
+      ? window.__TAURI__.core.invoke("get_versions")
+      // 浏览器开发时没有 Tauri，也就没有"程序版本"这个东西；价格表版本还是照读
+      : fetch("/constants/patch.json").then(r => r.json()).then(v => ({ app: "dev", dota: v.dota }))
+    ).catch(() => ({}));
+  }
+  return verOnce;
+}
+
+const MB = 1024 * 1024;
+/** 体积按 MB 给一位小数；不到 0.1MB 的显示 <0.1，别写成 0.0 让人以为是空的。 */
+function mb(bytes) {
+  const v = bytes / MB;
+  return (v > 0 && v < 0.05 ? "<0.1" : v.toFixed(1)) + " MB";
+}
+
+/** 开发区的录制那一组：一行统计 + 一个清空按钮。
+
+    **清空要点两下。** 第一下把按钮文字换成"确定删除？"，第二下才动手，
+    5 秒无操作自动退回。录像不可再生——打过的对局回不来——所以这一下值得。
+    不用 `confirm()`：它会弹一个抢焦点的系统框，而编辑态本来就在跟焦点较劲。 */
+function initRecords(stat, btn) {
+  if (!isTauri()) { stat.textContent = "—"; btn.disabled = true; return; }
+  const inv = (cmd) => window.__TAURI__.core.invoke(cmd);
+  const label = btn.textContent;
+  let armed = 0, timer = 0;
+
+  const show = (s) => {
+    // 单位跟着语言走。**别在 JS 里写死"个"**——英文那份会变成 "3 个 · 12.0 MB"。
+    stat.textContent = s && s.count ? `${s.count}${t("card.recUnit")} · ${mb(s.bytes)}` : "—";
+    btn.disabled = !(s && s.count);
+  };
+  const disarm = () => { armed = 0; clearTimeout(timer); btn.textContent = label; };
+  const refresh = () => inv("records_stat").then(show).catch(() => show(null));
+
+  btn.addEventListener("click", async () => {
+    if (!armed) {
+      armed = 1;
+      btn.textContent = t("card.clearRecConfirm");
+      timer = setTimeout(disarm, 5000);
+      return;
+    }
+    disarm();
+    // 留下的那个是正在录的——不提示反而像没删干净，所以把它说出来
+    const r = await inv("clear_records").catch(() => null);
+    if (r && r.kept) stat.textContent = t("card.recKept");
+    else await refresh();
+    if (r && r.kept) setTimeout(refresh, 2500);
+  });
+  refresh();
+}
+
 export async function initEditor(cardEl, onDone, onReset) {
   card = cardEl; doneCb = onDone; resetCb = onReset;
   await build(await loadSettings());
@@ -85,7 +145,13 @@ async function build(s) {
           <option value="info">info</option><option value="debug">${t("card.logDebug")}</option>
         </select></label>
       <label class="ed-row"><input id="edRecord" type="checkbox">${t("card.record")}</label>
-      <button id="edDir" type="button">${t("card.openDir")}</button>
+      <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b></div>
+      <div class="ed-row">
+        <button id="edClear" type="button">${t("card.clearRec")}</button>
+        <button id="edDir" type="button">${t("card.openDir")}</button>
+      </div>
+      <div class="ed-row ed-ver">${t("card.appVersion")}<b id="edAppVer">—</b></div>
+      <div class="ed-row ed-ver">${t("card.dotaVersion")}<b id="edDotaVer">—</b></div>
     </details>
     <div class="ed-foot">
       <span class="ed-hint">${t("card.hint")}</span>
@@ -122,6 +188,12 @@ async function build(s) {
   });
 
   sync();
+  // 建完再填：切语言会重建这两个节点，所以要等到这一刻才去拿它们
+  versions().then(v => {
+    const put = (id, val) => { const el = card.querySelector("#" + id); if (el && val) el.textContent = val; };
+    put("edAppVer", v.app);
+    put("edDotaVer", v.dota);
+  });
   for (const el of card.querySelectorAll("input, select")) {
     el.addEventListener("input", () => { sync(); saveSettings(collect()); });
   }
@@ -151,8 +223,9 @@ async function build(s) {
     resetCb(DEFAULTS.scale);
   });
   $("edDir").addEventListener("click", () => {
-    if (isTauri()) window.__TAURI__.core.invoke("open_constants_dir");
+    if (isTauri()) window.__TAURI__.core.invoke("open_data_dir");
   });
+  initRecords($("edRecStat"), $("edClear"));
   $("edDone").addEventListener("click", doneCb);
 
   const bar = card.querySelector(".ed-bar");

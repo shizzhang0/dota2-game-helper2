@@ -328,6 +328,14 @@ details[open] > summary { margin-bottom: 7px; }
   min-width: 44px; text-align: right; color: var(--dim);
   font-variant-numeric: tabular-nums;
 }
+/* 开发区的只读信息行（录制统计 + 两行版本号）：
+   值靠右对齐，和上面滑块的 output 同一个视觉位置。
+   刻意不加 user-select: none——它们存在的意义就是被选中复制走。 */
+.ed-ver { color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+.ed-ver b {
+  margin-left: auto; font-weight: 400; color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
 .editor option { background: #0E1319; color: var(--fg); }
 .editor select, .editor button {
   background: rgba(255, 255, 255, .08); color: var(--fg);

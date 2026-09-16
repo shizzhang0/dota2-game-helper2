@@ -23,11 +23,11 @@ const NAMES: [&str; 5] = ["normal", "turbo", "towers", "lang.zh-CN", "lang.en"];
 /// 这份常数对齐到哪个 Dota 版本，由 `tools/sync_constants.py` 跟着价格表一起更新。
 ///
 /// **版本号只在 `constants/patch.json` 里定义**，别处一律是它的产物：这里编译期内嵌、
-/// 启动写一条日志、README 顶部那枚徽章由同一个脚本改。它不进 `NAMES`、不落配置目录——
-/// 配置目录里已经没有任何东西需要知道版本了。
+/// 启动写一条日志、设置卡片的开发区显示一行、README 顶部那枚徽章由同一个脚本改。
+/// 它不进 `NAMES`、不落配置目录——配置目录里已经没有任何东西需要知道版本了。
 const PATCH: &str = include_str!("../../constants/patch.json");
 
-/// 形如 `7.41e`，读不出来时返回 `未知`。只用于日志。
+/// 形如 `7.41e`，读不出来时返回 `未知`。用于启动日志和设置卡片的开发区。
 pub fn dota_version() -> String {
     serde_json::from_str::<serde_json::Value>(PATCH)
         .ok()
@@ -123,4 +123,16 @@ pub fn read(app: &tauri::AppHandle, name: &str) -> serde_json::Value {
         }
     }
     embedded_value(&name)
+}
+
+/// 给设置卡片的开发区用：程序版本 + 价格表对齐的 Dota 版本。
+///
+/// **不走 `get_constants`**：那个命令只认 `NAMES` 白名单，而 `patch.json` 刻意不在其列
+/// （不播种、配置目录里不该有它的副本）。单开一个命令比为了它破例简单。
+#[tauri::command]
+pub fn get_versions(app: tauri::AppHandle) -> serde_json::Value {
+    serde_json::json!({
+        "app": app.package_info().version.to_string(),
+        "dota": dota_version(),
+    })
 }
