@@ -141,14 +141,16 @@ export function render(m) {
   }
 
   // 敌方塔防：ready 是威胁态，点亮；冷却中压暗并显示剩余
-  const g = els.cells.glyph, gm = m.glyph || { ready: true, remaining: 0 };
+  const g = els.cells.glyph, gm = m.glyph || { ready: true, remaining: 0, total: 300 };
   // 数字位永远只放数字：ready 时留空，靠环画满 + 盾点亮表达
   set(g.num, "g.n", gm.ready ? "" : fmt(gm.remaining));
   setHtml(g.lab, "g.l", icon("glyph"));
   const gu = gm.ready ? "now" : "far";
   if (prev["g.u"] !== gu) { prev["g.u"] = gu; g.root.dataset.urgency = gu; }
   if (prev["g.k"] !== 1) { prev["g.k"] = 1; g.root.style.setProperty("--accent", "var(--k-threat)"); }
-  const gf = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / 300));
+  // 冷却总长由 events.js 给，**不在这里写死**：开局那次是 270 不是 300，
+  // 而且常数写进渲染层正是上一个项目栽过的那个跟头。
+  const gf = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 300)));
   const goff = (CIRC * (1 - gf)).toFixed(1);
   if (prev["g.o"] !== goff) { prev["g.o"] = goff; g.fg.style.strokeDashoffset = goff; }
 

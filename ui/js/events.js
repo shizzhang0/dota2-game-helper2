@@ -14,8 +14,11 @@ export class EventTracker {
   constructor(C, towers) { this.C = C; this.towers = towers; this.reset(); }
   reset() {
     this.seen = new Set();
-    this.glyph = { 2: { readyAt: -Infinity, milestones: new Set() },
-                   3: { readyAt: -Infinity, milestones: new Set() } };
+    // readyAt = null 表示"还没用过也没刷新过"——这时按当前常数算**开局那次冷却**。
+    // **不能在这里把初值写成具体数字**：模式（普通/快速）要到 clock >= 60 才判得出来，
+    // 而两种模式的开局可用时刻不同（快速 3:30、普通 3:00）。写死就不会跟着改。
+    this.glyph = { 2: { readyAt: null, milestones: new Set() },
+                   3: { readyAt: null, milestones: new Set() } };
     this.buyback = {};          // slot -> usedAtClock
     this.reconstructed = false;
     this.lastClock = null;
@@ -48,7 +51,9 @@ export class EventTracker {
       case "CHAT_MESSAGE_TOWER_KILL":
       case "CHAT_MESSAGE_TOWER_DENY": {
         const loser = j.type === "CHAT_MESSAGE_TOWER_DENY" ? j.value : 5 - j.value;
-        if (j.value3 >= 1 && j.value3 <= 3) this.milestone(loser, "t" + j.value3, now);
+        // **只认 T1 和 T2，T3 不刷新**（2026-09-17 改）。原先把 T3 也算进来，
+        // 按 5 份录像重做归因后去掉了——理由和证据见 design/timers.md。
+        if (j.value3 >= 1 && j.value3 <= 2) this.milestone(loser, "t" + j.value3, now);
         break;
       }
       case "CHAT_MESSAGE_BARRACKS_KILL":
@@ -72,16 +77,33 @@ export class EventTracker {
     }
     const tol = this.towers.tolerance;
     for (const t of this.towers.towers) {
-      if (t.tier === 4) continue;
+      // 只有 T1/T2 是刷新里程碑，T3/T4 不是——重建时也就没必要标记
+      if (t.tier > 2) continue;
       const found = alive.some(o => o.team === t.team &&
         Math.abs(o.xpos - t.x) <= tol && Math.abs(o.ypos - t.y) <= tol);
       if (!found) this.glyph[t.team].milestones.add("t" + t.tier);
     }
   }
+  /** 开局那次冷却结束的时刻（clock）。冷却从**开局倒计时开始**那一刻起算，
+      所以可用时刻 = -倒计时长度 + 冷却长度：快速 3:30、普通 3:00。 */
+  firstReadyAt() {
+    return -(this.C.pregameLength ?? 0) + (this.C.glyphFirstReady ?? 0);
+  }
   enemyGlyph(info) {
+    // 没有 clock 就没有"还剩多久"可言（待机、换局那一瞬）。按 ready 显示，
+    // 和没有 tracker 时的占位一致。
+    if (info.clock === null) return { ready: true, remaining: 0, total: this.C.glyphCooldown };
     const enemy = info.myTeam === 2 ? 3 : 2;
-    const rem = Math.max(0, Math.ceil(this.glyph[enemy].readyAt - info.clock));
-    return { ready: rem === 0, remaining: rem };
+    const g = this.glyph[enemy];
+    const at = g.readyAt ?? this.firstReadyAt();
+    const rem = Math.max(0, Math.ceil(at - info.clock));
+    // **total 是"当前这次冷却有多长"，渲染层用它算环的进度。**
+    // 开局那次不是 300 而是 glyphFirstReady（270）——写死 300 会把开局的环画错，
+    // 而且常数就不该出现在渲染层里。
+    const total = g.readyAt === null
+      ? (this.C.glyphFirstReady ?? this.C.glyphCooldown)
+      : this.C.glyphCooldown;
+    return { ready: rem === 0, remaining: rem, total };
   }
   enemyBuybacks(info) {
     const range = info.myTeam === 2 ? [5, 9] : [0, 4];

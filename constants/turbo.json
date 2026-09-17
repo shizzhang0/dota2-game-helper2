@@ -12,6 +12,8 @@
   "wisdom": { "start": 420, "every": 420 },
   "stack":  { "every": 60, "windowStart": 50 },
   "glyphCooldown": 300,
+  "pregameLength": 60,
+  "glyphFirstReady": 270,
   "buybackCooldown": 480,
   "aghsShardValue": 1400,
   "aghsScepterValue": 4200,
