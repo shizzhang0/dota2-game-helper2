@@ -55,6 +55,57 @@ export class WardTracker {
     this.lastClock = null;
     this.joined = false;       // 是否已处理过本局第一包
     this.newOwnSentries = 0;   // 本包新出现的己方真眼数，净资产拿它扣眼架库存
+    this.seenKills = new Set();   // 排眼事件去重（同一条会在连续几包里重复出现）
+    this.dewarded = new Map();    // key -> 判定被我方排掉的 clock，见 update()
+  }
+
+  /** 我方排掉敌方眼的事件 -> 把对应的记忆删掉。
+
+      **为什么需要它**：敌方眼在我方真视之外被排掉时，我们无从得知，只能挂到名义
+      寿命——那就是"幽灵眼"。而 `CHAT_MESSAGE_{OBSERVER,SENTRY}_WARD_KILLED`
+      恰好只报**本方**排眼（实测：我方的眼被排时一条事件都没有），正好覆盖这种情形。
+
+      **事件不带坐标**，只有 `playerid1`（谁排的）。所以要自己判断删哪一个：
+
+      1. `playerid1` 必须在我方槽位内。`-1`（无主）一律不认——拿不准就别动记忆。
+      2. 候选只取**当前仍可见**的（距上次确认 <= `wardKillConfirm`）。
+         **排眼需要真视**，刚被排掉的那个此刻必然还在我们的真视里；
+         几分钟前才确认过的那个不可能是它。
+      3. 恰好一个才删，**否则什么都不做**。
+
+      实测（自己打的那局，12 条本方排眼事件）：只按类型分只有 7 条无歧义，
+      加上第 2 条过滤之后变成 **11 条**，剩下 1 条是两个眼同时都可见——那种就留着。
+
+      > **歧义时宁可不删。** 留幽灵最多让你多绕一次路；删错会把**活着的**眼从地图上
+      > 抹掉，而你会以为那儿安全。这和敌方眼淡化那次是同一个取舍方向。
+
+      > backlog 原先设想的是"按排眼者位置就近删"。**那条行不通**：minimap 的英雄
+      > 图标没有玩家槽位，自视角也拿不到队友的英雄，`playerid1` 根本落不到地图上。
+      > 而且实测"离我方英雄最近"在能定真值的样本上全错——后来发现真值本身就定不了
+      > （自视角下"之后没再出现"只说明离开视野）。 */
+  noteWardKills(state, info) {
+    const clock = info.clock;
+    if (clock === null || info.myTeam === null) return;
+    const lo = info.myTeam === 2 ? 0 : 5;
+    for (const e of state.events || []) {
+      if (e?.event_type !== "generic_event" || typeof e.data !== "string") continue;
+      let j; try { j = JSON.parse(e.data); } catch { continue; }
+      const type = String(j.type || "");
+      if (!type.includes("WARD_KILLED")) continue;
+      const id = `${type}|${j.time}|${j.playerid1}`;
+      if (this.seenKills.has(id)) continue;
+      this.seenKills.add(id);
+      if (!(j.playerid1 >= lo && j.playerid1 <= lo + 4)) continue;
+      const kind = type.includes("SENTRY") ? "sentry" : "obs";
+      const live = [...this.enemy].filter(([, w]) =>
+        w.kind === kind && clock - w.lastSeen <= this.C.wardKillConfirm);
+      if (live.length !== 1) continue;
+      this.enemy.delete(live[0][0]);
+      // **必须压制一段时间**：GSI 上报有滞后（实测约 7 秒），眼死了之后还会在
+      // minimap 里留一会儿。不压制的话下一包又把它加回来，而且 firstSeen 会重置成
+      // 现在——等于把一个旧幽灵换成一个**满寿命**的新幽灵，比不删还糟。
+      this.dewarded.set(live[0][0], clock);
+    }
   }
 
   update(state, info) {
@@ -64,6 +115,13 @@ export class WardTracker {
     // 时钟倒流 = 换局/重开，旧状态作废（号角前 clock 本就不单调）
     if (this.lastClock !== null && clock < this.lastClock - 5) this.reset();
     this.lastClock = clock;
+
+    // 先处理排眼事件，再刷新记忆：候选集要反映"这一包刷新之前"的状态，
+    // 和验证时量的是同一个口径。
+    this.noteWardKills(state, info);
+    for (const [k, at] of [...this.dewarded]) {
+      if (clock - at > this.C.wardKillSuppress) this.dewarded.delete(k);
+    }
 
     const seen = parseWards(state);
     const seenKeys = new Set(seen.map(w => w.key));
@@ -81,6 +139,8 @@ export class WardTracker {
           if (this.joined && w.kind === "sentry" && nearMe(state, w)) this.newOwnSentries++;
         }
       } else {
+        // 刚判定被我方排掉的，压制期内不再加回来（GSI 滞后，见 noteWardKills）
+        if (this.dewarded.has(w.key)) continue;
         const was = this.enemy.get(w.key);
         // firstSeen 要留住：眼**不可能活过"第一次看见 + 寿命"**——我们第一次看见它时
         // 它已经活着了，所以这是个物理上界，用它剪枝不会漏报。
