@@ -204,7 +204,8 @@ export class EconTracker {
     this.prevDispenser = false;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.prevTp = null;             // 传送槽充能数
-    this.tpQueue = [];              // 每个充能是不是自己买的，先进先出
+    this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
+    this.tpQueue = [];              // 每个充能是不是自己买的；用掉时先扣白送的
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
     this.activeBuffs = new Set();   // 已经生效的吞噬类 buff
   }
@@ -237,9 +238,18 @@ export class EconTracker {
   }
 
   /**
-   * 传送卷轴：开局白送一张，**阵亡的同一秒**还会再送一张（实测三局 11 次阵亡赠送
-   * 全部发生在 alive=false 的那一秒，与复活时刻无关），这些不该计入资产。
-   * 但自己买的确实花了 100，要算。判据就是充能增加时人是活的。
+   * 传送卷轴：开局白送一张，**被英雄击杀时**还会再送一张，这些不计入官方净资产。
+   * 但自己买的确实花了 100，要算。判据是**充能增加的这一包 `player.deaths` 涨没涨**。
+   *
+   * 早先用的是"充能增加时人是活的"。四局观战录制的 142 次充能增加表明
+   * **`hero.alive` 比发放晚一包的有 14 次（约 10%）**，那一包还报着活着，
+   * 于是判成自购、多算 100；`player.deaths` 一次都不晚。换判据后四局全量对账
+   * 一致率 50.3→59.5 / 45.3→53.2 / 56.6→60.2 / 55.7→60.7，四局全赢。
+   * `player.deaths` 自视角也有，且不从基线派生——这是它和上一次失败的
+   * "基线掉 100"判据的本质区别，详见 docs/design/networth.md。
+   *
+   * 一包里涨多张又恰好阵亡时，这里把它们**全算白送**（宁可少算），
+   * 与上面那组对账数字的口径一致。
    *
    * **用掉的先扣白送的那张。** 传送槽是个充能堆叠，用掉的那一张没有身份，
    * 只能靠对账反推。2026-09-08 快速局 8988706327 取七个点：全局只买过一张 TP，
@@ -251,14 +261,16 @@ export class EconTracker {
    * 它们各值 50~150，足以把那一个点判反。现在两个 bug 都修了，
    * 这局七个点里"先扣白送"全中、FIFO 中四个。
    */
-  noteTp(items, hero, clock) {
+  noteTp(items, player, clock) {
     const tp = (items || {}).teleport0;
     const ch = tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
+    const deaths = typeof player?.deaths === "number" ? player.deaths : null;
+    const died = deaths !== null && this.prevDeaths !== null && deaths > this.prevDeaths;
     if (this.prevTp === null) {
       this.tpQueue = Array(ch).fill(false);          // 首次见到的都算白送
     } else if (clock !== null && clock >= 0) {
       const d = ch - this.prevTp;
-      for (let i = 0; i < d; i++) this.tpQueue.push(hero?.alive === true);
+      for (let i = 0; i < d; i++) this.tpQueue.push(!died);
       for (let i = 0; i < -d; i++) {
         const free = this.tpQueue.indexOf(false);      // 先扣白送的
         this.tpQueue.splice(free >= 0 ? free : 0, 1);
@@ -269,6 +281,7 @@ export class EconTracker {
     while (this.tpQueue.length < ch) this.tpQueue.unshift(false);
     this.boughtTp = this.tpQueue.filter(Boolean).length;
     this.prevTp = ch;
+    if (deaths !== null) this.prevDeaths = deaths;   // 漏字段时保持上一包，别误判成阵亡
   }
 
   /**
@@ -329,7 +342,7 @@ export class EconTracker {
     const gold = (state.player || {}).gold ?? 0;
     this.noteDispenser(state, prices, wards, dispenser, placedSentries, clock);
     this.noteVariants(state.items);
-    this.noteTp(state.items, state.hero, clock);
+    this.noteTp(state.items, state.player, clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
     // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
