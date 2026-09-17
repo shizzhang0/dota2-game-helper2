@@ -1,11 +1,16 @@
-<h1><img src="src-tauri/icons/64x64.png" width="28" height="28" align="absmiddle" alt=""> dota2-game-helper2</h1>
+<div align="center">
+
+<img src="src-tauri/icons/icon.png" width="112" height="112" alt="">
+
+# dota2-game-helper2
+
+**按住 Alt，看见 Dota 2 不显示的那些计时**
 
 [English](README.md) · **简体中文**
 
-[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
-![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
+[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
+
+</div>
 
 **赏金符、莲花、智慧神符、敌方塔防和买活的计时，Dota 2 客户端里哪儿都不显示，
 只能靠自己记。**

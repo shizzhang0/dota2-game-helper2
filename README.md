@@ -1,11 +1,16 @@
-<h1><img src="src-tauri/icons/64x64.png" width="28" height="28" align="absmiddle" alt=""> dota2-game-helper2</h1>
+<div align="center">
+
+<img src="src-tauri/icons/icon.png" width="112" height="112" alt="">
+
+# dota2-game-helper2
+
+**Hold Alt to see the timers Dota 2 never shows you**
 
 **English** · [简体中文](README.zh-CN.md)
 
-[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
-![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
+[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
+
+</div>
 
 **Bounty runes, lotuses, wisdom runes, enemy glyph and enemy buyback — Dota 2 shows
 none of these timers anywhere. You are expected to keep them in your head.**
