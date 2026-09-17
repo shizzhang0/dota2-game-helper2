@@ -1,4 +1,4 @@
-import { isTauri } from "./source.js";
+import { isTauri, fetchConstant } from "./source.js";
 
 // 界面语言。词条走"常数外置"那套，和其他常数表同一个目录、同一套播种与补齐逻辑。
 // 只覆盖这张设置卡片——覆盖层上一个字都没有，托盘那两条在 Rust 侧自己读。
@@ -10,7 +10,7 @@ function load(lang) {
   if (!cache[lang]) {
     cache[lang] = isTauri()
       ? window.__TAURI__.core.invoke("get_constants", { name: `lang.${lang}` })
-      : fetch(`/constants/lang.${lang}.json`).then(r => r.json());
+      : fetchConstant(`lang.${lang}.json`);
   }
   return cache[lang];
 }

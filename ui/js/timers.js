@@ -1,4 +1,4 @@
-import { isTauri } from "./source.js";
+import { isTauri, fetchConstant } from "./source.js";
 
 // 缓存 Promise 而非结果：GSI 每秒推多包，缓存结果会让首个请求未返回前的所有调用各发一次
 const cache = {};
@@ -7,7 +7,7 @@ export function loadConstants(mode) {
     // Tauri 下走命令，常数表存在用户配置目录里，改完重启即可生效（不必重新编译）
     cache[mode] = isTauri()
       ? window.__TAURI__.core.invoke("get_constants", { name: mode })
-      : fetch(`/constants/${mode}.json`).then(r => r.json());
+      : fetchConstant(`${mode}.json`);
   }
   return cache[mode];
 }
