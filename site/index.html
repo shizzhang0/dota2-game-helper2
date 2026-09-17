@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>dota2-game-helper2 — hold Alt to see the timers Dota 2 never shows</title>
@@ -8,29 +8,46 @@
 <style>
   :root {
     --bg: #0b1014; --card: #121a21; --hair: rgba(255,255,255,.09);
-    --fg: #e6edf5; --dim: #96a3b2; --accent: #65d9f7; --warm: #ffc24b;
+    --fg: #e6edf5; --dim: #96a3b2; --accent: #65d9f7;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
-    font: 16px/1.65 "Segoe UI", -apple-system, system-ui, "Noto Sans SC", sans-serif;
+    font: 16px/1.65 "Segoe UI", -apple-system, system-ui,
+          "Microsoft YaHei", "Noto Sans SC", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
   a { color: var(--accent); }
 
+  /* ── 中英切换 ──────────────────────────────────────
+     两种语言都写在 HTML 里，靠 CSS 显示其中一份。**不用 JS 拼模板**：
+     文案里有 <kbd>、<code>、<a>，塞进字符串字典就得靠 innerHTML 拼回去，
+     既难读又容易出错。这里的代价只是 DOM 里多一份文本——整页也就几 KB。 */
+  html[data-lang="en"] [lang="zh"] { display: none; }
+  html[data-lang="zh"] [lang="en"] { display: none; }
+  /* 行内的那些用 span，别让它们变成块级 */
+  html[data-lang="en"] span[lang="en"], html[data-lang="zh"] span[lang="zh"] { display: inline; }
+
   header { text-align: center; padding: 56px 0 28px; }
   header img { width: 96px; height: 96px; }
   h1 { font-size: 36px; margin: 14px 0 6px; letter-spacing: -.5px; }
   .tag { color: var(--dim); font-size: 18px; margin: 0; }
-  .langs { margin-top: 14px; font-size: 14px; color: var(--dim); }
 
-  /* demo 框。里面是 iframe，理由见 demo.html 顶部的注释。 */
-  /* **iframe 固定 900×400，再整体缩放去适配容器。**
-     不能让 iframe 跟着容器变宽变窄：块的摆位会被 clamp() 钳进视口，
-     窄一点就会被挤到一起、甚至互相压住。固定尺寸 + 缩放，
-     任何屏幕上看到的构图都一样。 */
+  .langs { margin-top: 16px; display: flex; gap: 6px; justify-content: center; }
+  .langs button {
+    background: transparent; border: 1px solid var(--hair); color: var(--dim);
+    border-radius: 7px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .langs button:hover { color: var(--fg); background: rgba(255,255,255,.05); }
+  .langs button[aria-pressed="true"] {
+    background: rgba(101,217,247,.12); border-color: rgba(101,217,247,.35); color: var(--accent);
+  }
+
+  /* demo 框。里面是 iframe，理由见 demo.html 顶部的注释。
+     **iframe 固定 900×400，再整体缩放去适配容器。** 不能让它跟着容器变宽变窄：
+     块的摆位会被 clamp() 钳进视口，窄一点就会被挤到一起、甚至互相压住。 */
   .demo { position: relative; border: 1px solid var(--hair); border-radius: 12px;
           overflow: hidden; background: #0a0f0c; aspect-ratio: 900 / 400; }
   .demo iframe { width: 900px; height: 400px; border: 0; display: block;
@@ -45,8 +62,7 @@
         border-radius: 5px; padding: 1px 7px; font: inherit; font-size: 12px; color: var(--fg); }
   .caption { color: var(--dim); font-size: 13px; margin: 10px 2px 0; }
 
-  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
-         margin: 30px 0 8px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 30px 0 8px; }
   .btn { display: inline-block; padding: 11px 22px; border-radius: 9px;
          text-decoration: none; font-weight: 600; }
   .btn.primary { background: var(--accent); color: #06212a; }
@@ -79,74 +95,120 @@
   <header>
     <img src="icon.png" alt="">
     <h1>dota2-game-helper2</h1>
-    <p class="tag">Hold <kbd>Alt</kbd> to see the timers Dota 2 never shows you</p>
-    <p class="langs">
-      <a href="https://github.com/shizzhang0/dota2-game-helper2#readme">English</a> ·
-      <a href="https://github.com/shizzhang0/dota2-game-helper2/blob/main/README.zh-CN.md">简体中文</a>
+    <p class="tag">
+      <span lang="en">Hold <kbd>Alt</kbd> to see the timers Dota 2 never shows you</span>
+      <span lang="zh">按住 <kbd>Alt</kbd>，看见 Dota 2 不显示的那些计时</span>
     </p>
+    <div class="langs">
+      <button type="button" data-set="en" aria-pressed="true">English</button>
+      <button type="button" data-set="zh" aria-pressed="false">简体中文</button>
+    </div>
   </header>
 
   <div class="demo">
     <iframe id="demo" src="demo.html" title="Live overlay demo" scrolling="no"></iframe>
     <div class="hint">
-      <span id="state">This is the real overlay, running the same code as the download.</span>
-      <span id="takeover">Hold <kbd>Alt</kbd> to take over.</span>
+      <span id="state"></span>
+      <span id="takeover">
+        <span lang="en">Hold <kbd>Alt</kbd> to take over.</span>
+        <span lang="zh">按住 <kbd>Alt</kbd> 自己试试。</span>
+      </span>
     </div>
   </div>
   <p class="caption">
-    Driven by an actual recorded match, replayed at real speed and looping.
-    The background is a placeholder colour, not real gameplay.
+    <span lang="en">Driven by an actual recorded match, replayed at real speed and
+      looping. The background is a placeholder colour, not real gameplay.</span>
+    <span lang="zh">由一份真实对局录制驱动，按原速循环播放。
+      背景是占位色，不是真实游戏画面。</span>
   </p>
 
   <div class="cta">
-    <a class="btn primary" href="https://github.com/shizzhang0/dota2-game-helper2/releases/latest">Download for Windows</a>
-    <a class="btn ghost" href="https://github.com/shizzhang0/dota2-game-helper2">View on GitHub</a>
+    <a class="btn primary" href="https://github.com/shizzhang0/dota2-game-helper2/releases/latest">
+      <span lang="en">Download for Windows</span><span lang="zh">下载（Windows）</span></a>
+    <a class="btn ghost" href="https://github.com/shizzhang0/dota2-game-helper2">
+      <span lang="en">View on GitHub</span><span lang="zh">在 GitHub 上查看</span></a>
   </div>
-  <p class="sub">No installer — a single exe. MIT licensed.</p>
-
-  <h2>What it remembers for you</h2>
-  <div class="grid">
-    <div class="cell">
-      <img src="docs/images/block-timers.png" alt="Timers">
-      <h3>Five timers</h3>
-      <p>Mid rune, bounty, lotus, wisdom rune and the stacking window. A nearly-empty
-         ring means it's nearly up.</p>
-    </div>
-    <div class="cell">
-      <img src="docs/images/block-enemy.png" alt="Enemy glyph and buyback">
-      <h3>Glyph and buyback</h3>
-      <p>Glyph implements the full refresh rules (first T1/T2/T3/melee barracks lost).
-         Buyback is announced once and then gone — here it stays as state.</p>
-    </div>
-    <div class="cell">
-      <img src="docs/images/block-wardmap.png" alt="Ward map">
-      <h3>Ward map</h3>
-      <p>Colour is ownership, shape is state. Your wards get a countdown; enemy wards
-         are remembered and fade as the information gets older.</p>
-    </div>
-  </div>
-
-  <h2>Why this is safe</h2>
-  <table>
-    <tr><td class="no">Does not</td><td>read game memory · modify game files · inject into the process ·
-        hook graphics APIs · simulate input · touch the network at runtime</td></tr>
-    <tr><td class="yes">Does</td><td>accept the JSON that Dota 2 itself POSTs to <code>127.0.0.1</code>
-        through <a href="https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration">GSI</a>,
-        Valve's official interface — the same mechanism Logitech and Razer drivers use</td></tr>
-  </table>
-  <p class="caption">
-    During a match GSI only pushes your own data, so by design it cannot reveal hidden
-    information. Anything here you could see yourself by pressing Tab — it just
-    remembers the timing. The source is open; go read it.
+  <p class="sub">
+    <span lang="en">No installer — a single exe. MIT licensed.</span>
+    <span lang="zh">没有安装程序，就一个 exe。MIT 许可。</span>
   </p>
 
-  <h2>Requirements</h2>
+  <h2><span lang="en">What it remembers for you</span><span lang="zh">它替你记的那些事</span></h2>
+  <div class="grid">
+    <div class="cell">
+      <img src="docs/images/block-timers.png" alt="">
+      <h3><span lang="en">Five timers</span><span lang="zh">五个倒计时</span></h3>
+      <p lang="en">Mid rune, bounty, lotus, wisdom rune and the stacking window.
+         A nearly-empty ring means it's nearly up.</p>
+      <p lang="zh">中路符、赏金、莲花、智慧神符、堆野窗口。
+         环快走完就是快刷了，不用读数字。</p>
+    </div>
+    <div class="cell">
+      <img src="docs/images/block-enemy.png" alt="">
+      <h3><span lang="en">Glyph and buyback</span><span lang="zh">敌方塔防与买活</span></h3>
+      <p lang="en">Glyph implements the full refresh rules (first T1/T2/T3/melee barracks
+         lost). Buyback is announced once and then gone — here it stays as state.</p>
+      <p lang="zh">塔防实现了完整的刷新规则（丢首座 T1/T2/T3/近战兵营各刷新一次）。
+         买活游戏只播报一次、过后查不到，这里把它保留成状态。</p>
+    </div>
+    <div class="cell">
+      <img src="docs/images/block-wardmap.png" alt="">
+      <h3><span lang="en">Ward map</span><span lang="zh">眼位地图</span></h3>
+      <p lang="en">Colour is ownership, shape is state. Your wards get a countdown;
+         enemy wards are remembered and fade as the information gets older.</p>
+      <p lang="zh">颜色说归属，形状说状态。我方眼带到期倒计时；
+         敌方眼会被记住，并随着线索变旧而逐渐淡化。</p>
+    </div>
+  </div>
+
+  <h2><span lang="en">Why this is safe</span><span lang="zh">为什么这是安全的</span></h2>
   <table>
-    <tr><td>OS</td><td>Windows 10 / 11</td></tr>
-    <tr><td>Display</td><td>Borderless window. Exclusive fullscreen cannot show any
-        non-injecting overlay — that's an OS limitation.</td></tr>
-    <tr><td>Setup</td><td>Add <code>-gamestateintegration</code> to Dota 2's launch options.
-        The app writes the GSI config file itself on first run.</td></tr>
+    <tr>
+      <td class="no"><span lang="en">Does not</span><span lang="zh">它不做</span></td>
+      <td lang="en">read game memory · modify game files · inject into the process ·
+          hook graphics APIs · simulate input · touch the network at runtime</td>
+      <td lang="zh">读游戏内存 · 修改游戏文件 · 注入进程 ·
+          hook 图形 API · 模拟任何输入 · 运行时联网</td>
+    </tr>
+    <tr>
+      <td class="yes"><span lang="en">Does</span><span lang="zh">它只做</span></td>
+      <td lang="en">accept the JSON that Dota 2 itself POSTs to <code>127.0.0.1</code>
+          through <a href="https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration">GSI</a>,
+          Valve's official interface — the same mechanism Logitech and Razer drivers use</td>
+      <td lang="zh">接收 Dota 2 自己通过
+          <a href="https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration">GSI</a>
+          POST 到 <code>127.0.0.1</code> 的 JSON——Valve 官方的接口，
+          罗技、雷蛇的驱动用的是同一套机制</td>
+    </tr>
+  </table>
+  <p class="caption">
+    <span lang="en">During a match GSI only pushes your own data, so by design it cannot
+      reveal hidden information. Anything here you could see yourself by pressing Tab —
+      it just remembers the timing. The source is open; go read it.</span>
+    <span lang="zh">GSI 在对局中只推送玩家本人的数据，设计上就无法用于获取隐藏信息。
+      这里能算出来的，你自己按 Tab 一样能看到，只是它替你记住了时间。源码全部公开，可以自己核。</span>
+  </p>
+
+  <h2><span lang="en">Requirements</span><span lang="zh">运行条件</span></h2>
+  <table>
+    <tr>
+      <td><span lang="en">OS</span><span lang="zh">系统</span></td>
+      <td>Windows 10 / 11</td>
+    </tr>
+    <tr>
+      <td><span lang="en">Display</span><span lang="zh">显示模式</span></td>
+      <td lang="en">Borderless window. Exclusive fullscreen cannot show any
+          non-injecting overlay — that's an OS limitation.</td>
+      <td lang="zh">无边框窗口。独占全屏下任何非注入类悬浮层都无法显示，
+          这是系统级限制。</td>
+    </tr>
+    <tr>
+      <td><span lang="en">Setup</span><span lang="zh">设置</span></td>
+      <td lang="en">Add <code>-gamestateintegration</code> to Dota 2's launch options.
+          The app writes the GSI config file itself on first run.</td>
+      <td lang="zh">给 Dota 2 的启动项加上 <code>-gamestateintegration</code>。
+          首次运行时程序会自动写入 GSI 配置文件。</td>
+    </tr>
   </table>
 
   <footer>
@@ -154,12 +216,59 @@
     <a href="https://github.com/shizzhang0/dota2-game-helper2/releases">Releases</a> ·
     <a href="https://github.com/shizzhang0/dota2-game-helper2/blob/main/LICENSE">MIT</a>
     <br><br>
-    Not affiliated with Valve. Dota 2 is a trademark of Valve Corporation.
+    <span lang="en">Not affiliated with Valve. Dota 2 is a trademark of Valve Corporation.</span>
+    <span lang="zh">本项目与 Valve 无关联。Dota 2 是 Valve Corporation 的商标。</span>
   </footer>
 </div>
 
 <script>
-  // demo 的显隐走**产品自己那条路**：合成 Alt 的 keydown/keyup 打进 iframe，
+  // ── 语言 ─────────────────────────────────────────
+  // 首选顺序：用户上次选的 > 浏览器语言 > 英文。
+  // 英文兜底是因为这是个公开仓库的主页，陌生人里英文读者更多——
+  // 和两份 README 拿英文当默认入口是同一个理由。
+  const T = {
+    en: {
+      title: "dota2-game-helper2 — hold Alt to see the timers Dota 2 never shows",
+      shown: "This is the real overlay, running the same code as the download.",
+      hidden: "Nothing on screen unless you hold Alt — that's the whole idea.",
+    },
+    zh: {
+      title: "dota2-game-helper2 — 按住 Alt，看见 Dota 2 不显示的那些计时",
+      shown: "这就是那个覆盖层本身，跑的和下载到的是同一份代码。",
+      hidden: "不按 Alt 的时候，屏幕上什么都没有——这正是它的全部要点。",
+    },
+  };
+  const pick = () => {
+    const saved = (() => { try { return localStorage.getItem("lang"); } catch { return null; } })();
+    if (saved === "en" || saved === "zh") return saved;
+    return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+  };
+  let lang = pick();
+
+  const state = document.getElementById("state");
+  // **初值必须是 false。** 页面刚加载时 demo 还没开始放（要等 iframe load 再过
+  // 600ms），此时面板确实是空的。写成 true 的话，这段时间里提示说着
+  // "这就是那个覆盖层"，而框里什么都没有——文字和画面对不上。
+  let shown = false;
+
+  function apply() {
+    document.documentElement.dataset.lang = lang;
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.title = T[lang].title;
+    state.textContent = T[lang][shown ? "shown" : "hidden"];
+    for (const b of document.querySelectorAll(".langs button"))
+      b.setAttribute("aria-pressed", String(b.dataset.set === lang));
+  }
+  for (const b of document.querySelectorAll(".langs button")) {
+    b.addEventListener("click", () => {
+      lang = b.dataset.set;
+      try { localStorage.setItem("lang", lang); } catch { /* 无痕模式，不记就是了 */ }
+      apply();
+    });
+  }
+
+  // ── demo ────────────────────────────────────────
+  // 显隐走**产品自己那条路**：合成 Alt 的 keydown/keyup 打进 iframe，
   // 和真人按 Alt 走的是同一个监听器（source.js 的 onAltChange）。
   // 不另写一套显示逻辑——那样 demo 就不是真程序了。
   const frame = document.getElementById("demo");
@@ -167,54 +276,48 @@
     try { frame.contentWindow.dispatchEvent(new KeyboardEvent(type, { key: "Alt" })); }
     catch { /* iframe 还没好，下一拍再说 */ }
   };
+  function setShown(v) { shown = v; state.textContent = T[lang][v ? "shown" : "hidden"]; }
 
-  // 自动循环：显示 5 秒、隐藏 1.6 秒。**隐藏这一段是有意的**——
+  // 自动循环：显示 5 秒、隐藏 1.6 秒。**隐藏那一段是有意的**——
   // 它恰恰是这个东西最重要的特性：不按 Alt 的时候屏幕上什么都没有。
-  // 隐藏那一段**必须说清楚是故意的**，否则空荡荡的框看起来就是坏了。
-  const state = document.getElementById("state");
-  const SHOWN = "This is the real overlay, running the same code as the download.";
-  const HIDDEN = "Alt released — and the screen is clean again. That's the whole idea.";
-
+  // 所以隐藏时提示文字也要换掉，否则空荡荡的框看起来就是坏了。
   let auto = null;
   function cycle(show) {
     send(show ? "keydown" : "keyup");
-    state.textContent = show ? SHOWN : HIDDEN;
+    setShown(show);
     auto = setTimeout(() => cycle(!show), show ? 5000 : 1600);
   }
+
   // **手机上没有 Alt 键。** 那里既不能接管，"松开就什么都没有"也演示不了——
   // 只会剩一个空框和一句做不到的提示。所以触屏上常显，并把那句提示去掉。
   const canAlt = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  function fit() { frame.style.transform = `scale(${frame.parentElement.clientWidth / 900})`; }
+  addEventListener("resize", fit);
+
+  apply();
+  fit();
   frame.addEventListener("load", () => {
     fit();
     if (!canAlt) {
       document.getElementById("takeover").remove();
-      setTimeout(() => { send("keydown"); state.textContent = SHOWN; }, 600);
+      setTimeout(() => { send("keydown"); setShown(true); }, 600);
       return;
     }
     setTimeout(() => cycle(true), 600);
   });
-
-  // 把固定 900×400 的 iframe 缩到容器宽度
-  function fit() {
-    const box = frame.parentElement;
-    const k = box.clientWidth / 900;
-    frame.style.transform = `scale(${k})`;
-  }
-  addEventListener("resize", fit);
-  fit();
 
   // 访客自己按 Alt 就把自动循环停掉，把控制权交给他。
   addEventListener("keydown", (e) => {
     if (e.key !== "Alt") return;
     e.preventDefault();
     if (auto) { clearTimeout(auto); auto = null; }
-    state.textContent = SHOWN;
+    setShown(true);
     send("keydown");
   });
   addEventListener("keyup", (e) => {
     if (e.key !== "Alt") return;
     e.preventDefault();
-    if (!auto) state.textContent = HIDDEN;
+    if (!auto) setShown(false);
     send("keyup");
   });
   addEventListener("blur", () => send("keyup"));
