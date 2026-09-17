@@ -17,7 +17,7 @@ use crate::logf;
 /// 更糟的是 `finish()` 只在"从开变关"那条路径上调用，托盘退出、Dota 关掉、GSI 断流
 /// 都不收尾，不足 50 包的那一局整个消失且毫无提示。
 /// 挪到全局之后，设置、退出、断流三条路都能够到它。详见 design/overlay.md。
-pub struct Recorder {
+struct Recorder {
     enabled: bool,
     sink: Option<GzEncoder<std::fs::File>>,
     since_flush: u32,
