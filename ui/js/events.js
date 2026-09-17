@@ -1,11 +1,11 @@
-import { isTauri } from "./source.js";
+import { isTauri, fetchConstant } from "./source.js";
 
 let TOWERS = null;
 export function loadTowers() {
   if (!TOWERS) {
     TOWERS = isTauri()
       ? window.__TAURI__.core.invoke("get_constants", { name: "towers" })
-      : fetch("/constants/towers.json").then(r => r.json());
+      : fetchConstant("towers.json");
   }
   return TOWERS;
 }

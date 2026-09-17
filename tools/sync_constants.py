@@ -26,9 +26,14 @@ ROOT = Path(__file__).resolve().parent.parent
 CONSTANTS = ROOT / "constants"
 READMES = [ROOT / "README.md", ROOT / "README.zh-CN.md"]
 
-# README 顶部那枚徽章。版本号只在 patch.json 里定义，这行是它的产物——
-# 所以这里按整行替换，而不是让人手动跟着改（手动跟着改 = 版本号有了第二个出处）。
-BADGE_RE = re.compile(r'^!\[Dota 2: [^\]]*\]\(https://img\.shields\.io/badge/Dota%20\S*\)$', re.M)
+# README 顶部那枚徽章。版本号只在 patch.json 里定义，这枚徽章是它的产物——
+# 所以这里按模式替换，而不是让人手动跟着改（手动跟着改 = 版本号有了第二个出处）。
+#
+# **不要锚定行首行尾。** 原先写的是 `^...$` + re.M，也就是要求徽章独占一行；
+# 2026-09-17 把四枚徽章并成一行（居中的标题块里，各占一行会竖着排）之后，
+# 它就匹配不到了——脚本会打印一行警告然后跳过，而那行警告很容易淹在输出里。
+# 徽章怎么排版是 README 的事，不该决定版本号能不能被更新。
+BADGE_RE = re.compile(r'!\[Dota 2: [^\]]*\]\(https://img\.shields\.io/badge/Dota%20[^)\s]*\)')
 
 
 def badge(version):

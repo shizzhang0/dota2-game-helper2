@@ -1,5 +1,5 @@
 import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings } from "./settings.js";
-import { isTauri } from "./source.js";
+import { isTauri, fetchConstant } from "./source.js";
 import { icon, CELL_ICON } from "./icons.js";
 import { t, loadLang, LANGS } from "./i18n.js";
 
@@ -51,7 +51,7 @@ function versions() {
     verOnce = (isTauri()
       ? window.__TAURI__.core.invoke("get_versions")
       // 浏览器开发时没有 Tauri，也就没有"程序版本"这个东西；价格表版本还是照读
-      : fetch("/constants/patch.json").then(r => r.json()).then(v => ({ app: "dev", dota: v.dota }))
+      : fetchConstant("patch.json").then(v => ({ app: "dev", dota: v.dota }))
     ).catch(() => ({}));
   }
   return verOnce;

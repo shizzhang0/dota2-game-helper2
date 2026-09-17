@@ -1,0 +1,71 @@
+name: Pages
+
+# 发布项目主页（首页那个 live demo 跑的是真覆盖层）。
+#
+# **组装逻辑全在 tools/build_site.py 里，这里只负责调它。** 写进 YAML 就没法本地
+# 验了——`python tools/build_site.py --serve` 起出来的，和这里发出去的是同一份。
+#
+# 触发路径是"组装产物真正依赖的东西"：站点本身、被原样拷进去的 ui/ 与 constants/、
+# 首页引用的那几张截图、以及组装脚本自己。
+# 和 ci.yml 一样不能用 YAML 锚点——**GitHub Actions 不支持 anchor/alias**。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'ui/**'
+      - 'constants/**'
+      - 'docs/images/**'
+      - 'tools/build_site.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时刻只发一份，但**不取消进行中的那次**：取消到一半可能留下半新半旧的站点。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest      # 站点只是拷文件，不需要 Windows
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 组装 dist/
+        run: python tools/build_site.py
+
+      # demo 数据是从真实对局录制里裁出来的，理论上已经脱敏（tools/make_demo.py
+      # 走白名单）。这道闸是给"以后有人放宽白名单或换了数据"准备的——
+      # **发到公网之前再查一遍**，比事后发现便宜得多。
+      - name: 确认 demo 数据里没有身份信息
+        run: |
+          if grep -aE 'steamid|accountid|"activity"' dist/demo.jsonl; then
+            echo "::error::demo.jsonl 里出现了身份字段，已阻止发布"
+            exit 1
+          fi
+          echo "demo.jsonl 干净"
+
+      # enablement: true —— 仓库没开 Pages 的话它自己开，
+      # 省掉"先去 Settings 里手动打开"那一步（否则首次部署会直接失败）。
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

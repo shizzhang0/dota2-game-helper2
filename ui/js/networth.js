@@ -1,11 +1,11 @@
-import { isTauri } from "./source.js";
+import { isTauri, fetchConstant } from "./source.js";
 
 let PRICES = null;
 export function loadPrices() {
   if (!PRICES) {
     PRICES = isTauri()
       ? window.__TAURI__.core.invoke("get_item_prices")
-      : fetch("/constants/item_prices.json").then(r => r.json());
+      : fetchConstant("item_prices.json");
   }
   return PRICES;
 }
