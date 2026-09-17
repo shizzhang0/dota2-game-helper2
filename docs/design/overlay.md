@@ -108,6 +108,33 @@ SSE            EventSource("stream?speed=…")      开发用的回放服务器
 > `ui/` 与 `constants/` 由部署流水线原样带过去。抄一份代码过去迟早会和真程序脱节，
 > 而这个 demo 全部的意义就在于它是真的。
 
+#### 站点：一个页面 + 一个 iframe + 一条部署流水线
+
+`site/index.html` 是落地页，`site/demo.html` 是**框里跑的那份真覆盖层**，
+`tools/build_site.py` 把它们和 `ui/` `constants/` 组装成 `dist/`，
+`.github/workflows/pages.yml` 调同一个脚本发出去。
+
+**组装逻辑放脚本不放 YAML**：写进 workflow 就没法本地验了。
+`python tools/build_site.py --serve` 起出来的，和线上发的是同一份。
+
+四个不显然的点：
+
+1. **demo 必须放 `<iframe>` 里。** 覆盖层的四个块是 `position: fixed`——
+   相对**视口**而不是容器。直接嵌进首页，它们会飞到整个页面上去。
+2. **iframe 固定 900×400，再整体 `scale()` 去适配容器**，不让它跟着容器变宽窄。
+   块的摆位会被 `clamp()` 钳进视口，窄一点就会被挤到一起甚至互相压住——
+   固定尺寸加缩放，任何屏幕上的构图都一样。
+3. **显隐走产品自己那条路**：合成 Alt 的 keydown/keyup 打进 iframe，
+   和真人按 Alt 走同一个 `onAltChange`。不另写一套显示逻辑——那样 demo 就不是真程序了。
+   自动循环显示 5 秒、隐藏 1.6 秒；访客一按 Alt 就停掉循环把控制权交出去。
+   **隐藏那一段是有意的**，它恰恰是这个东西最重要的特性。
+4. **手机上没有 Alt 键。** 触屏设备（`(hover: hover) and (pointer: fine)` 为假）
+   常显，并把"按住 Alt 接管"那句提示整个删掉——做不到的事不要写在界面上。
+
+> **`ui/` 是拷进去的，不是另写一份。** demo 全部的意义就在于跑的是真程序。
+> 部署前还有一道 grep 闸门再查一遍 demo 数据里有没有身份字段——
+> 白名单理论上已经挡住了，但这是发到公网前的最后一道。
+
 #### 截图是生成的，不是摆拍的
 
 [`tools/make_shots.py`](../../tools/make_shots.py) 一条命令重出全部九张

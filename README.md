@@ -8,6 +8,8 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+**[▶ Try it in your browser](https://shizzhang0.github.io/dota2-game-helper2/)** — that's the real overlay running on the page
+
 [![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
 
 </div>

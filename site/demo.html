@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>demo</title>
+<link rel="stylesheet" href="ui/css/overlay.css">
+<style>
+  /* 站点首页那个 demo 框里跑的就是这一页，用 iframe 嵌。
+
+     **必须是 iframe。** 覆盖层的四个块是 position: fixed——相对视口定位，
+     不相对容器。直接嵌进首页的话它们会飞到整个页面上去，而不是待在框里。
+     iframe 给了它们一个自己的视口。
+
+     背景用和 README 截图同一种占位色，不用游戏画面：仓库是 MIT 且公开，
+     不放 Valve 的素材。 */
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(135deg, #0b1410, #132018 60%, #0a0f0c); }
+</style>
+<body class="dev">
+<div id="panel"></div>
+<div id="editor" hidden></div>
+<script>
+  // 摆位和设置要在 main.js 之前写好：块的位置每帧由 render() 重新套用，
+  // 事后改 inline style 会被立刻覆盖。和 tools/make_shots.py 是同一个道理。
+  const AT = { econ: [16, 14], wardmap: [16, 94], timers: [252, 14], enemy: [252, 109] };
+  localStorage.setItem("layout", JSON.stringify(
+    Object.fromEntries(Object.entries(AT).map(([k, [x, y]]) => [k, { x, y }]))));
+  localStorage.setItem("settings", JSON.stringify(
+    { scale: 1, opacity: 1, panelBg: 0.72, wardSize: 180 }));
+  window.HELPER2_DEMO = "demo.jsonl";
+</script>
+<script type="module" src="ui/js/main.js"></script>

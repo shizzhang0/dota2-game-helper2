@@ -17,3 +17,6 @@ __pycache__/
 
 # 杂项
 *.log
+
+# 站点组装产物，由 tools/build_site.py 生成
+dist/

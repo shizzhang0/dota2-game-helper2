@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dota2-game-helper2 — hold Alt to see the timers Dota 2 never shows</title>
+<meta name="description" content="A Dota 2 desktop overlay built on the official GSI interface. Hold Alt to see bounty, lotus, wisdom, glyph and buyback timers. Pure receiver: no memory reading, no injection, no simulated input.">
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    --bg: #0b1014; --card: #121a21; --hair: rgba(255,255,255,.09);
+    --fg: #e6edf5; --dim: #96a3b2; --accent: #65d9f7; --warm: #ffc24b;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 "Segoe UI", -apple-system, system-ui, "Noto Sans SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
+  a { color: var(--accent); }
+
+  header { text-align: center; padding: 56px 0 28px; }
+  header img { width: 96px; height: 96px; }
+  h1 { font-size: 36px; margin: 14px 0 6px; letter-spacing: -.5px; }
+  .tag { color: var(--dim); font-size: 18px; margin: 0; }
+  .langs { margin-top: 14px; font-size: 14px; color: var(--dim); }
+
+  /* demo 框。里面是 iframe，理由见 demo.html 顶部的注释。 */
+  /* **iframe 固定 900×400，再整体缩放去适配容器。**
+     不能让 iframe 跟着容器变宽变窄：块的摆位会被 clamp() 钳进视口，
+     窄一点就会被挤到一起、甚至互相压住。固定尺寸 + 缩放，
+     任何屏幕上看到的构图都一样。 */
+  .demo { position: relative; border: 1px solid var(--hair); border-radius: 12px;
+          overflow: hidden; background: #0a0f0c; aspect-ratio: 900 / 400; }
+  .demo iframe { width: 900px; height: 400px; border: 0; display: block;
+                 transform-origin: top left; }
+  .hint {
+    position: absolute; inset: auto 0 0 0; padding: 10px 14px;
+    background: linear-gradient(transparent, rgba(0,0,0,.75));
+    color: var(--dim); font-size: 13px; text-align: center;
+    display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap;
+  }
+  kbd { background: #1d2833; border: 1px solid var(--hair); border-bottom-width: 2px;
+        border-radius: 5px; padding: 1px 7px; font: inherit; font-size: 12px; color: var(--fg); }
+  .caption { color: var(--dim); font-size: 13px; margin: 10px 2px 0; }
+
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+         margin: 30px 0 8px; }
+  .btn { display: inline-block; padding: 11px 22px; border-radius: 9px;
+         text-decoration: none; font-weight: 600; }
+  .btn.primary { background: var(--accent); color: #06212a; }
+  .btn.ghost { border: 1px solid var(--hair); color: var(--fg); }
+  .sub { text-align: center; color: var(--dim); font-size: 13px; margin: 0 0 48px; }
+
+  h2 { font-size: 22px; margin: 44px 0 14px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .cell { background: var(--card); border: 1px solid var(--hair); border-radius: 10px; padding: 16px 18px; }
+  .cell h3 { margin: 0 0 6px; font-size: 15px; }
+  .cell p { margin: 0; color: var(--dim); font-size: 14px; }
+  .cell img { width: 100%; height: auto; border-radius: 6px; margin-bottom: 10px; display: block; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td { border-top: 1px solid var(--hair); padding: 9px 10px; vertical-align: top; }
+  td:first-child { color: var(--dim); white-space: nowrap; width: 1%; padding-right: 22px; }
+  .no { color: #ff8a8a; } .yes { color: #7ee3a8; }
+
+  footer { margin: 56px 0 40px; padding-top: 22px; border-top: 1px solid var(--hair);
+           color: var(--dim); font-size: 13px; text-align: center; }
+  @media (max-width: 620px) {
+    h1 { font-size: 28px } header { padding-top: 34px }
+    /* 小屏上 demo 框只有一百多像素高，两行提示会盖掉大半个画面 */
+    .hint { font-size: 11px; padding: 6px 10px; }
+  }
+</style>
+<body>
+<div class="wrap">
+
+  <header>
+    <img src="icon.png" alt="">
+    <h1>dota2-game-helper2</h1>
+    <p class="tag">Hold <kbd>Alt</kbd> to see the timers Dota 2 never shows you</p>
+    <p class="langs">
+      <a href="https://github.com/shizzhang0/dota2-game-helper2#readme">English</a> ·
+      <a href="https://github.com/shizzhang0/dota2-game-helper2/blob/main/README.zh-CN.md">简体中文</a>
+    </p>
+  </header>
+
+  <div class="demo">
+    <iframe id="demo" src="demo.html" title="Live overlay demo" scrolling="no"></iframe>
+    <div class="hint">
+      <span id="state">This is the real overlay, running the same code as the download.</span>
+      <span id="takeover">Hold <kbd>Alt</kbd> to take over.</span>
+    </div>
+  </div>
+  <p class="caption">
+    Driven by an actual recorded match, replayed at real speed and looping.
+    The background is a placeholder colour, not real gameplay.
+  </p>
+
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/shizzhang0/dota2-game-helper2/releases/latest">Download for Windows</a>
+    <a class="btn ghost" href="https://github.com/shizzhang0/dota2-game-helper2">View on GitHub</a>
+  </div>
+  <p class="sub">No installer — a single exe. MIT licensed.</p>
+
+  <h2>What it remembers for you</h2>
+  <div class="grid">
+    <div class="cell">
+      <img src="docs/images/block-timers.png" alt="Timers">
+      <h3>Five timers</h3>
+      <p>Mid rune, bounty, lotus, wisdom rune and the stacking window. A nearly-empty
+         ring means it's nearly up.</p>
+    </div>
+    <div class="cell">
+      <img src="docs/images/block-enemy.png" alt="Enemy glyph and buyback">
+      <h3>Glyph and buyback</h3>
+      <p>Glyph implements the full refresh rules (first T1/T2/T3/melee barracks lost).
+         Buyback is announced once and then gone — here it stays as state.</p>
+    </div>
+    <div class="cell">
+      <img src="docs/images/block-wardmap.png" alt="Ward map">
+      <h3>Ward map</h3>
+      <p>Colour is ownership, shape is state. Your wards get a countdown; enemy wards
+         are remembered and fade as the information gets older.</p>
+    </div>
+  </div>
+
+  <h2>Why this is safe</h2>
+  <table>
+    <tr><td class="no">Does not</td><td>read game memory · modify game files · inject into the process ·
+        hook graphics APIs · simulate input · touch the network at runtime</td></tr>
+    <tr><td class="yes">Does</td><td>accept the JSON that Dota 2 itself POSTs to <code>127.0.0.1</code>
+        through <a href="https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration">GSI</a>,
+        Valve's official interface — the same mechanism Logitech and Razer drivers use</td></tr>
+  </table>
+  <p class="caption">
+    During a match GSI only pushes your own data, so by design it cannot reveal hidden
+    information. Anything here you could see yourself by pressing Tab — it just
+    remembers the timing. The source is open; go read it.
+  </p>
+
+  <h2>Requirements</h2>
+  <table>
+    <tr><td>OS</td><td>Windows 10 / 11</td></tr>
+    <tr><td>Display</td><td>Borderless window. Exclusive fullscreen cannot show any
+        non-injecting overlay — that's an OS limitation.</td></tr>
+    <tr><td>Setup</td><td>Add <code>-gamestateintegration</code> to Dota 2's launch options.
+        The app writes the GSI config file itself on first run.</td></tr>
+  </table>
+
+  <footer>
+    <a href="https://github.com/shizzhang0/dota2-game-helper2">GitHub</a> ·
+    <a href="https://github.com/shizzhang0/dota2-game-helper2/releases">Releases</a> ·
+    <a href="https://github.com/shizzhang0/dota2-game-helper2/blob/main/LICENSE">MIT</a>
+    <br><br>
+    Not affiliated with Valve. Dota 2 is a trademark of Valve Corporation.
+  </footer>
+</div>
+
+<script>
+  // demo 的显隐走**产品自己那条路**：合成 Alt 的 keydown/keyup 打进 iframe，
+  // 和真人按 Alt 走的是同一个监听器（source.js 的 onAltChange）。
+  // 不另写一套显示逻辑——那样 demo 就不是真程序了。
+  const frame = document.getElementById("demo");
+  const send = (type) => {
+    try { frame.contentWindow.dispatchEvent(new KeyboardEvent(type, { key: "Alt" })); }
+    catch { /* iframe 还没好，下一拍再说 */ }
+  };
+
+  // 自动循环：显示 5 秒、隐藏 1.6 秒。**隐藏这一段是有意的**——
+  // 它恰恰是这个东西最重要的特性：不按 Alt 的时候屏幕上什么都没有。
+  // 隐藏那一段**必须说清楚是故意的**，否则空荡荡的框看起来就是坏了。
+  const state = document.getElementById("state");
+  const SHOWN = "This is the real overlay, running the same code as the download.";
+  const HIDDEN = "Alt released — and the screen is clean again. That's the whole idea.";
+
+  let auto = null;
+  function cycle(show) {
+    send(show ? "keydown" : "keyup");
+    state.textContent = show ? SHOWN : HIDDEN;
+    auto = setTimeout(() => cycle(!show), show ? 5000 : 1600);
+  }
+  // **手机上没有 Alt 键。** 那里既不能接管，"松开就什么都没有"也演示不了——
+  // 只会剩一个空框和一句做不到的提示。所以触屏上常显，并把那句提示去掉。
+  const canAlt = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  frame.addEventListener("load", () => {
+    fit();
+    if (!canAlt) {
+      document.getElementById("takeover").remove();
+      setTimeout(() => { send("keydown"); state.textContent = SHOWN; }, 600);
+      return;
+    }
+    setTimeout(() => cycle(true), 600);
+  });
+
+  // 把固定 900×400 的 iframe 缩到容器宽度
+  function fit() {
+    const box = frame.parentElement;
+    const k = box.clientWidth / 900;
+    frame.style.transform = `scale(${k})`;
+  }
+  addEventListener("resize", fit);
+  fit();
+
+  // 访客自己按 Alt 就把自动循环停掉，把控制权交给他。
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Alt") return;
+    e.preventDefault();
+    if (auto) { clearTimeout(auto); auto = null; }
+    state.textContent = SHOWN;
+    send("keydown");
+  });
+  addEventListener("keyup", (e) => {
+    if (e.key !== "Alt") return;
+    e.preventDefault();
+    if (!auto) state.textContent = HIDDEN;
+    send("keyup");
+  });
+  addEventListener("blur", () => send("keyup"));
+</script>

@@ -9,6 +9,7 @@ name: CI
 #
 # 注意 constants/ 和 tools/ **不在忽略之列**：前者是 include_str! 编译进二进制的，
 # 后者虽然不进二进制，但它生成的就是 constants/，宁可多跑一次。
+# site/ 在忽略之列：它只被 Pages 那条流水线用，一个字节也进不了 exe。
 #
 # 两份清单是照抄的，不能用 YAML 锚点——**GitHub Actions 不支持 anchor/alias**，
 # 写了会解析失败。改其中一份时记得改另一份。
@@ -19,12 +20,14 @@ on:
       - 'docs/**'
       - '**.md'
       - 'LICENSE'
+      - 'site/**'
   pull_request:
     branches: [main]
     paths-ignore:
       - 'docs/**'
       - '**.md'
       - 'LICENSE'
+      - 'site/**'
 
 jobs:
   build:
