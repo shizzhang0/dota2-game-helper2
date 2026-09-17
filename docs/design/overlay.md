@@ -135,6 +135,16 @@ SSE            EventSource("stream?speed=…")      开发用的回放服务器
 > 部署前还有一道 grep 闸门再查一遍 demo 数据里有没有身份字段——
 > 白名单理论上已经挡住了，但这是发到公网前的最后一道。
 
+> **Pages 必须先由人开一次，workflow 自己开不了。** 首次部署就栽在这上面：
+> `configure-pages` 加 `enablement: true` 会报
+> `Create Pages site failed. Error: Resource not accessible by integration`。
+> 默认的 `GITHUB_TOKEN` 能**读**仓库的 Pages 配置，但没有**创建**它的权限，
+> 而且这不是 `permissions:` 里加一条能解决的。一次性命令：
+>
+> ```bash
+> gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow
+> ```
+
 #### 截图是生成的，不是摆拍的
 
 [`tools/make_shots.py`](../../tools/make_shots.py) 一条命令重出全部九张

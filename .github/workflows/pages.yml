@@ -57,11 +57,19 @@ jobs:
           fi
           echo "demo.jsonl 干净"
 
-      # enablement: true —— 仓库没开 Pages 的话它自己开，
-      # 省掉"先去 Settings 里手动打开"那一步（否则首次部署会直接失败）。
+      # **不要加 `enablement: true`。** 首次部署就是栽在这上面的：
+      #
+      #   Create Pages site failed.
+      #   Error: Resource not accessible by integration
+      #
+      # 默认的 GITHUB_TOKEN 能**读**仓库的 Pages 配置，但没有**创建**它的权限，
+      # 而且这不是靠 permissions: 里加一条能解决的——建站点那个接口不接受
+      # workflow token。所以 Pages 必须先由人开一次（一次性）：
+      #
+      #   gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow
+      #
+      # 开完之后这一步就只是读配置，正常工作。
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
