@@ -19,8 +19,9 @@ input; only data the game pushes on its own, that you can already see
 
 ![The overlay](docs/images/overlay.png)
 
-<sub>Top left: net worth / GPM / XPM. Bottom left: the ward map (cyan = yours,
-purple = enemy, hollow = sentry, amber = expiring within 60s). Top right: the timers.
+<sub>Top left: net worth / GPM / XPM. Bottom left: the ward map — colour is ownership
+(cyan = yours, red = enemy), shape is state (solid = observer, hollow = sentry,
+cross = just dewarded); amber = expiring within 60s. Top right: the timers.
 Bottom right: enemy glyph and buyback. The background is a placeholder colour from the
 replay tool, not an actual game frame.</sub>
 
@@ -95,9 +96,17 @@ Quit
 
 **"Edit panel" enters edit mode** (hotkey `Ctrl+Alt+F10`): the four blocks — **timers /
 enemy / net worth / ward map** — are forced visible and can each be dragged where you
-want them, and a settings card floats up alongside: display toggles, language, panel
-scale, overall opacity, backdrop opacity, ward map size, reset, ward map legend, log
-level, and match recording. Changes apply immediately, no restart. The card itself can
+want them, and a settings card floats up alongside. The card has four pages, switched
+by icon:
+
+| Page | Contents |
+|---|---|
+| Display | a toggle for each of the nine cells |
+| Panel | language, panel scale, overall opacity, backdrop opacity, ward map size, reset |
+| Legend | what each colour and shape on the ward map means |
+| Developer | log level, match recording and cleanup, open data folder, versions |
+
+Changes apply immediately, no restart. The card itself can
 be dragged too — grab its title bar.
 
 Settings and layout share one mode for a reason: the panel is normally hidden, so if
