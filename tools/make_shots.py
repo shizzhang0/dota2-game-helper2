@@ -48,9 +48,18 @@ def _block_shot(name, clock):
     return dict(block=name, clock=clock, w=w + MARGIN * 2, h=h + MARGIN * 2)
 
 
-def _card_shot(tab, clock=120):
-    return dict(block="card", clock=clock, w=CARD_W + MARGIN * 2, h=CARD_H + MARGIN * 2, tab=tab)
+def _card_shot(tab, lang, clock=120):
+    # 英文卡片比中文略矮（实测 310 vs 316），统一按中文那档给，多出来的是背景
+    return dict(block="card", clock=clock, w=CARD_W + MARGIN * 2, h=CARD_H + MARGIN * 2,
+                tab=tab, lang=lang)
 
+
+# **卡片是界面上唯一有文字的地方**，所以只有它需要出两套：
+# `card-*.png` 英文给 README.md，`card-*-zh.png` 中文给 README.zh-CN.md。
+# 另外五张（整体 + 四个块）一个字都没有，与语言无关，不必重复。
+#
+# 英文那套用不带后缀的名字，因为 README.md 是 GitHub 的默认入口。
+CARD_TABS = ["show", "panel", "legend", "dev"]
 
 SHOTS = {
     "overlay":       dict(block="panel", clock=451, w=620, h=330),
@@ -58,11 +67,10 @@ SHOTS = {
     "block-enemy":   _block_shot("enemy", 451),
     "block-econ":    _block_shot("econ", 451),
     "block-wardmap": _block_shot("wardmap", 451),
-    "card-show":     _card_shot("show"),
-    "card-panel":    _card_shot("panel"),
-    "card-legend":   _card_shot("legend"),
-    "card-dev":      _card_shot("dev"),
 }
+for _tab in CARD_TABS:
+    SHOTS[f"card-{_tab}"] = _card_shot(_tab, "en")
+    SHOTS[f"card-{_tab}-zh"] = _card_shot(_tab, "zh-CN")
 
 SHOT_HTML = """<!doctype html>
 <meta charset="utf-8"><title>shot</title>
@@ -95,7 +103,8 @@ SHOT_HTML = """<!doctype html>
   localStorage.setItem("layout", JSON.stringify(layout));
   // 设置也钉死，免得图随环境变
   localStorage.setItem("settings", JSON.stringify({
-    scale: 1, opacity: 1, panelBg: 0.72, wardSize: 180, lang: "zh-CN",
+    scale: 1, opacity: 1, panelBg: 0.72, wardSize: 180,
+    lang: qs.get("lang") || "en",
   }));
   window.HELPER2_DEMO = "demo.jsonl";
 </script>
@@ -266,6 +275,7 @@ def main():
         httpd = serve(work)
         try:
             q = f"?block={spec['block']}" + (f"&tab={spec['tab']}" if spec.get("tab") else "")
+            q += f"&lang={spec['lang']}" if spec.get("lang") else ""
             # 极高倍速 + 不循环：几百毫秒内播完，页面停在最后一包
             q += "&speed=10000&loop=0"
             dest = OUT / f"{name}.png"

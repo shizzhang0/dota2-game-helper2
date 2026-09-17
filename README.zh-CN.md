@@ -138,9 +138,9 @@ Alt 是被动检测的（轮询键盘状态），**不注册热键、不拦截�
 
 |  |  |
 |---|---|
-| ![显示项](docs/images/card-show.png) | ![面板](docs/images/card-panel.png) |
+| ![显示项](docs/images/card-show-zh.png) | ![面板](docs/images/card-panel-zh.png) |
 | **显示项** — 九个格子各自的开关 | **面板** — 语言、缩放、透明度、底板、地图大小、重置 |
-| ![图例](docs/images/card-legend.png) | ![开发](docs/images/card-dev.png) |
+| ![图例](docs/images/card-legend-zh.png) | ![开发](docs/images/card-dev-zh.png) |
 | **图例** — 地图上各种颜色和形状的含义 | **开发** — 日志级别、对局录制、数据目录、版本号 |
 
 改动即时生效，不需重启。卡片自己也能拖，抓它顶部的标题栏。
