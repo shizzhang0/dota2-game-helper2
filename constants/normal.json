@@ -20,5 +20,7 @@
   "wardObserverDuration": 360,
   "wardSentryDuration": 420,
   "wardKilledGrace": 5,
+  "wardKillConfirm": 3,
+  "wardKillSuppress": 15,
   "sentryTrueSight": 1050
 }
