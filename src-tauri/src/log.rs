@@ -49,18 +49,28 @@ pub fn init(app: &tauri::AppHandle) {
     *STATE.lock().unwrap() = Some((file, level));
 }
 
+/// 时间戳：本地时间，`2026-09-19 22:33:26`。
+///
+/// 原先写的是 Unix 秒。机器友好，人不友好——查"那局录制怎么没了"的时候每一行都要
+/// 手动换算，而这类排查恰恰全靠在时间线上把事件对起来。
+///
+/// 用 `GetLocalTime` 而不是自己从 `SystemTime` 换算：它直接给本地时间，
+/// 时区和夏令时都归系统管，我们一行算式都不用写。
+fn stamp() -> String {
+    // SAFETY: 只读当前时间，无参数、无指针，不会失败
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
+}
+
 pub fn write(level: Level, msg: &str) {
     let guard = STATE.lock().unwrap();
     let Some((path, min)) = guard.as_ref() else { return };
     if level > *min {
         return;
     }
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "{secs} [{}] {msg}", level.tag());
+        let _ = writeln!(f, "{} [{}] {msg}", stamp(), level.tag());
     }
 }
 

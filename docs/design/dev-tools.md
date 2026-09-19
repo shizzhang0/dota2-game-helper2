@@ -9,7 +9,13 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 做法：写文件日志到配置目录 `logs/`。
 
 - `logs/helper2.log` 当前，`logs/helper2.1.log` 上一份（超 5MB 轮转，只留一个备份）
-- 一行一条：`<Unix秒> [级别] <消息>`
+- 一行一条：`<本地时间> [级别] <消息>`，例如 `2026-09-19 22:33:26 [INFO] [record] 开始录制 ...`
+
+  > 2026-09-19 之前写的是 Unix 秒。机器友好，人不友好——查"那局录制怎么没了"的时候
+  > 每一行都要手动换算，而这类排查恰恰全靠在时间线上对事件。
+  > 用 `GetLocalTime` 直接取本地时间，不自己做时区换算（`windows` crate 已经是依赖，
+  > 只多开一个 `Win32_System_SystemInformation` 特性）。
+  > 轮转出去的 `helper2.1.log` 里可能还是旧格式，混着看不影响。
 - 新建时写 UTF-8 BOM——日志是给人看的，中文 Windows 上有些工具不带 BOM 会认错编码
 - **分级** `error` / `warn` / `info` / `debug`，级别写在 `settings.json` 里可改。
   现阶段默认 `debug`（全量），功能稳定后再调高
