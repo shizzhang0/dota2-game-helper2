@@ -161,22 +161,49 @@ pub fn shutdown() {
     }
 }
 
-/// 断流看门狗：2 秒一跳，超过 `IDLE_SECS` 没写过东西就给当前文件收尾封口。
-/// 之后若又来了包，`write` 会懒建一个新文件。
+/// 看门狗：2 秒一跳，管两件事。
+///
+/// 1. **断流** —— 超过 `IDLE_SECS` 没写过东西就给当前文件收尾封口。
+///    之后若又来了包，`write` 会懒建一个新文件。
+/// 2. **文件被删** —— 见 `vanished()`。
 fn watchdog() {
     std::thread::spawn(|| loop {
         std::thread::sleep(std::time::Duration::from_secs(2));
-        let last = LAST_WRITE.load(Ordering::Relaxed);
-        if last == 0 || now().saturating_sub(last) < IDLE_SECS {
+        let idle = {
+            let last = LAST_WRITE.load(Ordering::Relaxed);
+            last != 0 && now().saturating_sub(last) >= IDLE_SECS
+        };
+        let mut g = REC.lock().unwrap();
+        let Some(r) = g.as_mut() else { continue };
+        if r.sink.is_none() {
             continue;
         }
-        let mut g = REC.lock().unwrap();
-        if let Some(r) = g.as_mut() {
-            if r.sink.is_some() {
-                r.close("断流");
-            }
+        if idle {
+            r.close("断流");
+        } else if vanished() {
+            // 收尾的是个幽灵句柄，写不到任何地方，但要把 sink 清掉，
+            // 好让下一包懒建出一个新文件，这一局剩下的部分还能录到
+            logf!(Level::Error,
+                  "[record] 录制文件不见了（被外部删除？），这之前写的那段已经丢失；换新文件继续");
+            r.close("文件被删");
         }
     });
+}
+
+/// 正在录的那个文件还在不在。
+///
+/// **Rust 的 `File::create` 在 Windows 上默认带 `FILE_SHARE_DELETE`**，所以
+/// 外部（资源管理器、清理工具）可以删掉我们正在写的文件。删掉之后它进入"删除挂起"：
+/// 目录项没了，而我们的句柄照样可写——实测 `write_all` 和 `flush` **都返回 `Ok`**。
+/// 没有任何一层会报错，2026-09-19 就这么静默丢了 26 分钟的数据。
+///
+/// 不去改 `share_mode` 挡住删除：那只会让资源管理器弹"文件正在使用"，
+/// 而用户并不知道哪个是正在录的。**让删除成功、但别让它静默。**
+fn vanished() -> bool {
+    match CURRENT.lock().unwrap().as_deref() {
+        Some(p) => !p.exists(),
+        None => false,
+    }
 }
 
 /// 开发区那一行：有几个文件、一共多大。
