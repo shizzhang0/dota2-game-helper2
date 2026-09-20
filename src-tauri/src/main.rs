@@ -47,6 +47,11 @@ pub fn set_edit(app: &tauri::AppHandle, on: bool) {
     logf!(Level::Info, "[edit] 编辑态 = {on}");
 }
 
+/// 编辑态热键。**注册用的和给人看的必须一致**，改一个记得改另一个——
+/// 全局热键的写法要小写，而托盘菜单上要显示成 Windows 的惯用大小写。
+pub const EDIT_HOTKEY: &str = "ctrl+alt+F10";
+pub const EDIT_HOTKEY_LABEL: &str = "Ctrl+Alt+F10";
+
 pub fn toggle_edit(app: &tauri::AppHandle) {
     set_edit(app, !EDIT.load(Ordering::Relaxed));
 }
@@ -70,8 +75,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts(["ctrl+alt+F10"])
-                .expect("注册热键 Ctrl+Alt+F10 失败")
+                .with_shortcuts([EDIT_HOTKEY])
+                .expect("注册编辑态热键失败")
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
                         toggle_edit(app);
