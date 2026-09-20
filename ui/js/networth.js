@@ -122,6 +122,11 @@ function notOwnedBy(it, mine) {
   return p !== mine;                         // 队友、敌方、无主(-1) 都不算
 }
 
+/** 魔晶值多少。价格优先查表（随版本自动更新），查不到再退回常数表。 */
+function shardValue(prices, C) {
+  return prices.aghanims_shard?.cost ?? C.aghsShardValue ?? 0;
+}
+
 /** 把物品栏拆成"装备栏价值 / 储藏处价值"。中立物品不花钱（价格表里也确实是 0）；
  *  传送槽每局白送一个 TP，计入会让开局虚高 100。 */
 function itemValues(items, prices, player) {
@@ -218,6 +223,7 @@ export class EconTracker {
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.prevTp = null;             // 传送槽充能数
     this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
+    this.prevShard = false;         // 上一包有没有魔晶，用来冲销吃掉时留下的在途账
     this.tpQueue = [];              // 每个充能是不是自己买的；用掉时先扣白送的
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
     this.activeBuffs = new Set();   // 已经生效的吞噬类 buff
@@ -383,7 +389,28 @@ export class EconTracker {
     this.prevStash = stash;
     this.prevGold = gold;
     this.noteBuffs(state.hero, prices, C);
+    this.noteShard(state.hero, prices, C);
     return this.total(state, prices, C, slot, stash);
+  }
+
+  /**
+   * 魔晶吃掉的那一刻，把它从在途账里冲销掉。
+   *
+   * 买来的魔晶先在物品栏里待十几到二十秒，吃掉时**从物品栏消失而金币不动**——
+   * 这正是"被信使取走"的形状，于是被记成在途；同时 `hero.aghanims_shard` 翻真，
+   * `total()` 又加一次 1400。**重复计，直到在途账 90 秒 TTL 到期。**
+   *
+   * 2026-09-20 在 matchid 9006189153 里三例全中，起止精确到秒：
+   * slot3 物品 22:49 消失 / 标志 23:03 / 虚高到 24:18（22:49+90 = 24:19）·
+   * slot7 25:24 / 25:41 / 26:54（= 25:24+90）· slot0 28:05 / 28:28 / 29:34（= 28:05+90）。
+   *
+   * 吞噬类 buff 早就在 `noteBuffs` 里这么冲销了；魔晶不走 `CONSUMED_BUFFS`
+   * （它是 `total()` 里单独加的），所以一直漏掉。
+   */
+  noteShard(hero, prices, C) {
+    const has = !!(hero || {}).aghanims_shard;
+    if (has && !this.prevShard) this.deliver(shardValue(prices, C));
+    this.prevShard = has;
   }
 
   total(state, prices, C, slot, stash) {
@@ -391,7 +418,7 @@ export class EconTracker {
     const inTransit = this.transit.reduce((a, t) => a + t.v, 0);
     let nw = (p.gold ?? 0) + slot + stash + inTransit + this.dispenserValue
            + this.boughtTp * (prices.tpscroll?.cost ?? 100);
-    if (h.aghanims_shard) nw += prices.aghanims_shard?.cost ?? C.aghsShardValue ?? 0;
+    if (h.aghanims_shard) nw += shardValue(prices, C);
     const buffs = h.permanent_buffs || {};
     for (const b of CONSUMED_BUFFS) {
       const up = b.upgrade;
