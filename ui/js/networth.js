@@ -11,6 +11,13 @@ export function loadPrices() {
 }
 
 const TRANSIT_TTL = 90;   // 秒（游戏时钟）：信使飞完全图也用不了这么久
+
+/** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
+const SPEND_MIN = 150;
+
+/** 买活事件之后多久之内不记支出账。掉钱和事件不一定落在同一包。 */
+const BUYBACK_GRACE = 5;
+
 const DISPENSER_GRACE = 20;   // 秒：眼架被信使拿着时 GSI 看不见它，别急着把价值清零
 const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来吸收同一包里的被动收入
 
@@ -224,6 +231,9 @@ export class EconTracker {
     this.prevTp = null;             // 传送槽充能数
     this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
     this.prevShard = false;         // 上一包有没有魔晶，用来冲销吃掉时留下的在途账
+    this.spend = [];                // 说不清去向的支出：钱花了、东西还没出现（见 noteSpend）
+    this.lastBuyback = null;        // 最近一次自己买活的时刻，买活掉的钱不是花钱
+    this.prevBase = null;           // 上一包的"非金钱资产"（不含 spend 账），给 noteSpend 做差用
     this.tpQueue = [];              // 每个充能是不是自己买的；用掉时先扣白送的
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
     this.activeBuffs = new Set();   // 已经生效的吞噬类 buff
@@ -280,11 +290,39 @@ export class EconTracker {
    * 它们各值 50~150，足以把那一个点判反。现在两个 bug 都修了，
    * 这局七个点里"先扣白送"全中、FIFO 中四个。
    */
-  noteTp(items, player, clock) {
+  /**
+   * 这一包是不是刚阵亡。**用 `player.deaths` 而不是 `hero.alive`**——后者比事实
+   * 晚一包（142 次充能增加里有 14 次，见 `noteTp`）。阵亡这一刻金钱也会掉，
+   * `noteSpend` 同样要靠它把"掉钱"和"花钱"分开。
+   */
+  noteDeaths(player) {
+    const n = typeof player?.deaths === "number" ? player.deaths : null;
+    const died = n !== null && this.prevDeaths !== null && n > this.prevDeaths;
+    if (n !== null) this.prevDeaths = n;   // 漏字段时保持上一包，别误判成阵亡
+    return died;
+  }
+
+  /**
+   * 记下自己最近一次买活的时刻。
+   *
+   * **不能靠 `hero.alive` 挡买活**：买活的瞬间人就复活了，掉钱那一包 `alive`
+   * 已经是 `true`。实测不挡的话，1789397873 的 slot9 买活共花 5376，
+   * 终值偏差就正好炸出 5376。
+   */
+  noteBuyback(state, clock) {
+    const mine = mySlot(state.player);
+    if (mine === null || clock === null) return;
+    for (const e of Object.values(state.events || {})) {
+      if (!e || e.event_type !== "generic_event" || typeof e.data !== "string") continue;
+      let d;
+      try { d = JSON.parse(e.data); } catch { continue; }
+      if (d.type === "CHAT_MESSAGE_BUYBACK" && d.playerid1 === mine) this.lastBuyback = clock;
+    }
+  }
+
+  noteTp(items, died, clock) {
     const tp = (items || {}).teleport0;
     const ch = tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
-    const deaths = typeof player?.deaths === "number" ? player.deaths : null;
-    const died = deaths !== null && this.prevDeaths !== null && deaths > this.prevDeaths;
     if (this.prevTp === null) {
       this.tpQueue = Array(ch).fill(false);          // 首次见到的都算白送
     } else if (clock !== null && clock >= 0) {
@@ -300,7 +338,6 @@ export class EconTracker {
     while (this.tpQueue.length < ch) this.tpQueue.unshift(false);
     this.boughtTp = this.tpQueue.filter(Boolean).length;
     this.prevTp = ch;
-    if (deaths !== null) this.prevDeaths = deaths;   // 漏字段时保持上一包，别误判成阵亡
   }
 
   /**
@@ -359,14 +396,19 @@ export class EconTracker {
   update(state, prices, C, clock, placedSentries = 0) {
     const { slot, stash, wards, dispenser } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
+    const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     this.noteDispenser(state, prices, wards, dispenser, placedSentries, clock);
     this.noteVariants(state.items);
-    this.noteTp(state.items, state.player, clock);
+    const died = this.noteDeaths(state.player);
+    this.noteBuyback(state, clock);
+    this.noteTp(state.items, died, clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
     // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
     if (clock === null || clock < 0 || (this.lastClock !== null && clock < this.lastClock - 5)) {
       this.transit = [];
+      this.spend = [];
+      this.prevBase = null;
       this.prevSlot = slot;
       this.prevStash = stash;
       this.prevGold = gold;
@@ -390,7 +432,58 @@ export class EconTracker {
     this.prevGold = gold;
     this.noteBuffs(state.hero, prices, C);
     this.noteShard(state.hero, prices, C);
-    return this.total(state, prices, C, slot, stash);
+    const out = this.total(state, prices, C, slot, stash);
+    this.noteSpend(out, gold, goldBefore, clock, died, state.hero);
+    return out;
+  }
+
+  /**
+   * 说不清去向的支出：**钱花了，而我们能看见的资产一点没多。**
+   *
+   * 两种真实情况会这样，自视角下形状完全相同：
+   *
+   * 1. **买了但东西还没出现。** 在外面买东西，金钱立刻扣，而物品要过几十秒才
+   *    出现在储藏处——实测 matchid 9006189153 的 slot4：29:19 花掉 2000，
+   *    30:16 才出现 `stash0:lesser_crit`，**整整 57 秒**。官方从掏钱那一刻就算着。
+   * 2. **买了给队友带。** 官方按 `purchaser` 算在买方头上，而 GSI 只给我们各人
+   *    自己物品栏里的东西——买方这边东西压根不会出现。slot8 买 900 的真视宝石
+   *    给 slot7 带，三段共 620 秒一直低 900。
+   *
+   * 两种共用一套账：东西出现时冲销（第 1 种），不出现就一直留着（第 2 种，
+   * **而官方也一直算着，所以留着才是对的**）。因此这本账**不设 TTL**——
+   * 与信使在途那本不同，那本的前提是"东西一定会到"。
+   *
+   * **必须挡住阵亡**：死了也会掉钱，那不是花钱。用 `player.deaths` 判，
+   * 不用 `hero.alive`（后者晚一包，正好错过掉钱那一刻）。
+   */
+  noteSpend(out, gold, goldBefore, clock, died, hero) {
+    const ledger = this.spend.reduce((a, t) => a + t.v, 0);
+    const base = out.networth - gold - ledger;      // 不含金钱、也不含这本账的资产
+    const prev = this.prevBase;
+    this.prevBase = base;
+    if (prev === null || goldBefore === null) return;
+    const got = base - prev;                        // 资产侧多了多少
+    if (got > 0) this.deliverSpend(got);            // 东西出现了，冲销掉对应的那笔
+    // 死着的时候不记账：阵亡会掉钱，**买活更会**——而买活的钱官方不算
+    // （实测 1789397873 的 slot9 买活共 5376，正是不挡时终值炸出来的那个数）。
+    // 阵亡那一包用 deaths 判（alive 晚一包，正好错过掉钱那一刻），
+    // 之后整段死亡期用 alive 判（这时它已经不滞后了）。
+    if (died || hero?.alive === false) return;
+    if (this.lastBuyback !== null && clock - this.lastBuyback <= BUYBACK_GRACE) return;
+    const spent = goldBefore - gold;
+    const missing = spent - Math.max(0, got);
+    if (spent >= SPEND_MIN && missing >= SPEND_MIN) this.spend.push({ v: missing, at: clock });
+    out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0);
+  }
+
+  /** 东西终于出现了，按先进先出冲销这本账。 */
+  deliverSpend(value) {
+    for (const t of this.spend) {
+      const d = Math.min(t.v, value);
+      t.v -= d; value -= d;
+      if (value <= 0) break;
+    }
+    this.spend = this.spend.filter(t => t.v > 0);
   }
 
   /**
@@ -417,6 +510,7 @@ export class EconTracker {
     const p = state.player || {}, h = state.hero || {};
     const inTransit = this.transit.reduce((a, t) => a + t.v, 0);
     let nw = (p.gold ?? 0) + slot + stash + inTransit + this.dispenserValue
+           + this.spend.reduce((a, t) => a + t.v, 0)
            + this.boughtTp * (prices.tpscroll?.cost ?? 100);
     if (h.aghanims_shard) nw += shardValue(prices, C);
     const buffs = h.permanent_buffs || {};
