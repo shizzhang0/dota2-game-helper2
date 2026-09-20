@@ -183,6 +183,14 @@ pub fn write(app: &tauri::AppHandle, v: &serde_json::Value) {
         }
     }
     if r.sink.is_none() {
+        // **没有 matchid 的包不建文件。** Dota 在主菜单里推的是这样的心跳包：
+        // `{"provider":{…},"player":{},"events":[]}`，一包 114 字节。
+        // 懒建是"第一包数据到来时才建"，而心跳包也算数据——于是断流封口之后
+        // 只要 Dota 还开着，就会立刻建出一个只有心跳包的空壳文件。
+        // 开关叫「记录对局数据」，没有对局就不该有文件。
+        if id.is_none() {
+            return;
+        }
         r.open(app);
     }
     if id.is_some() {
