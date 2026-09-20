@@ -102,11 +102,24 @@ function mySlot(player) {
 /** 队友塞过来让你带的东西（圣剑、宝石）不该算进自己的资产；
  *  自己买的、无主的、从敌人手里缴获的都算。
  *  槽位算错时会退化成"全都算"，也就是原来的行为，不会把资产错误地清空。 */
-function isTeammates(it, mine) {
+/**
+ * 这件东西算不算持有者的钱。**官方完全按 `purchaser` 算：等于自己才算。**
+ *
+ * 2026-09-20 用 matchid 9006189153（观战，有官方 net_worth 当真值）验的。
+ * 最硬的一例是同一件物品只有 purchaser 变了：slot0 捡起肉山掉的刷新球碎片后
+ * `purchaser` 一直是 -1，官方一分不算；等它变成 0（= 他自己），官方净资产
+ * **同包 +1000**。物品没变、人没变、金币没变。
+ *
+ * 原先这里对 `p < 0` 返回 false（= 照计），会在刚捡起肉山掉落物的那段时间
+ * 虚高 1000；而"同队与否"这个分法本身也是错的——slot2 末局拿着一个从地上捡的
+ * 敌方的雾（`purchaser=9`），旧规则不排除，他的终值一直虚高 50。
+ * 判据就是**等于不等于自己**。改完这局十个人的终值偏差全部是 0。
+ */
+function notOwnedBy(it, mine) {
   if (mine === null) return false;
   const p = it.purchaser;
-  if (typeof p !== "number" || p < 0 || p === mine) return false;
-  return (p < 5) === (mine < 5);      // 同队但不是自己
+  if (typeof p !== "number") return false;   // 没这个字段就别猜，按自己的算
+  return p !== mine;                         // 队友、敌方、无主(-1) 都不算
 }
 
 /** 把物品栏拆成"装备栏价值 / 储藏处价值"。中立物品不花钱（价格表里也确实是 0）；
@@ -117,7 +130,7 @@ function itemValues(items, prices, player) {
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
     if (k.startsWith("neutral") || k.startsWith("preserved_neutral") || k.startsWith("teleport")) continue;
-    if (isTeammates(it, mine)) continue;
+    if (notOwnedBy(it, mine)) continue;
     const name = (it.name || "").replace(/^item_/, "");
     // 眼架的价值等于里面装的眼，而 GSI 只给 charges:1，从不说装了什么。
     // 所以它不走物品价，由 EconTracker 单独跟踪，见 dispenserValue。
