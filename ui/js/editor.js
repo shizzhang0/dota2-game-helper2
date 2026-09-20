@@ -12,6 +12,9 @@ import { t, loadLang, LANGS } from "./i18n.js";
 // 「完成」失效等于编辑态出不去。见 design/overlay.md 的第 3 号坑。
 let card = null, doneCb = null, resetCb = null;
 
+/** 重拉录制统计。由 `initRecords` 装上，打开卡片和拨录制开关时调用——见那里的注释。 */
+let recRefresh = null;
+
 /** 显示项那九行前面的图标——卡片因此同时是设置和图例，一份数据两用。
     每行一个图标，眼位也不例外：曾经放过"眼 + 塔"两个（想表达那块地图画了哪两类
     东西），但九行里只有它是两个，反而不齐。塔图标仍留在 icons.js 里，
@@ -98,6 +101,15 @@ function initRecords(stat, btn) {
   };
   const disarm = () => { armed = 0; clearTimeout(timer); btn.textContent = label; };
   const refresh = () => inv("records_stat").then(show).catch(() => show(null));
+  // 装出去给 setEditorOpen 和录制开关用。
+  //
+  // **这个数字原先只在程序启动那一刻拉过一次。** 打开/关闭卡片走的是
+  // `card.hidden`，不重建也不重拉，于是开着程序打了三局再去看，显示的还是
+  // 启动时的数字——而那恰恰是最想看它的时候（想确认刚才那局录下来没有）。
+  //
+  // 不做轮询：这个数字只有卡片开着时有人看，开的那一刻拉一次就够，
+  // 代价是一次 readdir。
+  recRefresh = refresh;
 
   btn.addEventListener("click", async () => {
     if (!armed) {
@@ -239,6 +251,9 @@ async function build(s) {
   for (const el of card.querySelectorAll("input, select")) {
     el.addEventListener("input", () => { sync(); saveSettings(collect()); });
   }
+  // 拨录制开关会新建或收尾一个文件，数字跟着变。**延后一点再拉**：
+  // saveSettings 在 Tauri 下是异步 invoke，Rust 那边要先 refresh() 完才有结果。
+  record.addEventListener("input", () => setTimeout(() => recRefresh?.(), 300));
   // 语言换了整卡重建。用手上这份设置重建，不重新 loadSettings()——
   // 上面那次保存在 Tauri 下是异步的 invoke，读回来可能还是旧的 lang。
   lang.addEventListener("change", async () => {
@@ -299,7 +314,7 @@ function place() {
 export function setEditorOpen(on) {
   if (!card) return;
   card.hidden = !on;          // 必须先取消隐藏再量尺寸，hidden 时 offsetWidth 为 0
-  if (on) { pinPaneHeight(); place(); }
+  if (on) { pinPaneHeight(); place(); recRefresh?.(); }
 }
 
 /** 把四页拉到同高，卡片切页时就不会忽高忽低。
