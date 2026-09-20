@@ -21,6 +21,8 @@ struct Recorder {
     enabled: bool,
     sink: Option<GzEncoder<std::fs::File>>,
     since_flush: u32,
+    /// 当前文件属于哪一局。换局就收尾，下一包懒建新文件。
+    match_id: Option<String>,
 }
 
 /// 每多少包 flush 一次。gzip 把数据缓存在内存里，只有 finish/flush 才落盘；
@@ -63,6 +65,35 @@ fn files(app: &tauri::AppHandle) -> Vec<std::path::PathBuf> {
         .collect()
 }
 
+/// 这一包说自己属于哪一局。`"0"` 和空串当作"不知道"——主菜单就是这个样子。
+fn match_id(v: &serde_json::Value) -> Option<String> {
+    let s = v.get("map")?.get("matchid")?.as_str()?;
+    if s.is_empty() || s == "0" { None } else { Some(s.to_string()) }
+}
+
+/// 收尾之后把 matchid 补进文件名：`raw_<秒>.jsonl.gz` -> `raw_<秒>_m<matchid>.jsonl.gz`。
+///
+/// **时间戳留在前面**：同一局可能被录两次（比如回放看两遍），只有 matchid 会撞名。
+/// 改名放在 `finish()` 之后——这时文件已经关上了，是一次普通的重命名；
+/// 不去动正在写的那个文件的名字，Windows 上那取决于句柄的共享位，不值得赌。
+fn tag_with_match(path: std::path::PathBuf, id: Option<&str>) -> std::path::PathBuf {
+    let Some(id) = id else { return path };
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else { return path };
+    let Some(stem) = name.strip_suffix(".jsonl.gz") else { return path };
+    if stem.contains("_m") {
+        return path;
+    }
+    let to = path.with_file_name(format!("{stem}_m{id}.jsonl.gz"));
+    match std::fs::rename(&path, &to) {
+        Ok(()) => to,
+        Err(e) => {
+            logf!(Level::Warn, "[record] 改名失败（{} -> {}）: {e}",
+                  path.display(), to.display());
+            path
+        }
+    }
+}
+
 fn size(p: &std::path::Path) -> u64 {
     std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
 }
@@ -73,9 +104,13 @@ impl Recorder {
     fn close(&mut self, why: &str) {
         let Some(enc) = self.sink.take() else { return };
         let path = CURRENT.lock().unwrap().take();
+        let id = self.match_id.take();
         match enc.finish() {
-            Ok(_) => logf!(Level::Info, "[record] 收尾（{why}）：{}",
-                           path.map(|p| p.display().to_string()).unwrap_or_default()),
+            Ok(_) => {
+                let p = path.map(|p| tag_with_match(p, id.as_deref()));
+                logf!(Level::Info, "[record] 收尾（{why}）：{}",
+                      p.map(|p| p.display().to_string()).unwrap_or_default());
+            }
             Err(e) => logf!(Level::Error, "[record] 收尾失败（{why}）: {e}"),
         }
         self.since_flush = 0;
@@ -103,7 +138,8 @@ impl Recorder {
 
 /// 启动录制子系统。必须在 GSI 起来之前调用。
 pub fn init(app: &tauri::AppHandle) {
-    *REC.lock().unwrap() = Some(Recorder { enabled: false, sink: None, since_flush: 0 });
+    *REC.lock().unwrap() = Some(Recorder { enabled: false, sink: None, since_flush: 0,
+                                           match_id: None });
     refresh(app);
     watchdog();
 }
@@ -127,15 +163,32 @@ pub fn refresh(app: &tauri::AppHandle) {
 }
 
 /// 写一包。文件在这里懒建，所以调用方不需要关心有没有开着。
-pub fn write(app: &tauri::AppHandle, line: &str) {
+///
+/// 收的是解析好的 `Value` 而不是字符串：换局要看 `map.matchid`，
+/// 而 gsi.rs 那边本来就已经解析过一次了，没必要为了取一个字段再解析一遍。
+pub fn write(app: &tauri::AppHandle, v: &serde_json::Value) {
     let mut g = REC.lock().unwrap();
     let Some(r) = g.as_mut() else { return };
     if !r.enabled {
         return;
     }
+    // 换局就收尾，下面会懒建新文件。**两个都是真 matchid 且不相等**才算换局：
+    // `map` 段可能整包缺席（GSI 推的是增量），主菜单里的 matchid 是 "0" 或没有，
+    // 这些一律当"不知道"，跟着当前文件走——宁可让菜单数据粘在某一局的尾巴上，
+    // 也不要凭空造出一堆碎文件。
+    let id = match_id(v);
+    if let (Some(now), Some(cur)) = (id.as_deref(), r.match_id.as_deref()) {
+        if now != cur {
+            r.close("换局");
+        }
+    }
     if r.sink.is_none() {
         r.open(app);
     }
+    if id.is_some() {
+        r.match_id = id;
+    }
+    let line = v.to_string();
     let Some(enc) = r.sink.as_mut() else { return };
     if writeln!(enc, "{line}").is_err() {
         logf!(Level::Error, "[record] 写入失败，停止录制");

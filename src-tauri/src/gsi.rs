@@ -22,11 +22,14 @@ pub fn spawn(app: AppHandle) {
             // 现在 set_settings 直接通知录制器，见 record.rs 顶部的注释。
             match serde_json::from_str::<serde_json::Value>(&body) {
                 Ok(v) => {
-                    // 压成一行再写。Dota 推来的 body 是带制表符缩进的多行 JSON，
-                    // 原样落盘一包就摊成几十行，根本不是 JSONL——replay.py 按行读
-                    // 会一条都解析不出来。gsi_dump.py 用的同样是紧凑序列化。
+                    // **传解析好的 Value，不传 body**。两个原因：
+                    // 一是录制要压成一行——Dota 推来的 body 是带制表符缩进的多行 JSON，
+                    // 原样落盘一包就摊成几十行，根本不是 JSONL，replay.py 按行读
+                    // 会一条都解析不出来（gsi_dump.py 用的同样是紧凑序列化）；
+                    // 二是按对局分文件要读 map.matchid，这里既然已经解析过了，
+                    // 就别让录制侧为了一个字段再解析一遍。
                     // 解析不了的 body 干脆不写：回放也用不了，只会破坏文件结构。
-                    crate::record::write(&app, &v.to_string());
+                    crate::record::write(&app, &v);
                     let _ = app.emit("gsi", v);
                 }
                 Err(e) => logf!(Level::Error, "[gsi] JSON 解析失败: {e}"),
