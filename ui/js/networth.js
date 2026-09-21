@@ -12,8 +12,16 @@ export function loadPrices() {
 
 const TRANSIT_TTL = 90;   // 秒（游戏时钟）：信使飞完全图也用不了这么久
 
-/** 买到手就送一张免费 TP 的东西。合成飞鞋、升二级飞鞋各送一张，**和鞋同一包到手**。 */
+/** 买到手就送一张免费 TP 的东西。合成飞鞋、升二级飞鞋各送一张。 */
 const TP_GIFT_ITEMS = ["travel_boots", "travel_boots_2"];
+
+/**
+ * 飞鞋到手之后多久之内的充能增加还算赠品。
+ *
+ * **赠品不一定和鞋落在同一包。** 原先要求同包，实测 matchid 9009685067 的 slot8：
+ * 19:59 出 `travel_boots`、**20:00** 充能才 +1，差一包就没认出来，终值多算 100。
+ */
+const TP_GIFT_WINDOW = 3;
 
 /** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
 const SPEND_MIN = 150;
@@ -235,6 +243,7 @@ export class EconTracker {
     this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
     this.prevShard = false;         // 上一包有没有魔晶，用来冲销吃掉时留下的在途账
     this.prevGifts = new Set();     // 上一包身上有哪几种"买了送 TP"的东西
+    this.giftAt = null;             // 最近一次拿到"送 TP 的东西"的时刻
     this.spend = [];                // 说不清去向的支出：钱花了、东西还没出现（见 noteSpend）
     this.lastBuyback = null;        // 最近一次自己买活的时刻，买活掉的钱不是花钱
     this.prevBase = null;           // 上一包的"非金钱资产"（不含 spend 账），给 noteSpend 做差用
@@ -334,17 +343,20 @@ export class EconTracker {
    *
    * 只看"名字这一包新出现"，所以鞋在格子间挪动不会误触发；升级时
    * `travel_boots` 换成 `travel_boots_2`，后者是新名字，照样认得出来。
+   *
+   * **鞋到手之后留一个 `TP_GIFT_WINDOW` 秒的窗口**：赠品不一定和鞋落在同一包，
+   * 实测有差一包的（见那个常量的注释）。
    */
-  noteTpGift(items) {
+  noteTpGift(items, clock) {
     const now = new Set();
     for (const o of Object.values(items || {})) {
       if (!o || typeof o !== "object") continue;
       const n = String(o.name || "").replace(/^item_/, "");
       if (TP_GIFT_ITEMS.includes(n)) now.add(n);
     }
-    const got = [...now].some(n => !this.prevGifts.has(n));
+    if ([...now].some(n => !this.prevGifts.has(n))) this.giftAt = clock;
     this.prevGifts = now;
-    return got;
+    return this.giftAt !== null && clock !== null && clock - this.giftAt <= TP_GIFT_WINDOW;
   }
 
   noteTp(items, free, clock) {
@@ -428,7 +440,7 @@ export class EconTracker {
     this.noteVariants(state.items);
     const died = this.noteDeaths(state.player);
     this.noteBuyback(state, clock);
-    this.noteTp(state.items, died || this.noteTpGift(state.items), clock);
+    this.noteTp(state.items, died || this.noteTpGift(state.items, clock), clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
     // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
