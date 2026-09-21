@@ -447,10 +447,22 @@ export class EconTracker {
     if (this.prevStash !== null) {
       const lost = this.prevStash - stash;      // 储藏处减少的价值
       const gained = slot - this.prevSlot;      // 装备栏增加的价值
+      const back = stash - this.prevStash;      // 储藏处变多了多少
+      const paid = this.prevGold - gold;        // 这一包花了多少
       if (lost > 0 && gained < lost && !soldFromStash(lost, gold - this.prevGold)) {
         this.transit.push({ v: lost - Math.max(0, gained), at: clock });
       } else if (gained > 0) {
         this.deliver(gained);                   // 装备栏变多 = 在途的东西到货了
+      } else if (back > 0 && paid < back / 2) {
+        // **东西回到储藏处了，也要冲销。** GSI 里储藏处的物品会闪——同一件东西
+        // 隔几包消失一次再出现。每次消失都记一笔在途，而它回来时若只看装备栏
+        // 就永远冲销不掉，幽灵一直挂到 90 秒 TTL 到期。实测 1789386225 的 slot3：
+        // 23:15 买的 2000 的 hyperstone 在 23:15/16/18/20 四包里闪了两轮，
+        // 比赛 23:48 结束，幽灵没等到过期，终值就多了 2000。
+        //
+        // `paid < back / 2` 是为了把**买进储藏处**排除掉：那是新东西，
+        // 不是在途的那件回来了，冲销它会把真的在途账抹掉。
+        this.deliver(back);
       }
       this.transit = this.transit.filter(t => clock - t.at < TRANSIT_TTL);
     }
