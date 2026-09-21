@@ -2,7 +2,7 @@
   "card.title": "面板设置",
   "card.show": "显示项",
   "card.panel": "面板",
-  "card.alwaysShow": "常显",
+  "card.alwaysShow": "始终显示",
   "card.alwaysShowHint": "不按 Alt 也一直显示面板（仅对局中）",
   "card.lang": "语言",
   "card.scale": "缩放",
