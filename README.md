@@ -43,8 +43,8 @@ colour, not real gameplay.</sub>
    the GSI config file on first run
 5. Get into a match and **hold Alt**
 
-That's it. To move things around or turn cells off: right-click the tray icon →
-"Edit panel" (or `Ctrl+Alt+F10`).
+That's it. To move things around or turn cells off: **left-click the tray icon**,
+or right-click → "Edit panel (Ctrl+Alt+F10)".
 
 > **Panel never shows up?** Check steps 2 and 3 first — no non-injecting overlay can
 > draw over exclusive fullscreen, which is an OS-level limitation rather than a bug
@@ -131,6 +131,10 @@ Alt is detected passively by polling the key state. It **registers no hotkey and
 swallows no input**, so Alt's normal in-game behaviour (Alt-clicking the map and so on)
 is completely unaffected.
 
+> If you'd rather not hold Alt, there's an **Always show** setting. It only removes the
+> "hold Alt" condition — **it still disappears back in the main menu**, it won't sit on
+> your desktop.
+
 ### What's supported
 
 | | |
@@ -149,14 +153,15 @@ is completely unaffected.
 
 ## Making it yours
 
-Right-click the tray icon → "Edit panel" (or `Ctrl+Alt+F10`). The four blocks —
+**Left-click the tray icon** (or right-click → "Edit panel (Ctrl+Alt+F10)", or just
+press the hotkey). The four blocks —
 **timers / enemy / net worth / ward map** — become permanently visible and individually
 draggable, and a settings card floats up. The card has four pages, switched by icon:
 
 |  |  |
 |---|---|
 | ![Display](docs/images/card-show.png) | ![Panel](docs/images/card-panel.png) |
-| **Display** — a toggle for each of the nine cells | **Panel** — language, scale, opacity, backdrop, map size, reset |
+| **Display** — a toggle for each of the nine cells | **Panel** — always show, language, scale, opacity, backdrop, map size, reset |
 | ![Legend](docs/images/card-legend.png) | ![Developer](docs/images/card-dev.png) |
 | **Legend** — what every colour and shape on the map means | **Developer** — log level, match recording, data folder, versions |
 
@@ -182,7 +187,7 @@ All under `%APPDATA%\dev.dota2helper2.app\`:
 | `settings.json` | Everything from the card |
 | `layout.json` | Where each of the four blocks sits |
 | `logs/` | Run log (rotates past 5 MB, one backup kept) |
-| `records/` | Match recordings (off by default) |
+| `records/` | Match recordings (off by default). **One file per match**, with the match id in the name: `raw_<secs>_m<matchid>.jsonl.gz` |
 
 ### Uninstalling
 
