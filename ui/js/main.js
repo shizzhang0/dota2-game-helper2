@@ -120,7 +120,12 @@ setInterval(() => {
   const { st, info } = last || IDLE;
   const e = (last || IDLE).econ;
   render({
-    visible: (alt || forceShow || editMode) && (info.inMatch || forceShow || editMode),
+    // 常显**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
+    // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
+    // 编辑态则要绕过，摆位置这件事恰恰要在开游戏之前做。
+    // 开发页的 forceShow（v 键）保留绕过，那是开发时要的。
+    visible: (alt || cfg.alwaysShow || forceShow || editMode)
+          && (info.inMatch || forceShow || editMode),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },

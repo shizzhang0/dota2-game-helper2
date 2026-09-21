@@ -8,6 +8,7 @@ export const SHOW_KEYS = ["mid", "bounty", "lotus", "wisdom", "stack",
 // 这份只在浏览器开发时用得上。
 export const DEFAULTS = {
   show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
+  alwaysShow: false,
   scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
   logLevel: "info", recordMatches: false, lang: "zh-CN",
 };
