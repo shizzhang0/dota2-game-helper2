@@ -152,6 +152,8 @@ async function build(s) {
         }><span class="ed-ico">${showIcon(k)}</span>${t("show." + k)}</label>`).join("")}</div>
     </div>
     <div class="ed-pane" data-pane="panel">
+      <label class="ed-row" title="${t("card.alwaysShowHint")}">
+        <input id="edAlways" type="checkbox"${s.alwaysShow ? " checked" : ""}>${t("card.alwaysShow")}</label>
       <label class="ed-row">${t("card.lang")}
         <select id="edLang">${LANGS.map(([v, name]) =>
           `<option value="${v}">${name}</option>`).join("")}</select></label>
@@ -195,13 +197,15 @@ async function build(s) {
 
   const $ = (id) => card.querySelector("#" + id);
   const scale = $("edScale"), opacity = $("edOpacity"), ward = $("edWard"),
-        bg = $("edBg"), log = $("edLog"), record = $("edRecord"), lang = $("edLang");
+        bg = $("edBg"), log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
+        always = $("edAlways");
   scale.value = s.scale ?? DEFAULTS.scale;
   opacity.value = s.opacity ?? DEFAULTS.opacity;
   ward.value = s.wardSize ?? DEFAULTS.wardSize;
   bg.value = s.panelBg ?? DEFAULTS.panelBg;
   log.value = s.logLevel ?? DEFAULTS.logLevel;
   record.checked = !!s.recordMatches;
+  always.checked = !!s.alwaysShow;
   lang.value = s.lang ?? DEFAULTS.lang;
 
   const sync = () => {
@@ -213,6 +217,7 @@ async function build(s) {
   const collect = () => ({
     show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
       .map(el => [el.dataset.show, el.checked])),
+    alwaysShow: always.checked,
     scale: Number(scale.value),
     opacity: Number(opacity.value),
     wardSize: Number(ward.value),
@@ -263,7 +268,9 @@ async function build(s) {
     if (!card.hidden) { pinPaneHeight(); place(); }   // 中英文卡片不一样宽也不一样高
   });
 
-  // 「重置」把这张卡片管的外观一次还原：九个勾 + 四条滑块 + 四块摆位。
+  // 「重置」把这张卡片管的外观一次还原：九个勾 + 常显 + 四条滑块 + 四块摆位。
+  // **常显也还原成关**：它是外观行为、和滑块同类，而"按住 Alt 才显示"是产品的
+  // 默认形态；还原它不会造成任何数据损失。
   // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
   // **语言也不动**：重置回中文会让看不懂中文的用户无法退出这个状态，
   // 他得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
@@ -271,6 +278,7 @@ async function build(s) {
   // 这会儿还是旧值，所以把 scale 直接传过去，别让它自己去读。
   $("edReset").addEventListener("click", () => {
     for (const el of card.querySelectorAll("[data-show]")) el.checked = DEFAULTS.show[el.dataset.show];
+    always.checked = DEFAULTS.alwaysShow;
     scale.value = DEFAULTS.scale;
     opacity.value = DEFAULTS.opacity;
     bg.value = DEFAULTS.panelBg;

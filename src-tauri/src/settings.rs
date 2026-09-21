@@ -11,6 +11,7 @@ fn defaults() -> serde_json::Value {
         "show": { "mid": true, "bounty": true, "lotus": true, "wisdom": true,
                   "stack": true, "glyph": true, "buyback": true, "econ": true,
                   "wardmap": true },
+        "alwaysShow": false,
         "scale": 1.0,
         "opacity": 1.0,
         "panelBg": 0.72,
@@ -71,7 +72,7 @@ pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
 
 /// 开配置目录**本身**，不是它下面某一个子目录。`constants/`、`records/`、`logs/`
 /// 是同级兄弟，给每个配一个按钮等于把文件树抄到卡片上；开父目录一次覆盖三个，
-/// 而且是唯一通向日志的入口——理由见 design/overlay.md 的「设置」第 8 条。
+/// 而且是唯一通向日志的入口——理由见 design/overlay.md 的「设置」里的「开发区」那条。
 #[tauri::command]
 pub fn open_data_dir(app: tauri::AppHandle) {
     if let Ok(dir) = app.path().app_config_dir() {
