@@ -262,7 +262,8 @@ export class EconTracker {
   constructor() { this.reset(); }
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
-    this.proxy = []; this.prevProxyHeld = null;   // 我买的、此刻不在我包里的宝石，见 noteProxy
+    this.proxy = [];   // 我买的、此刻不在我包里的宝石，见 noteProxy
+    this.prevProxySlot = null; this.prevProxyStash = null;
     this.prevTpSlot = null;
     this.prevNames = null;         // 上一包按名字分组的物品价值，见 noteSpend
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
@@ -719,24 +720,39 @@ export class EconTracker {
    */
   noteProxy(items, prices, player, clock, goldUp) {
     const mine = mySlot(player);
-    let held = 0;
+    let inSlot = 0, inStash = 0;
     for (const [k, it] of Object.entries(items || {})) {
       if (!it || typeof it !== "object") continue;
       if (!(k.startsWith("slot") || k.startsWith("stash"))) continue;
       if (notOwnedBy(it, mine)) continue;
       const name = (it.name || "").replace(/^item_/, "");
-      if (PROXY_ITEMS[name]) held++;
+      if (!PROXY_ITEMS[name]) continue;
+      if (k.startsWith("stash")) inStash++; else inSlot++;
     }
-    const prev = this.prevProxyHeld ?? held;
-    this.prevProxyHeld = held;
+    const pSlot = this.prevProxySlot ?? inSlot;
+    const pStash = this.prevProxyStash ?? inStash;
+    this.prevProxySlot = inSlot;
+    this.prevProxyStash = inStash;
     if (clock === null) return;
     const cost = prices.gem?.cost ?? 900;
-    // 回到包里了：销账
+    const held = inSlot + inStash, prev = pSlot + pStash;
+    // 回到包里了：销账。（装备栏↔储藏处之间挪动不算离开，held 不变）
     for (let i = held - prev; i > 0 && this.proxy.length; i--) this.proxy.shift();
     // 离开包里了。卖掉不算——Dota 卖价是半价。
+    //
+    // **从哪一侧离开决定什么时候开始算。** 从储藏处离开的，在途账会为它记一笔
+    // （`lost = prevStash - stash`），所以让位 `TRANSIT_TTL` 秒免得重复；
+    // 而**从装备栏离开的，在途账那三条分支一条都不触发**——`lost` 只看储藏处，
+    // 金币也没掉，`noteSpend` 同样不记。这一类前 90 秒完全没人接管，
+    // 面板会先凹一个 900 的坑再自己涨回来。实测八局里宝石离开物品栏 13 次，
+    // **6 次是从装备栏直接走的**（辅助买了宝石手递手给核心，这最常见），
+    // 那 6 次立刻开始算。
+    let fromSlot = Math.max(0, pSlot - inSlot);
     for (let i = prev - held; i > 0; i--) {
       if (goldUp >= cost / 2) break;
-      this.proxy.push({ at: clock });
+      const bySlot = fromSlot > 0;
+      if (bySlot) fromSlot--;
+      this.proxy.push({ at: clock, now: bySlot });
     }
   }
 
@@ -745,7 +761,7 @@ export class EconTracker {
     // 当场掉 899，而宝石还在队友包里。跟着它一起不算，否则终值凭空多 900。
     if (clock === null || gameState === "DOTA_GAMERULES_STATE_POST_GAME") return 0;
     const cost = prices.gem?.cost ?? 900;
-    return this.proxy.reduce((a, t) => a + (clock - t.at >= TRANSIT_TTL ? cost : 0), 0);
+    return this.proxy.reduce((a, t) => a + (t.now || clock - t.at >= TRANSIT_TTL ? cost : 0), 0);
   }
 
   total(state, prices, C, slot, stash) {
