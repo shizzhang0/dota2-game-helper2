@@ -23,6 +23,9 @@ const TP_GIFT_ITEMS = ["travel_boots", "travel_boots_2"];
  */
 const TP_GIFT_WINDOW = 3;
 
+/** 认"买真眼进架子"时允许的金币偏差。同一包里的被动收入约 +2，取 8 够宽也够紧。 */
+const SENTRY_TOL = 8;
+
 /** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
 const SPEND_MIN = 150;
 
@@ -46,41 +49,6 @@ const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来�
 function soldFromStash(lost, dGold) {
   if (!(dGold > 0)) return false;
   return Math.abs(dGold - lost) <= SELL_TOL || Math.abs(dGold - lost / 2) <= SELL_TOL;
-}
-
-/**
- * 本包里"我"新买了哪些东西。GSI 的购买事件只给物品 id，靠价格表里的 id 反查名字。
- *
- * **必须去重**：events 是缓存池里的一段，同一条事件会在后续每一包里重复出现，
- * 直接累加会把一次购买算上几十次（实测眼架能涨到一万多）。用 `type|time` 当键，
- * 和 EventTracker 里的做法一致。
- */
-function myPurchases(state, prices, mine, seen) {
-  const out = [];
-  if (mine === null) return out;
-  for (const e of Object.values(state.events || {})) {
-    if (!e || e.event_type !== "generic_event" || typeof e.data !== "string") continue;
-    let d;
-    try { d = JSON.parse(e.data); } catch { continue; }
-    if (d.type !== "CHAT_MESSAGE_ITEM_PURCHASE") continue;
-    const key = d.type + "|" + d.time + "|" + d.value + "|" + d.playerid1;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (d.playerid1 === mine) out.push(d.value);
-  }
-  return out;
-}
-
-/** 物品 id -> 表里的条目。只建一次，价格表一局之内不变。 */
-let BY_ID = null, BY_ID_SRC = null;
-function byId(prices, id) {
-  if (BY_ID_SRC !== prices) {
-    BY_ID_SRC = prices;
-    BY_ID = new Map();
-    for (const [name, v] of Object.entries(prices))
-      if (v && typeof v.id === "number") BY_ID.set(v.id, name);
-  }
-  return BY_ID.get(id);
 }
 
 /**
@@ -234,7 +202,6 @@ export class EconTracker {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.dispenserValue = 0;        // 眼架里装的眼值多少钱（GSI 不告诉我们，只能自己跟）
-    this.seenBuys = new Set();      // 已处理过的购买事件，events 段会重复推送
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
     this.prevWards = 0;             // 上一包散装眼的价值，用来接住"合成眼架"那一刻
     this.prevDispenser = false;
@@ -397,12 +364,7 @@ export class EconTracker {
    * 幅度不超过架子里的存货，且眼架一空就归零、不会跨局累积。
    * 假眼不用管，它本来就不要钱。
    */
-  noteDispenser(state, prices, wards, dispenser, placedSentries, clock) {
-    // **每一包都要把购买事件消费掉**，哪怕当时没有架子。只在有架子时才读，
-    // 那些"合成之前买的眼"就会一直留在未处理集合里，等架子一出现被重新算一遍——
-    // 于是价值既随物品平移进来、又被事件加一次，正好翻倍。
-    const buys = myPurchases(state, prices, mySlot(state.player), this.seenBuys)
-      .map(id => byId(prices, id));
+  noteDispenser(prices, wards, dispenser, placedSentries, clock, paid, assetUp, died) {
     if (!dispenser) {
       // 架子会短暂消失：被信使拿走的十几秒里 GSI 完全看不见它（实测一次 10 秒）。
       // 立刻清零就把刚合成的价值丢了，所以给一段宽限；真的用完了，
@@ -412,11 +374,24 @@ export class EconTracker {
     } else {
       this.dispenserGone = null;
       if (!this.prevDispenser) this.dispenserValue += this.prevWards;   // 刚合成，价值平移
-      for (const name of buys) {
-        if (name === "ward_sentry" || name === "ward_observer")
-          this.dispenserValue += prices[name]?.cost ?? 0;
-      }
       const sentry = prices.ward_sentry?.cost ?? 50;
+      // **买真眼进架子只能靠金币认出来。** 原先读 `CHAT_MESSAGE_ITEM_PURCHASE`，
+      // 而**买眼根本不发这个事件**——实测一整局 `id=42/43/218` 一条都没有，
+      // 那条路是死代码。于是估值只能从"合成那一刻的散装眼平移"拿到一次，
+      // 之后只减不增，必然漂到 0：matchid 9009513738 的 slot1（辅助）17:24 之后
+      // 我们一直估 0，而官方的真值一路涨到 250。
+      //
+      // 判据窄且硬：**手上有架子 + 这一包掉了约 50 的整数倍 + 装备/储藏处没多东西**
+      // = 钱变成了架子里的真眼。假眼不花钱，所以不会被误加。
+      // **只挡阵亡那一包，不挡整个死亡期。** 普通模式阵亡会掉金币，掉的量恰好落在
+      // 50 附近就会被误判成买了真眼——但掉钱只发生在死的那一刻。
+      // 而**人死着的时候照样能买东西**，辅助更是死了就顺手补眼：实测把整个死亡期
+      // 都挡掉，辅助那局立刻从"完全准 45.5% / 平均差 51"退回"38.6% / 79"。
+      //
+      // 现有的八局观战语料全是快速模式（实测 72 次阵亡金币一次没掉），
+      // **这条挡板在其中测不出效果**——它是按机制加的，不是按数据加的。
+      if (!died && Math.abs(paid - sentry) <= SENTRY_TOL && assetUp < sentry / 2)
+        this.dispenserValue += sentry;
       this.dispenserValue = Math.max(0, this.dispenserValue - placedSentries * sentry);
     }
     this.prevWards = wards;
@@ -436,9 +411,12 @@ export class EconTracker {
     const { slot, stash, wards, dispenser } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
-    this.noteDispenser(state, prices, wards, dispenser, placedSentries, clock);
-    this.noteVariants(state.items);
     const died = this.noteDeaths(state.player);
+    this.noteDispenser(prices, wards, dispenser, placedSentries, clock,
+                       goldBefore === null ? 0 : goldBefore - gold,
+                       (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)),
+                       died);
+    this.noteVariants(state.items);
     this.noteBuyback(state, clock);
     this.noteTp(state.items, died || this.noteTpGift(state.items, clock), clock);
 
