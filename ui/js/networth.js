@@ -144,6 +144,36 @@ function tpCharges(items) {
   return tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
 }
 
+/** 我自己的物品，**按名字分组**的价值。
+ *
+ *  为什么不能只看总和：合成会让"组件没了、成品出现"在总和里互相抵消，
+ *  而记账要分得清"多出来的是什么"和"少掉的是什么"。
+ *
+ *  传送槽也算进来。它不进 `slot`（价值由 `boughtTp` 单独记），但买一张 TP
+ *  确实是"钱变成了东西"，不算进来的话两张 TP（200 金）会被记成说不清的支出。
+ */
+function ownedByName(items, prices, player) {
+  const mine = mySlot(player);
+  const m = new Map();
+  for (const [k, it] of Object.entries(items || {})) {
+    if (!it || typeof it !== "object") continue;
+    if (!(k.startsWith("slot") || k.startsWith("stash") || k.startsWith("teleport"))) continue;
+    if (notOwnedBy(it, mine)) continue;
+    const name = (it.name || "").replace(/^item_/, "");
+    if (!name || name === "empty") continue;
+    m.set(name, (m.get(name) || 0) + itemCost(it, prices));
+  }
+  return m;
+}
+
+/** 两张价值表之间**新出现**的价值（按名字逐项取正差再求和）。 */
+function appearedValue(now, prev) {
+  if (!prev) return 0;
+  let v = 0;
+  for (const [n, c] of now) v += Math.max(0, c - (prev.get(n) || 0));
+  return v;
+}
+
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
   let slot = 0, stash = 0, wards = 0, dispenser = false;
@@ -231,6 +261,7 @@ export class EconTracker {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
     this.proxy = []; this.prevProxyHeld = null;   // 我买的、此刻不在我包里的宝石，见 noteProxy
     this.prevTpSlot = null;
+    this.prevNames = null;         // 上一包按名字分组的物品价值，见 noteSpend
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.dispenserValue = 0;        // 眼架里装的眼值多少钱（GSI 不告诉我们，只能自己跟）
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
@@ -514,7 +545,8 @@ export class EconTracker {
     this.noteBuffs(state.hero, prices, C);
     this.noteShard(state.hero, prices, C);
     const out = this.total(state, prices, C, slot, stash);
-    this.noteSpend(out, gold, goldBefore, clock, died, state.hero);
+    this.noteSpend(out, gold, goldBefore, clock, died, state.hero,
+                   ownedByName(state.items, prices, state.player));
     return out;
   }
 
@@ -537,22 +569,43 @@ export class EconTracker {
    * **必须挡住阵亡**：死了也会掉钱，那不是花钱。用 `player.deaths` 判，
    * 不用 `hero.alive`（后者晚一包，正好错过掉钱那一刻）。
    */
-  noteSpend(out, gold, goldBefore, clock, died, hero) {
+  noteSpend(out, gold, goldBefore, clock, died, hero, names) {
     const ledger = this.spend.reduce((a, t) => a + t.v, 0);
     const base = out.networth - gold - ledger;      // 不含金钱、也不含这本账的资产
     const prev = this.prevBase;
+    const prevNames = this.prevNames;
     this.prevBase = base;
+    this.prevNames = names;
     if (prev === null || goldBefore === null) return;
-    const got = base - prev;                        // 资产侧多了多少
-    if (got > 0) this.deliverSpend(got);            // 东西出现了，冲销掉对应的那笔
-    // 死着的时候不记账：阵亡会掉钱，**买活更会**——而买活的钱官方不算
+
+    // 死着的时候不记账也不冲销：阵亡会掉钱，**买活更会**——而买活的钱官方不算
     // （实测 1789397873 的 slot9 买活共 5376，正是不挡时终值炸出来的那个数）。
     // 阵亡那一包用 deaths 判（alive 晚一包，正好错过掉钱那一刻），
     // 之后整段死亡期用 alive 判（这时它已经不滞后了）。
-    if (died || hero?.alive === false) return;
-    if (this.lastBuyback !== null && clock - this.lastBuyback <= BUYBACK_GRACE) return;
-    const spent = goldBefore - gold;
-    const missing = spent - Math.max(0, got);
+    const dead = died || hero?.alive === false
+                 || (this.lastBuyback !== null && clock - this.lastBuyback <= BUYBACK_GRACE);
+    const spent = dead ? 0 : goldBefore - gold;     // 掉的钱不是花的钱
+
+    // 冲销仍按资产总值的增量走。**试过"扣掉这一包自己付过的钱"再冲销**
+    // （理由是买件看得见的东西不该去销旧账），实测更差：m9006189153 的 `=0`
+    // 从 70.9% 掉到 66.1%、平均|差| 44→56、终值 0→689，其余各局基本不动。
+    const got = base - prev;
+    if (got > 0) this.deliverSpend(got);
+
+    if (dead) { out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0); return; }
+
+    // **"东西出现了没有"要按物品身份判，光看资产总值会漏。**
+    // `got` 是资产总值的增量，同一包里**卖掉的东西**会把它压低，于是"边卖边买"
+    // 凭空记出一笔假账：实测 1789397873 的 slot1 在 17:26 卖掉 505 的空灵挂饰
+    // （回 252）同时买了 2200 的两个大件，净支出 1946 而 `got` 只有 1695，
+    // 多记了 251。按名字看"新出现的物品值多少钱"是 2200 ≥ 1946，一分钱都不欠。
+    //
+    // 两个口径**取大的那个**，谁能解释掉这笔钱就听谁的：
+    // `appeared` 看不见在途账和眼架的增量（它们不在物品栏里），`got` 看不见
+    // 被卖掉/被合成吃掉的部分。八局对账里取大的一档 `=0` 五升三平零退，
+    // 平均|差| 四升三平，m8988783173 的终值 448→200。
+    const appeared = appearedValue(names, prevNames);
+    const missing = spent - Math.max(appeared, got, 0);
     if (spent >= SPEND_MIN && missing >= SPEND_MIN) this.spend.push({ v: missing, at: clock });
     out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0);
   }
