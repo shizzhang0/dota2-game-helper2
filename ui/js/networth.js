@@ -176,7 +176,7 @@ function appearedValue(now, prev) {
 
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
-  let slot = 0, stash = 0, wards = 0, dispenser = false;
+  let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false;
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
     if (k.startsWith("neutral") || k.startsWith("preserved_neutral") || k.startsWith("teleport")) continue;
@@ -186,11 +186,14 @@ function itemValues(items, prices, player) {
     // 所以它不走物品价，由 EconTracker 单独跟踪，见 dispenserValue。
     if (name === "ward_dispenser") { dispenser = true; continue; }
     const cost = itemCost(it, prices);
-    // 散装的眼要单独记：眼架合成的那一刻，它们的价值要平移进眼架
-    if (name === "ward_sentry" || name === "ward_observer") wards += cost;
+    // 散装的眼要单独记：眼架合成的那一刻，它们的价值要平移进眼架。
+    // **装备栏和储藏处分开数**，两处少掉的含义完全不同，见 noteDispenser。
+    if (name === "ward_sentry" || name === "ward_observer") {
+      if (k.startsWith("stash")) wardsStash += cost; else wards += cost;
+    }
     if (k.startsWith("stash")) stash += cost; else slot += cost;
   }
-  return { slot, stash, wards, dispenser };
+  return { slot, stash, wards, wardsStash, dispenser };
 }
 
 /**
@@ -265,7 +268,10 @@ export class EconTracker {
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.dispenserValue = 0;        // 眼架里装的眼值多少钱（GSI 不告诉我们，只能自己跟）
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
-    this.prevWards = 0;             // 上一包散装眼的价值，用来接住"合成眼架"那一刻
+    this.prevWards = 0;             // 上一包装备栏里散装眼的价值，用来接住"合成眼架"那一刻
+    this.prevWardsStash = 0;        // 同上，储藏处那一份（口径不同，见 noteDispenser）
+    this.dispFromStash = 0;         // 眼架估值里有多少是"从储藏处平移来的"，可能要退回
+    this.wardsMovedFromStash = 0;   // 这一包平移了多少，在途那边要把它从 lost 里扣掉
     this.prevDispenser = false;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.prevTp = null;             // 传送槽充能数
@@ -426,13 +432,17 @@ export class EconTracker {
    * 幅度不超过架子里的存货，且眼架一空就归零、不会跨局累积。
    * 假眼不用管，它本来就不要钱。
    */
-  noteDispenser(prices, wards, dispenser, placedSentries, clock, paid, assetUp, died) {
+  noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock, paid, assetUp, died) {
+    this.wardsMovedFromStash = 0;
     if (!dispenser) {
       // 架子会短暂消失：被信使拿走的十几秒里 GSI 完全看不见它（实测一次 10 秒）。
       // 立刻清零就把刚合成的价值丢了，所以给一段宽限；真的用完了，
       // 上面的插眼扣减本来也已经把它扣到 0。
       if (this.dispenserGone === null) this.dispenserGone = clock;
-      if (clock !== null && clock - this.dispenserGone > DISPENSER_GRACE) this.dispenserValue = 0;
+      if (clock !== null && clock - this.dispenserGone > DISPENSER_GRACE) {
+        this.dispenserValue = 0;
+        this.dispFromStash = 0;
+      }
     } else {
       this.dispenserGone = null;
       // **散装眼少了多少，就往架子里平移多少**——不只是刚合成那一次。
@@ -443,7 +453,24 @@ export class EconTracker {
       //
       // 散装眼也可能是被**插掉**而不是并进架子——那种情况下面的 placedSentries
       // 会再扣一次，一加一减正好抵消，不用在这里分辨。
-      this.dispenserValue += Math.max(0, this.prevWards - wards);
+      //
+      // **储藏处里的眼少掉，可能是并进架子、也可能是信使来取，形状一模一样。**
+      // 两条路在这一刻分不开，但**后来能分开**：信使送的那份会**回到装备栏**，
+      // 并进架子的不会。所以先一律当成并进架子，记住其中来自储藏处的那部分
+      // （`dispFromStash`）；一旦散装眼回到装备栏，就按回来的量退回去。
+      //
+      // 同一包里在途账也会为这笔记一遍（储藏处少了、装备栏没多）。两边都记
+      // 就是同一笔钱记两遍——实测八局里 **45 次、涉及 3500 金**，比真正的
+      // "并进架子"（30 次）还多。所以把这部分从在途的 `lost` 里扣掉，
+      // 用 `wardsMovedFromStash` 传过去。
+      const fromSlot = Math.max(0, this.prevWards - wards);
+      const fromStash = Math.max(0, this.prevWardsStash - wardsStash);
+      const undo = Math.min(Math.max(0, wards - this.prevWards), this.dispFromStash);
+      this.dispenserValue = Math.max(0, this.dispenserValue - undo);
+      this.dispFromStash -= undo;
+      this.dispenserValue += fromSlot + fromStash;
+      this.dispFromStash += fromStash;
+      this.wardsMovedFromStash = fromStash;
       const sentry = prices.ward_sentry?.cost ?? 50;
       // **买真眼进架子只能靠金币认出来。** 原先读 `CHAT_MESSAGE_ITEM_PURCHASE`，
       // 而**买眼根本不发这个事件**——实测一整局 `id=42/43/218` 一条都没有，
@@ -470,6 +497,7 @@ export class EconTracker {
       this.dispenserValue = Math.max(0, this.dispenserValue - placedSentries * sentry);
     }
     this.prevWards = wards;
+    this.prevWardsStash = wardsStash;
     this.prevDispenser = dispenser;
   }
 
@@ -503,7 +531,7 @@ export class EconTracker {
     if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
       this.reset();
     }
-    const { slot, stash, wards, dispenser } = itemValues(state.items, prices, state.player);
+    const { slot, stash, wards, wardsStash, dispenser } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     const died = this.noteDeaths(state.player);
@@ -513,7 +541,7 @@ export class EconTracker {
     const tpNow = tpCharges(state.items);
     const tpUp = (tpNow - (this.prevTpSlot ?? tpNow)) * (prices.tpscroll?.cost ?? 100);
     this.prevTpSlot = tpNow;
-    this.noteDispenser(prices, wards, dispenser, placedSentries, clock,
+    this.noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock,
                        goldBefore === null ? 0 : goldBefore - gold,
                        (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
                        died);
@@ -539,7 +567,8 @@ export class EconTracker {
     this.lastClock = clock;
 
     if (this.prevStash !== null) {
-      const lost = this.prevStash - stash;      // 储藏处减少的价值
+      // 减掉刚平移进眼架的那部分：储藏处少的是它，不是信使取走的（见 noteDispenser）
+      const lost = this.prevStash - stash - this.wardsMovedFromStash;
       const gained = slot - this.prevSlot;      // 装备栏增加的价值
       const back = stash - this.prevStash;      // 储藏处变多了多少
       const paid = this.prevGold - gold;        // 这一包花了多少
