@@ -10,9 +10,13 @@ import { loadSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
 
 // 正式版没有控制台也开不出 devtools，前端异常必须转发给 Rust 写进日志
-if (isTauri()) {
-  const send = (lv, m) =>
+const send = (lv, m) => {
+  if (!isTauri()) return;
+  try {
     window.__TAURI__.core.invoke("log_front", { level: lv, msg: String(m) });
+  } catch { /* 日志本身绝不能把主流程带崩 */ }
+};
+if (isTauri()) {
   addEventListener("error", e => send("error", `${e.message} @ ${e.filename}:${e.lineno}`));
   addEventListener("unhandledrejection", e => send("error", e.reason?.stack || e.reason));
 }
@@ -116,7 +120,13 @@ connectSource(async (pkt) => {
   lastAt = Date.now();
 });
 
-onAltChange((d) => { alt = d; });
+// **只在真的变化时才记日志。** Rust 那边每秒会无条件重发一次当前状态
+// （见 `altkey.rs` 的失步自愈），不过滤的话日志一秒一条。
+// debug 级，默认的 info 下不落盘；真遇上"Alt 变成切换键"再把级别调到 debug 看这条。
+onAltChange((d) => {
+  if (d !== alt) send("debug", `[alt] ${alt} -> ${d}`);
+  alt = d;
+});
 
 // 没有 GSI 数据时的占位，用于编辑态摆位置——调位置这件事恰恰要在开游戏之前做，
 // 若等到有数据才渲染，没开 Dota 时面板根本不出现，也就无从拖动。

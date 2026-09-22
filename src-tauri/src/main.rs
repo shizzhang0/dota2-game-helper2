@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::log::Level;
-use tauri_plugin_global_shortcut::ShortcutState;
+use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
 /// 编辑态：可拖拽调位置；锁定态整窗鼠标穿透
 static EDIT: AtomicBool = AtomicBool::new(false);
@@ -52,6 +52,18 @@ pub fn set_edit(app: &tauri::AppHandle, on: bool) {
 pub const EDIT_HOTKEY: &str = "ctrl+alt+F10";
 pub const EDIT_HOTKEY_LABEL: &str = "Ctrl+Alt+F10";
 
+/// 「始终显示」开关的热键，规则同上。
+///
+/// **为什么值得再占一个全局热键**：想在对局中途开关它，原本唯一的入口是编辑态，
+/// 而编辑态会抢焦点、取消鼠标穿透——那一刻根本没法继续玩。于是这个开关事实上
+/// 退化成了"开局前设好就别动"，而它最有价值的用法恰恰是中途切换
+/// （对线打钱时开着，团战时关掉免得挡视野）。
+///
+/// **不能用裸字母**：Dota 几乎把字母键占满了。带两个修饰键的 F 区组合不会撞游戏，
+/// 和编辑态的 `Ctrl+Alt+F10` 挨着，同一族好记。
+pub const ALWAYS_HOTKEY: &str = "ctrl+alt+F11";
+pub const ALWAYS_HOTKEY_LABEL: &str = "Ctrl+Alt+F11";
+
 pub fn toggle_edit(app: &tauri::AppHandle) {
     set_edit(app, !EDIT.load(Ordering::Relaxed));
 }
@@ -75,11 +87,21 @@ fn main() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts([EDIT_HOTKEY])
-                .expect("注册编辑态热键失败")
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
+                .with_shortcuts([EDIT_HOTKEY, ALWAYS_HOTKEY])
+                .expect("注册全局热键失败")
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    // **比解析后的 Shortcut，不比字符串**：Display 的规范化写法
+                    // 未必和这里的字面量一致（大小写、修饰键顺序）。
+                    let is = |lit: &str| {
+                        lit.parse::<Shortcut>().map(|s| &s == shortcut).unwrap_or(false)
+                    };
+                    if is(EDIT_HOTKEY) {
                         toggle_edit(app);
+                    } else if is(ALWAYS_HOTKEY) {
+                        settings::toggle_always_show(app);
                     }
                 })
                 .build(),

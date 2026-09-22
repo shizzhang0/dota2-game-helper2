@@ -133,7 +133,9 @@ Alt is detected passively by polling the key state. It **registers no hotkey and
 swallows no input**, so Alt's normal in-game behaviour (Alt-clicking the map and so on)
 is completely unaffected.
 
-> If you'd rather not hold Alt, there's an **Always show** setting. It only removes the
+> If you'd rather not hold Alt, there's **Always show**, reachable three ways:
+> the settings card, the tray menu, or the global hotkey **`Ctrl+Alt+F11`** — use the
+> hotkey to flip it mid-match, since opening the settings steals focus. It only removes the
 > "hold Alt" condition — **it still disappears back in the main menu**, it won't sit on
 > your desktop.
 

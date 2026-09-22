@@ -52,6 +52,18 @@ pub fn get_settings(app: tauri::AppHandle) -> serde_json::Value {
     load(&app)
 }
 
+/// 翻转「始终显示」。给全局热键和托盘菜单共用。
+///
+/// 走 `set_settings` 而不是自己写盘：那条路上还挂着托盘菜单重建（勾选状态要跟着变）
+/// 和给前端的 `settings` 事件，绕过去就会各改各的。
+pub fn toggle_always_show(app: &tauri::AppHandle) {
+    let mut v = load(app);
+    let now = !v["alwaysShow"].as_bool().unwrap_or(false);
+    v["alwaysShow"] = serde_json::Value::Bool(now);
+    set_settings(app.clone(), v);
+    crate::logf!(crate::log::Level::Info, "[settings] 始终显示 = {now}");
+}
+
 #[tauri::command]
 pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
     let mut merged = defaults();
