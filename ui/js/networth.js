@@ -25,6 +25,7 @@ const TP_GIFT_WINDOW = 3;
 
 /** 认"买真眼进架子"时允许的金币偏差。同一包里的被动收入约 +2，取 8 够宽也够紧。 */
 const SENTRY_TOL = 8;
+const SENTRY_MAX_BUY = 2;   // 一包里最多认几个真眼，见 noteDispenser
 
 /** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
 const SPEND_MIN = 150;
@@ -398,8 +399,13 @@ export class EconTracker {
       //
       // 现有的八局观战语料全是快速模式（实测 72 次阵亡金币一次没掉），
       // **这条挡板在其中测不出效果**——它是按机制加的，不是按数据加的。
-      if (!died && Math.abs(paid - sentry) <= SENTRY_TOL && assetUp < sentry / 2)
-        this.dispenserValue += sentry;
+      // 一次可以买不止一个。实测认到两个（100 金）三局改善、一局退 1.4、两局不变；
+      // 放到三个一分不涨——买第三个的时候架子早满了。
+      if (!died && assetUp < sentry / 2) {
+        for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
+          if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
+        }
+      }
       this.dispenserValue = Math.max(0, this.dispenserValue - placedSentries * sentry);
     }
     this.prevWards = wards;
