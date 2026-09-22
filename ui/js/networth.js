@@ -483,6 +483,26 @@ export class EconTracker {
   }
 
   update(state, prices, C, clock, placedSentries = 0) {
+    // **时钟倒流 = 换局/重开，整份作废。** 和 `WardTracker` / `EventTracker` 一个口径。
+    //
+    // 原先这里只清 `transit` / `spend` / `prevBase` 三项。不够——留下来的是
+    // **带时间戳的状态**，倒流之后时间戳落在未来，判据全部失灵：
+    //
+    // | 字段 | 后果 |
+    // |---|---|
+    // | `lastBuyback` | `clock - lastBuyback` 是大负数，恒 `<= BUYBACK_GRACE`，**支出账整局每包提前返回，彻底不工作** |
+    // | `giftAt` | `clock - giftAt <= TP_GIFT_WINDOW` 恒真，整局 TP 全算白送 |
+    // | `proxy[].at` | `clock - at >= TRANSIT_TTL` 恒假，代拿的宝石永不计入 |
+    // | `dispenserValue` / `seenVariants` / `activeBuffs` / `prevShard` | 跨局残留 |
+    //
+    // `main.js` 那边靠 `info.newMatch`（matchid 变）调 `reset()`，挡得住换局，
+    // 挡不住"同一 matchid 内时钟倒流"——而这个分支正是专门为它写的。
+    //
+    // **只认 `clock >= 0` 的倒流。** 号角前 clock 本就不单调（选人阶段先倒计时
+    // 一轮，再重置到 -90 数到 0），那种不是换局，走下面的轻量分支。
+    if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
+      this.reset();
+    }
     const { slot, stash, wards, dispenser } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
@@ -504,8 +524,9 @@ export class EconTracker {
     this.noteTp(state.items, died || this.noteTpGift(state.items, clock), clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
-    // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
-    if (clock === null || clock < 0 || (this.lastClock !== null && clock < this.lastClock - 5)) {
+    // 用它算超时不成立，这一段只记录状态、不做在途推断。
+    // （换局重开那条已经在函数开头整份 reset 掉了，不再在这里兜。）
+    if (clock === null || clock < 0) {
       this.transit = [];
       this.spend = [];
       this.prevBase = null;
