@@ -10,7 +10,7 @@
   "bounty": { "start": 0, "every": 180 },
   "lotus":  { "start": 90, "every": 90 },
   "wisdom": { "start": 420, "every": 420 },
-  "stack":  { "every": 60, "windowStart": 50 },
+  "stack":  { "every": 60 },
   "glyphCooldown": 300,
   "pregameLength": 60,
   "glyphFirstReady": 270,
