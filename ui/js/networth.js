@@ -282,6 +282,7 @@ export class EconTracker {
     this.giftAt = null;             // 最近一次拿到"送 TP 的东西"的时刻
     this.spend = [];                // 说不清去向的支出：钱花了、东西还没出现（见 noteSpend）
     this.lastBuyback = null;        // 最近一次自己买活的时刻，买活掉的钱不是花钱
+    this.seenBuybacks = new Set();  // 买活事件去重，GSI 会连着几十包重复推同一条
     this.prevBase = null;           // 上一包的"非金钱资产"（不含 spend 账），给 noteSpend 做差用
     this.tpQueue = [];              // 每个充能是不是自己买的；用掉时先扣白送的
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
@@ -357,6 +358,15 @@ export class EconTracker {
    * **不能靠 `hero.alive` 挡买活**：买活的瞬间人就复活了，掉钱那一包 `alive`
    * 已经是 `true`。实测不挡的话，1789397873 的 slot9 买活共花 5376，
    * 终值偏差就正好炸出 5376。
+   *
+   * **必须去重。** GSI 会在连续多包里重复推同一条事件——实测八局里每条买活
+   * 平均被推 **53.7 包**（最多 55 包，约 27 秒）。不去重的话 `lastBuyback`
+   * 一路被刷到最后一包，`BUYBACK_GRACE = 5` 实际变成 **32 秒**，
+   * 这期间 `noteSpend` 一分钱都不记。
+   *
+   * 键取 `type|time|playerid1`，和 `minimap.js` 的排眼去重一个口径。
+   * （`events.js` 读的是本包的 `packet.events`，这里只拿得到缓存池合并后的
+   * `state.events`，所以更需要自己去重。）
    */
   noteBuyback(state, clock) {
     const mine = mySlot(state.player);
@@ -365,7 +375,11 @@ export class EconTracker {
       if (!e || e.event_type !== "generic_event" || typeof e.data !== "string") continue;
       let d;
       try { d = JSON.parse(e.data); } catch { continue; }
-      if (d.type === "CHAT_MESSAGE_BUYBACK" && d.playerid1 === mine) this.lastBuyback = clock;
+      if (d.type !== "CHAT_MESSAGE_BUYBACK" || d.playerid1 !== mine) continue;
+      const id = `${d.time}|${d.playerid1}`;
+      if (this.seenBuybacks.has(id)) continue;
+      this.seenBuybacks.add(id);
+      this.lastBuyback = clock;
     }
   }
 
