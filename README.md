@@ -103,7 +103,7 @@ GPM and XPM.
 | Channel | Values |
 |---|---|
 | Colour | cyan = yours · red = enemy · amber = expiring within 60s |
-| Shape | filled circle = observer · hollow ring = sentry · **cross = just dewarded** |
+| Shape | filled circle = observer · hollow ring = sentry · **cross = dewarded** (stays 20s, fading out) |
 
 In the shot above a cyan ring and a red ring sit side by side — both sentries, one
 yours and one theirs.
