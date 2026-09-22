@@ -373,7 +373,15 @@ export class EconTracker {
       if (clock !== null && clock - this.dispenserGone > DISPENSER_GRACE) this.dispenserValue = 0;
     } else {
       this.dispenserGone = null;
-      if (!this.prevDispenser) this.dispenserValue += this.prevWards;   // 刚合成，价值平移
+      // **散装眼少了多少，就往架子里平移多少**——不只是刚合成那一次。
+      // 原先写的是 `if (!this.prevDispenser)`，只在眼架第一次出现时平移；
+      // 而后面再买眼往往是**先进物品栏、再并进已有的架子**，那部分价值就凭空蒸发了。
+      // 实测 matchid 9009513738 的 slot1：25:58 一个散装真眼、28:13 三个，
+      // 下一包全并进架子，我们的估值一动不动。
+      //
+      // 散装眼也可能是被**插掉**而不是并进架子——那种情况下面的 placedSentries
+      // 会再扣一次，一加一减正好抵消，不用在这里分辨。
+      this.dispenserValue += Math.max(0, this.prevWards - wards);
       const sentry = prices.ward_sentry?.cost ?? 50;
       // **买真眼进架子只能靠金币认出来。** 原先读 `CHAT_MESSAGE_ITEM_PURCHASE`，
       // 而**买眼根本不发这个事件**——实测一整局 `id=42/43/218` 一条都没有，
