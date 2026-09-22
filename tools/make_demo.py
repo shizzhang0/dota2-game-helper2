@@ -16,12 +16,19 @@
     map.clock_time        timers.js 全部倒计时的基准
     map.game_state        match.js 判 inMatch
     map.paused            match.js
-    player.team_name      match.js 定我方阵营；也是"是不是观战"的判据
+    player.team_name      match.js 定我方阵营；也是"是不是观战"的判据；
+                          networth.js 的 mySlot() 也要它（夜魇要加 5）
+    player.team_slot      networth.js 的 mySlot()——**items[].purchaser 的全部意义在此**，
+                          少了它 mySlot() 返回 null，notOwnedBy() 直接放行，
+                          队友和敌方的东西会全算成自己的
     player.gold           networth.js
     player.gold_from_income  match.js 判普通局还是快速组队
     player.gpm / xpm      networth.js
-    hero.alive            networth.js 的 TP 判据
-    hero.permanent_buffs  networth.js 的吞噬类 buff（魔晶、神杖、月之碎片…）
+    player.deaths         networth.js：TP 自购/白送的判据，以及支出账和眼架
+                          两处"掉钱不等于花钱"的挡板。**比 hero.alive 早一包**
+    hero.alive            networth.js 的死亡期挡板（阵亡那一包用 deaths，不用它）
+    hero.aghanims_shard   networth.js 的魔晶（1400），走 flag 不走物品栏
+    hero.permanent_buffs  networth.js 的吞噬类 buff（神杖、月之碎片…）
     hero.xpos / ypos      minimap.js 判"眼是不是插在自己脚下"
     items.name/charges/purchaser  networth.js（整段的其余字段——冷却、
                           可否施放、等级——一个都没人读）
@@ -34,11 +41,17 @@
 import argparse, json, re, sys
 from pathlib import Path
 
+# Windows 控制台默认是 cp1252/cp936，脚本的输出全是中文，不改会在 print 那里
+# UnicodeEncodeError 退出 1——而文件其实已经写出去了，最容易误判成"生成失败"。
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8")
+    except Exception: pass
+
 ROOT = Path(__file__).resolve().parent.parent
 
 MAP_KEYS = ("matchid", "clock_time", "game_state", "paused")
-PLAYER_KEYS = ("team_name", "gold", "gold_from_income", "gpm", "xpm")
-HERO_KEYS = ("alive", "permanent_buffs", "xpos", "ypos")
+PLAYER_KEYS = ("team_name", "team_slot", "gold", "gold_from_income", "gpm", "xpm", "deaths")
+HERO_KEYS = ("alive", "aghanims_shard", "permanent_buffs", "xpos", "ypos")
 # networth.js 只读这三个；purchaser 用来认"谁买的"
 ITEM_KEYS = ("name", "charges", "purchaser")
 

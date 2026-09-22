@@ -12,6 +12,11 @@ export function loadPrices() {
 
 const TRANSIT_TTL = 90;   // 秒（游戏时钟）：信使飞完全图也用不了这么久
 
+/** 会被队友代拿、而官方仍按 `purchaser` 算给买方的物品。见 noteProxy。
+    九局观战语料里「东西在别人包里」的全部价值几乎都是真视宝石：
+    gem 出现 5013 包、单价 900，其余是烟(50)、眼(0/50)、树苗(30) 这种零头。 */
+const PROXY_ITEMS = { gem: true };
+
 /** 买到手就送一张免费 TP 的东西。合成飞鞋、升二级飞鞋各送一张。 */
 const TP_GIFT_ITEMS = ["travel_boots", "travel_boots_2"];
 
@@ -22,6 +27,10 @@ const TP_GIFT_ITEMS = ["travel_boots", "travel_boots_2"];
  * 19:59 出 `travel_boots`、**20:00** 充能才 +1，差一包就没认出来，终值多算 100。
  */
 const TP_GIFT_WINDOW = 3;
+
+/** 认"买真眼进架子"时允许的金币偏差。同一包里的被动收入约 +2，取 8 够宽也够紧。 */
+const SENTRY_TOL = 8;
+const SENTRY_MAX_BUY = 2;   // 一包里最多认几个真眼，见 noteDispenser
 
 /** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
 const SPEND_MIN = 150;
@@ -49,41 +58,6 @@ function soldFromStash(lost, dGold) {
 }
 
 /**
- * 本包里"我"新买了哪些东西。GSI 的购买事件只给物品 id，靠价格表里的 id 反查名字。
- *
- * **必须去重**：events 是缓存池里的一段，同一条事件会在后续每一包里重复出现，
- * 直接累加会把一次购买算上几十次（实测眼架能涨到一万多）。用 `type|time` 当键，
- * 和 EventTracker 里的做法一致。
- */
-function myPurchases(state, prices, mine, seen) {
-  const out = [];
-  if (mine === null) return out;
-  for (const e of Object.values(state.events || {})) {
-    if (!e || e.event_type !== "generic_event" || typeof e.data !== "string") continue;
-    let d;
-    try { d = JSON.parse(e.data); } catch { continue; }
-    if (d.type !== "CHAT_MESSAGE_ITEM_PURCHASE") continue;
-    const key = d.type + "|" + d.time + "|" + d.value + "|" + d.playerid1;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (d.playerid1 === mine) out.push(d.value);
-  }
-  return out;
-}
-
-/** 物品 id -> 表里的条目。只建一次，价格表一局之内不变。 */
-let BY_ID = null, BY_ID_SRC = null;
-function byId(prices, id) {
-  if (BY_ID_SRC !== prices) {
-    BY_ID_SRC = prices;
-    BY_ID = new Map();
-    for (const [name, v] of Object.entries(prices))
-      if (v && typeof v.id === "number") BY_ID.set(v.id, name);
-  }
-  return BY_ID.get(id);
-}
-
-/**
  * 单件物品的价值。消耗品按充能数折算——`价格 × 当前充能 ÷ 满充能`。
  * 这一个公式同时管两件事：
  *   · **用剩的**（树苗 1/4 → 23）不值一整份的钱
@@ -95,6 +69,22 @@ function byId(prices, id) {
  *
  * 注意瓶子有充能但不算消耗品，空瓶依然值全价，这里靠 consumable 标志区分。
  */
+/** 没标 consumable、但**用完就没**因而官方也按充能折价的物品。
+ *
+ *  判据不在数据里：`ItemQuality` 只把真·消耗品标成 consumable，而瓶子、
+ *  梅肯、夜叉同样有充能却**不折价**（空瓶仍值全价）。所以只能实测。
+ *  九局语料里逐个查过，符合"充能减一、官方物品值就掉 cost/charges"的只有雨滴：
+ *
+ *  | 物品 | 按充能折价 | 不折价 |
+ *  |---|---|---|
+ *  | `infused_raindrop` | **86 次** | 8 次 |
+ *  | `bottle` | 0 | 413 次 |
+ *  | `holy_locket` | 0 | 176 次 |
+ *  | `hand_of_midas` | 0 | 35 次 |
+ *
+ *  不折价那 8 次是同包里还有别的事在发生。 */
+const CHARGE_SCALED = { infused_raindrop: true };
+
 function itemCost(it, prices) {
   const n = it.name;
   if (!n || n === "empty") return 0;
@@ -102,7 +92,8 @@ function itemCost(it, prices) {
   if (!info) return 0;
   const base = info.cost || 0;
   const max = info.charges;
-  if (info.consumable && max > 0 && typeof it.charges === "number" && it.charges >= 0) {
+  const scaled = info.consumable || CHARGE_SCALED[n.replace(/^item_/, "")];
+  if (scaled && max > 0 && typeof it.charges === "number" && it.charges >= 0) {
     return Math.round(base * it.charges / max);
   }
   return base;
@@ -147,9 +138,45 @@ function shardValue(prices, C) {
 
 /** 把物品栏拆成"装备栏价值 / 储藏处价值"。中立物品不花钱（价格表里也确实是 0）；
  *  传送槽每局白送一个 TP，计入会让开局虚高 100。 */
+/** 传送槽里有几张卷轴。它不进 `slot`，但对"钱变成了什么"的判断是真资产。 */
+function tpCharges(items) {
+  const tp = (items || {}).teleport0;
+  return tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
+}
+
+/** 我自己的物品，**按名字分组**的价值。
+ *
+ *  为什么不能只看总和：合成会让"组件没了、成品出现"在总和里互相抵消，
+ *  而记账要分得清"多出来的是什么"和"少掉的是什么"。
+ *
+ *  传送槽也算进来。它不进 `slot`（价值由 `boughtTp` 单独记），但买一张 TP
+ *  确实是"钱变成了东西"，不算进来的话两张 TP（200 金）会被记成说不清的支出。
+ */
+function ownedByName(items, prices, player) {
+  const mine = mySlot(player);
+  const m = new Map();
+  for (const [k, it] of Object.entries(items || {})) {
+    if (!it || typeof it !== "object") continue;
+    if (!(k.startsWith("slot") || k.startsWith("stash") || k.startsWith("teleport"))) continue;
+    if (notOwnedBy(it, mine)) continue;
+    const name = (it.name || "").replace(/^item_/, "");
+    if (!name || name === "empty") continue;
+    m.set(name, (m.get(name) || 0) + itemCost(it, prices));
+  }
+  return m;
+}
+
+/** 两张价值表之间**新出现**的价值（按名字逐项取正差再求和）。 */
+function appearedValue(now, prev) {
+  if (!prev) return 0;
+  let v = 0;
+  for (const [n, c] of now) v += Math.max(0, c - (prev.get(n) || 0));
+  return v;
+}
+
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
-  let slot = 0, stash = 0, wards = 0, dispenser = false;
+  let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false;
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
     if (k.startsWith("neutral") || k.startsWith("preserved_neutral") || k.startsWith("teleport")) continue;
@@ -159,11 +186,14 @@ function itemValues(items, prices, player) {
     // 所以它不走物品价，由 EconTracker 单独跟踪，见 dispenserValue。
     if (name === "ward_dispenser") { dispenser = true; continue; }
     const cost = itemCost(it, prices);
-    // 散装的眼要单独记：眼架合成的那一刻，它们的价值要平移进眼架
-    if (name === "ward_sentry" || name === "ward_observer") wards += cost;
+    // 散装的眼要单独记：眼架合成的那一刻，它们的价值要平移进眼架。
+    // **装备栏和储藏处分开数**，两处少掉的含义完全不同，见 noteDispenser。
+    if (name === "ward_sentry" || name === "ward_observer") {
+      if (k.startsWith("stash")) wardsStash += cost; else wards += cost;
+    }
     if (k.startsWith("stash")) stash += cost; else slot += cost;
   }
-  return { slot, stash, wards, dispenser };
+  return { slot, stash, wards, wardsStash, dispenser };
 }
 
 /**
@@ -232,11 +262,17 @@ export class EconTracker {
   constructor() { this.reset(); }
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
+    this.proxy = [];   // 我买的、此刻不在我包里的宝石，见 noteProxy
+    this.prevProxySlot = null; this.prevProxyStash = null;
+    this.prevTpSlot = null;
+    this.prevNames = null;         // 上一包按名字分组的物品价值，见 noteSpend
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.dispenserValue = 0;        // 眼架里装的眼值多少钱（GSI 不告诉我们，只能自己跟）
-    this.seenBuys = new Set();      // 已处理过的购买事件，events 段会重复推送
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
-    this.prevWards = 0;             // 上一包散装眼的价值，用来接住"合成眼架"那一刻
+    this.prevWards = 0;             // 上一包装备栏里散装眼的价值，用来接住"合成眼架"那一刻
+    this.prevWardsStash = 0;        // 同上，储藏处那一份（口径不同，见 noteDispenser）
+    this.dispFromStash = 0;         // 眼架估值里有多少是"从储藏处平移来的"，可能要退回
+    this.wardsMovedFromStash = 0;   // 这一包平移了多少，在途那边要把它从 lost 里扣掉
     this.prevDispenser = false;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.prevTp = null;             // 传送槽充能数
@@ -246,6 +282,7 @@ export class EconTracker {
     this.giftAt = null;             // 最近一次拿到"送 TP 的东西"的时刻
     this.spend = [];                // 说不清去向的支出：钱花了、东西还没出现（见 noteSpend）
     this.lastBuyback = null;        // 最近一次自己买活的时刻，买活掉的钱不是花钱
+    this.seenBuybacks = new Set();  // 买活事件去重，GSI 会连着几十包重复推同一条
     this.prevBase = null;           // 上一包的"非金钱资产"（不含 spend 账），给 noteSpend 做差用
     this.tpQueue = [];              // 每个充能是不是自己买的；用掉时先扣白送的
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
@@ -321,6 +358,15 @@ export class EconTracker {
    * **不能靠 `hero.alive` 挡买活**：买活的瞬间人就复活了，掉钱那一包 `alive`
    * 已经是 `true`。实测不挡的话，1789397873 的 slot9 买活共花 5376，
    * 终值偏差就正好炸出 5376。
+   *
+   * **必须去重。** GSI 会在连续多包里重复推同一条事件——实测八局里每条买活
+   * 平均被推 **53.7 包**（最多 55 包，约 27 秒）。不去重的话 `lastBuyback`
+   * 一路被刷到最后一包，`BUYBACK_GRACE = 5` 实际变成 **32 秒**，
+   * 这期间 `noteSpend` 一分钱都不记。
+   *
+   * 键取 `type|time|playerid1`，和 `minimap.js` 的排眼去重一个口径。
+   * （`events.js` 读的是本包的 `packet.events`，这里只拿得到缓存池合并后的
+   * `state.events`，所以更需要自己去重。）
    */
   noteBuyback(state, clock) {
     const mine = mySlot(state.player);
@@ -329,7 +375,11 @@ export class EconTracker {
       if (!e || e.event_type !== "generic_event" || typeof e.data !== "string") continue;
       let d;
       try { d = JSON.parse(e.data); } catch { continue; }
-      if (d.type === "CHAT_MESSAGE_BUYBACK" && d.playerid1 === mine) this.lastBuyback = clock;
+      if (d.type !== "CHAT_MESSAGE_BUYBACK" || d.playerid1 !== mine) continue;
+      const id = `${d.time}|${d.playerid1}`;
+      if (this.seenBuybacks.has(id)) continue;
+      this.seenBuybacks.add(id);
+      this.lastBuyback = clock;
     }
   }
 
@@ -397,29 +447,72 @@ export class EconTracker {
    * 幅度不超过架子里的存货，且眼架一空就归零、不会跨局累积。
    * 假眼不用管，它本来就不要钱。
    */
-  noteDispenser(state, prices, wards, dispenser, placedSentries, clock) {
-    // **每一包都要把购买事件消费掉**，哪怕当时没有架子。只在有架子时才读，
-    // 那些"合成之前买的眼"就会一直留在未处理集合里，等架子一出现被重新算一遍——
-    // 于是价值既随物品平移进来、又被事件加一次，正好翻倍。
-    const buys = myPurchases(state, prices, mySlot(state.player), this.seenBuys)
-      .map(id => byId(prices, id));
+  noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock, paid, assetUp, died) {
+    this.wardsMovedFromStash = 0;
     if (!dispenser) {
       // 架子会短暂消失：被信使拿走的十几秒里 GSI 完全看不见它（实测一次 10 秒）。
       // 立刻清零就把刚合成的价值丢了，所以给一段宽限；真的用完了，
       // 上面的插眼扣减本来也已经把它扣到 0。
       if (this.dispenserGone === null) this.dispenserGone = clock;
-      if (clock !== null && clock - this.dispenserGone > DISPENSER_GRACE) this.dispenserValue = 0;
+      if (clock !== null && clock - this.dispenserGone > DISPENSER_GRACE) {
+        this.dispenserValue = 0;
+        this.dispFromStash = 0;
+      }
     } else {
       this.dispenserGone = null;
-      if (!this.prevDispenser) this.dispenserValue += this.prevWards;   // 刚合成，价值平移
-      for (const name of buys) {
-        if (name === "ward_sentry" || name === "ward_observer")
-          this.dispenserValue += prices[name]?.cost ?? 0;
-      }
+      // **散装眼少了多少，就往架子里平移多少**——不只是刚合成那一次。
+      // 原先写的是 `if (!this.prevDispenser)`，只在眼架第一次出现时平移；
+      // 而后面再买眼往往是**先进物品栏、再并进已有的架子**，那部分价值就凭空蒸发了。
+      // 实测 matchid 9009513738 的 slot1：25:58 一个散装真眼、28:13 三个，
+      // 下一包全并进架子，我们的估值一动不动。
+      //
+      // 散装眼也可能是被**插掉**而不是并进架子——那种情况下面的 placedSentries
+      // 会再扣一次，一加一减正好抵消，不用在这里分辨。
+      //
+      // **储藏处里的眼少掉，可能是并进架子、也可能是信使来取，形状一模一样。**
+      // 两条路在这一刻分不开，但**后来能分开**：信使送的那份会**回到装备栏**，
+      // 并进架子的不会。所以先一律当成并进架子，记住其中来自储藏处的那部分
+      // （`dispFromStash`）；一旦散装眼回到装备栏，就按回来的量退回去。
+      //
+      // 同一包里在途账也会为这笔记一遍（储藏处少了、装备栏没多）。两边都记
+      // 就是同一笔钱记两遍——实测八局里 **45 次、涉及 3500 金**，比真正的
+      // "并进架子"（30 次）还多。所以把这部分从在途的 `lost` 里扣掉，
+      // 用 `wardsMovedFromStash` 传过去。
+      const fromSlot = Math.max(0, this.prevWards - wards);
+      const fromStash = Math.max(0, this.prevWardsStash - wardsStash);
+      const undo = Math.min(Math.max(0, wards - this.prevWards), this.dispFromStash);
+      this.dispenserValue = Math.max(0, this.dispenserValue - undo);
+      this.dispFromStash -= undo;
+      this.dispenserValue += fromSlot + fromStash;
+      this.dispFromStash += fromStash;
+      this.wardsMovedFromStash = fromStash;
       const sentry = prices.ward_sentry?.cost ?? 50;
+      // **买真眼进架子只能靠金币认出来。** 原先读 `CHAT_MESSAGE_ITEM_PURCHASE`，
+      // 而**买眼根本不发这个事件**——实测一整局 `id=42/43/218` 一条都没有，
+      // 那条路是死代码。于是估值只能从"合成那一刻的散装眼平移"拿到一次，
+      // 之后只减不增，必然漂到 0：matchid 9009513738 的 slot1（辅助）17:24 之后
+      // 我们一直估 0，而官方的真值一路涨到 250。
+      //
+      // 判据窄且硬：**手上有架子 + 这一包掉了约 50 的整数倍 + 装备/储藏处没多东西**
+      // = 钱变成了架子里的真眼。假眼不花钱，所以不会被误加。
+      // **只挡阵亡那一包，不挡整个死亡期。** 普通模式阵亡会掉金币，掉的量恰好落在
+      // 50 附近就会被误判成买了真眼——但掉钱只发生在死的那一刻。
+      // 而**人死着的时候照样能买东西**，辅助更是死了就顺手补眼：实测把整个死亡期
+      // 都挡掉，辅助那局立刻从"完全准 45.5% / 平均差 51"退回"38.6% / 79"。
+      //
+      // 现有的八局观战语料全是快速模式（实测 72 次阵亡金币一次没掉），
+      // **这条挡板在其中测不出效果**——它是按机制加的，不是按数据加的。
+      // 一次可以买不止一个。实测认到两个（100 金）三局改善、一局退 1.4、两局不变；
+      // 放到三个一分不涨——买第三个的时候架子早满了。
+      if (!died && assetUp < sentry / 2) {
+        for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
+          if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
+        }
+      }
       this.dispenserValue = Math.max(0, this.dispenserValue - placedSentries * sentry);
     }
     this.prevWards = wards;
+    this.prevWardsStash = wardsStash;
     this.prevDispenser = dispenser;
   }
 
@@ -433,18 +526,50 @@ export class EconTracker {
   }
 
   update(state, prices, C, clock, placedSentries = 0) {
-    const { slot, stash, wards, dispenser } = itemValues(state.items, prices, state.player);
+    // **时钟倒流 = 换局/重开，整份作废。** 和 `WardTracker` / `EventTracker` 一个口径。
+    //
+    // 原先这里只清 `transit` / `spend` / `prevBase` 三项。不够——留下来的是
+    // **带时间戳的状态**，倒流之后时间戳落在未来，判据全部失灵：
+    //
+    // | 字段 | 后果 |
+    // |---|---|
+    // | `lastBuyback` | `clock - lastBuyback` 是大负数，恒 `<= BUYBACK_GRACE`，**支出账整局每包提前返回，彻底不工作** |
+    // | `giftAt` | `clock - giftAt <= TP_GIFT_WINDOW` 恒真，整局 TP 全算白送 |
+    // | `proxy[].at` | `clock - at >= TRANSIT_TTL` 恒假，代拿的宝石永不计入 |
+    // | `dispenserValue` / `seenVariants` / `activeBuffs` / `prevShard` | 跨局残留 |
+    //
+    // `main.js` 那边靠 `info.newMatch`（matchid 变）调 `reset()`，挡得住换局，
+    // 挡不住"同一 matchid 内时钟倒流"——而这个分支正是专门为它写的。
+    //
+    // **只认 `clock >= 0` 的倒流。** 号角前 clock 本就不单调（选人阶段先倒计时
+    // 一轮，再重置到 -90 数到 0），那种不是换局，走下面的轻量分支。
+    if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
+      this.reset();
+    }
+    const { slot, stash, wards, wardsStash, dispenser } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
-    this.noteDispenser(state, prices, wards, dispenser, placedSentries, clock);
-    this.noteVariants(state.items);
     const died = this.noteDeaths(state.player);
+    // **传送槽也要算进资产。** 它不进 `slot`（价值由 boughtTp 单独记），
+    // 于是"花了 100 金、装备栏没多东西"的形状和"买了两个真眼进架子"一模一样——
+    // 实测 1789397873 的 slot1 每买一张 TP 就被误加 100 眼架，一路挂到终局。
+    const tpNow = tpCharges(state.items);
+    const tpUp = (tpNow - (this.prevTpSlot ?? tpNow)) * (prices.tpscroll?.cost ?? 100);
+    this.prevTpSlot = tpNow;
+    this.noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock,
+                       goldBefore === null ? 0 : goldBefore - gold,
+                       (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
+                       died);
+    this.noteProxy(state.items, prices, state.player, clock,
+                   goldBefore === null ? 0 : gold - goldBefore);
+    this.noteVariants(state.items);
     this.noteBuyback(state, clock);
     this.noteTp(state.items, died || this.noteTpGift(state.items, clock), clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
-    // 用它算超时不成立；换局重开同理。这两种情况下只记录状态，不做在途推断。
-    if (clock === null || clock < 0 || (this.lastClock !== null && clock < this.lastClock - 5)) {
+    // 用它算超时不成立，这一段只记录状态、不做在途推断。
+    // （换局重开那条已经在函数开头整份 reset 掉了，不再在这里兜。）
+    if (clock === null || clock < 0) {
       this.transit = [];
       this.spend = [];
       this.prevBase = null;
@@ -457,7 +582,8 @@ export class EconTracker {
     this.lastClock = clock;
 
     if (this.prevStash !== null) {
-      const lost = this.prevStash - stash;      // 储藏处减少的价值
+      // 减掉刚平移进眼架的那部分：储藏处少的是它，不是信使取走的（见 noteDispenser）
+      const lost = this.prevStash - stash - this.wardsMovedFromStash;
       const gained = slot - this.prevSlot;      // 装备栏增加的价值
       const back = stash - this.prevStash;      // 储藏处变多了多少
       const paid = this.prevGold - gold;        // 这一包花了多少
@@ -484,7 +610,8 @@ export class EconTracker {
     this.noteBuffs(state.hero, prices, C);
     this.noteShard(state.hero, prices, C);
     const out = this.total(state, prices, C, slot, stash);
-    this.noteSpend(out, gold, goldBefore, clock, died, state.hero);
+    this.noteSpend(out, gold, goldBefore, clock, died, state.hero,
+                   ownedByName(state.items, prices, state.player));
     return out;
   }
 
@@ -507,22 +634,43 @@ export class EconTracker {
    * **必须挡住阵亡**：死了也会掉钱，那不是花钱。用 `player.deaths` 判，
    * 不用 `hero.alive`（后者晚一包，正好错过掉钱那一刻）。
    */
-  noteSpend(out, gold, goldBefore, clock, died, hero) {
+  noteSpend(out, gold, goldBefore, clock, died, hero, names) {
     const ledger = this.spend.reduce((a, t) => a + t.v, 0);
     const base = out.networth - gold - ledger;      // 不含金钱、也不含这本账的资产
     const prev = this.prevBase;
+    const prevNames = this.prevNames;
     this.prevBase = base;
+    this.prevNames = names;
     if (prev === null || goldBefore === null) return;
-    const got = base - prev;                        // 资产侧多了多少
-    if (got > 0) this.deliverSpend(got);            // 东西出现了，冲销掉对应的那笔
-    // 死着的时候不记账：阵亡会掉钱，**买活更会**——而买活的钱官方不算
+
+    // 死着的时候不记账也不冲销：阵亡会掉钱，**买活更会**——而买活的钱官方不算
     // （实测 1789397873 的 slot9 买活共 5376，正是不挡时终值炸出来的那个数）。
     // 阵亡那一包用 deaths 判（alive 晚一包，正好错过掉钱那一刻），
     // 之后整段死亡期用 alive 判（这时它已经不滞后了）。
-    if (died || hero?.alive === false) return;
-    if (this.lastBuyback !== null && clock - this.lastBuyback <= BUYBACK_GRACE) return;
-    const spent = goldBefore - gold;
-    const missing = spent - Math.max(0, got);
+    const dead = died || hero?.alive === false
+                 || (this.lastBuyback !== null && clock - this.lastBuyback <= BUYBACK_GRACE);
+    const spent = dead ? 0 : goldBefore - gold;     // 掉的钱不是花的钱
+
+    // 冲销仍按资产总值的增量走。**试过"扣掉这一包自己付过的钱"再冲销**
+    // （理由是买件看得见的东西不该去销旧账），实测更差：m9006189153 的 `=0`
+    // 从 70.9% 掉到 66.1%、平均|差| 44→56、终值 0→689，其余各局基本不动。
+    const got = base - prev;
+    if (got > 0) this.deliverSpend(got);
+
+    if (dead) { out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0); return; }
+
+    // **"东西出现了没有"要按物品身份判，光看资产总值会漏。**
+    // `got` 是资产总值的增量，同一包里**卖掉的东西**会把它压低，于是"边卖边买"
+    // 凭空记出一笔假账：实测 1789397873 的 slot1 在 17:26 卖掉 505 的空灵挂饰
+    // （回 252）同时买了 2200 的两个大件，净支出 1946 而 `got` 只有 1695，
+    // 多记了 251。按名字看"新出现的物品值多少钱"是 2200 ≥ 1946，一分钱都不欠。
+    //
+    // 两个口径**取大的那个**，谁能解释掉这笔钱就听谁的：
+    // `appeared` 看不见在途账和眼架的增量（它们不在物品栏里），`got` 看不见
+    // 被卖掉/被合成吃掉的部分。八局对账里取大的一档 `=0` 五升三平零退，
+    // 平均|差| 四升三平，m8988783173 的终值 448→200。
+    const appeared = appearedValue(names, prevNames);
+    const missing = spent - Math.max(appeared, got, 0);
     if (spent >= SPEND_MIN && missing >= SPEND_MIN) this.spend.push({ v: missing, at: clock });
     out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0);
   }
@@ -568,10 +716,73 @@ export class EconTracker {
     this.prevShard = has;
   }
 
+  /** 我买的真视宝石不在我包里了 —— 官方还照算给我，我们也得照算。
+   *
+   * **官方净资产按 `purchaser` 认人**，东西在谁手上不影响。辅助买了宝石让核心
+   * 背着（或者死了掉在地上）是常规操作，这时自视角就什么也看不见了。
+   * 实测 matchid 9006189153 的 slot2：27:46 宝石转给队友，一直到终局 15 分钟，
+   * 我们一路低 900。
+   *
+   * **只跟宝石。** 原本想做成通用的"东西没了就继续算"，做不成：物品从包里消失
+   * 最常见的原因是**被合成吃掉**，而组件不会再以同名回来，没有配方表就分不清
+   * 它和"送人了"。实测通用版把平均偏差从 39 炸到 1687，加了一堆补丁（总值不降、
+   * 成品按金额吸收组件、buff 物品豁免）之后仍然三局退步。
+   * 而语料说这一类的钱几乎全在宝石上——宝石不是任何东西的组件，也不是消耗品，
+   * 单跟它就够，且没有上面那些坑。
+   *
+   * 只接管 `TRANSIT_TTL` 之后的时间段：前 90 秒归在途账管（信使在送），不重叠。
+   */
+  noteProxy(items, prices, player, clock, goldUp) {
+    const mine = mySlot(player);
+    let inSlot = 0, inStash = 0;
+    for (const [k, it] of Object.entries(items || {})) {
+      if (!it || typeof it !== "object") continue;
+      if (!(k.startsWith("slot") || k.startsWith("stash"))) continue;
+      if (notOwnedBy(it, mine)) continue;
+      const name = (it.name || "").replace(/^item_/, "");
+      if (!PROXY_ITEMS[name]) continue;
+      if (k.startsWith("stash")) inStash++; else inSlot++;
+    }
+    const pSlot = this.prevProxySlot ?? inSlot;
+    const pStash = this.prevProxyStash ?? inStash;
+    this.prevProxySlot = inSlot;
+    this.prevProxyStash = inStash;
+    if (clock === null) return;
+    const cost = prices.gem?.cost ?? 900;
+    const held = inSlot + inStash, prev = pSlot + pStash;
+    // 回到包里了：销账。（装备栏↔储藏处之间挪动不算离开，held 不变）
+    for (let i = held - prev; i > 0 && this.proxy.length; i--) this.proxy.shift();
+    // 离开包里了。卖掉不算——Dota 卖价是半价。
+    //
+    // **从哪一侧离开决定什么时候开始算。** 从储藏处离开的，在途账会为它记一笔
+    // （`lost = prevStash - stash`），所以让位 `TRANSIT_TTL` 秒免得重复；
+    // 而**从装备栏离开的，在途账那三条分支一条都不触发**——`lost` 只看储藏处，
+    // 金币也没掉，`noteSpend` 同样不记。这一类前 90 秒完全没人接管，
+    // 面板会先凹一个 900 的坑再自己涨回来。实测八局里宝石离开物品栏 13 次，
+    // **6 次是从装备栏直接走的**（辅助买了宝石手递手给核心，这最常见），
+    // 那 6 次立刻开始算。
+    let fromSlot = Math.max(0, pSlot - inSlot);
+    for (let i = prev - held; i > 0; i--) {
+      if (goldUp >= cost / 2) break;
+      const bySlot = fromSlot > 0;
+      if (bySlot) fromSlot--;
+      this.proxy.push({ at: clock, now: bySlot });
+    }
+  }
+
+  proxyValue(prices, clock, gameState) {
+    // **官方赛后就不算了**：实测 m9006189153 进 POST_GAME 的那一包，slot2 的净资产
+    // 当场掉 899，而宝石还在队友包里。跟着它一起不算，否则终值凭空多 900。
+    if (clock === null || gameState === "DOTA_GAMERULES_STATE_POST_GAME") return 0;
+    const cost = prices.gem?.cost ?? 900;
+    return this.proxy.reduce((a, t) => a + (t.now || clock - t.at >= TRANSIT_TTL ? cost : 0), 0);
+  }
+
   total(state, prices, C, slot, stash) {
     const p = state.player || {}, h = state.hero || {};
     const inTransit = this.transit.reduce((a, t) => a + t.v, 0);
     let nw = (p.gold ?? 0) + slot + stash + inTransit + this.dispenserValue
+           + this.proxyValue(prices, this.lastClock, (state.map || {}).game_state)
            + this.spend.reduce((a, t) => a + t.v, 0)
            + this.boughtTp * (prices.tpscroll?.cost ?? 100);
     if (h.aghanims_shard) nw += shardValue(prices, C);

@@ -39,7 +39,7 @@ export function deadTowers(state, towers) {
 }
 
 /** 眼是不是插在自己英雄脚下。hero.xpos/ypos 与 minimap 用的是同一套世界坐标。 */
-const PLACE_RADIUS = 700;
+const PLACE_RADIUS = 1000;
 function nearMe(state, w) {
   const h = state.hero;
   if (!h || typeof h.xpos !== "number" || typeof h.ypos !== "number") return false;
@@ -134,7 +134,8 @@ export class WardTracker {
                                 firstSeen: this.joined ? clock : null });
           // 刚插下的己方真眼，且**插在自己英雄脚下**——净资产拿它扣眼架库存。
           // minimap 的眼条目只有 team、没有玩家 id，也没有"插眼"事件，
-          // 所以队友的眼只能靠距离排除：真眼施法距离 500，取 700 留余量。
+          // 所以队友的眼只能靠距离排除：施法距离 500，再加一包的位移（移速约 300），
+          // 取 1000。
           // 见 design/networth.md 的眼架一节。
           if (this.joined && w.kind === "sentry" && nearMe(state, w)) this.newOwnSentries++;
         }

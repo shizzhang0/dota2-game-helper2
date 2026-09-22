@@ -20,6 +20,19 @@ if (isTauri()) {
 const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker();
 let tracker = null, C = null, alt = false, last = null, editMode = false, forceShow = false;
 let wards = null;
+let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
+
+// **断流多久算断。** Dota 崩了、被关掉、或者网络断了之后不会有任何通知，
+// `last` 会一直留着最后一包——按住 Alt 仍然显示一份**冻结**的旧面板：
+// 倒计时不动、净资产不动，而它看起来和正常面板一模一样，比不显示更坏。
+//
+// 阈值要分两档，因为 GSI 配置里 `heartbeat` 是 **30 秒**（见 `gsicfg.rs`）：
+//   · 没暂停时 `clock_time` 每秒都在变，`throttle 0.1` 下包是连着来的，
+//     5 秒没包必然是断了
+//   · **暂停时什么都不变**，GSI 就只剩心跳，30 秒才推一次——
+//     用 5 秒判会把正常的暂停误判成断流，把面板关掉
+const STALE_MS = 5000;
+const STALE_PAUSED_MS = 40000;
 
 const towers = await loadTowers();
 const prices = await loadPrices();
@@ -100,6 +113,7 @@ connectSource(async (pkt) => {
   if (info.newMatch) econ.reset();
   // 插眼数要在 wards.update 之后取：净资产靠它把眼架里的存货扣掉
   last = { st, info, econ: econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
+  lastAt = Date.now();
 });
 
 onAltChange((d) => { alt = d; });
@@ -117,8 +131,14 @@ setInterval(() => {
   // 不要在这里提前 return：退出编辑态时若恰好没有 GSI 数据，
   // render 就再也不会被调用，面板会永远停在编辑态的样子上。
   // 有 IDLE 占位，照常渲染即可（visible 自然算成 false，面板隐藏）。
-  const { st, info } = last || IDLE;
-  const e = (last || IDLE).econ;
+  // 断流就退回待机：宁可不显示，也不要显示一份冻结的旧数据（见 STALE_MS）。
+  // 只是不渲染，**不重置各个 tracker**——数据回来时若还是同一局，接着算就是了；
+  // 换局了 `newMatch` 自然会触发重置。
+  const stale = last !== null
+             && Date.now() - lastAt > (last.info.paused ? STALE_PAUSED_MS : STALE_MS);
+  const cur = stale ? IDLE : (last || IDLE);
+  const { st, info } = cur;
+  const e = cur.econ;
   render({
     // 「始终显示」**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
     // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
