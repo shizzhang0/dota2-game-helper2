@@ -38,6 +38,12 @@ export function deadTowers(state, towers) {
     o.team === t.team && Math.abs(o.xpos - t.x) <= tol && Math.abs(o.ypos - t.y) <= tol));
 }
 
+/** 被排的叉在图上留多久（秒）。缺键时兜 20——老用户的常数表里还没有这个键。 */
+function killedShow(C) {
+  const v = C && C.wardKilledShow;
+  return typeof v === "number" && v > 0 ? v : 20;
+}
+
 /** 眼是不是插在自己英雄脚下。hero.xpos/ypos 与 minimap 用的是同一套世界坐标。 */
 const PLACE_RADIUS = 1000;
 function nearMe(state, w) {
@@ -166,10 +172,9 @@ export class WardTracker {
       }
       this.own.delete(key);
     }
-    // 被排的 X 保留多久。**原先写死 3 秒，太短了**——排眼这件事的价值不在"刚刚发生"，
-    // 而在"那个点现在没视野了、并且对面在那儿有真眼"，看一眼小地图得来得及。
-    // 走常数表，用户嫌长嫌短都能自己改。
-    this.killed = this.killed.filter(k => clock - k.at < (this.C.wardKilledShow ?? 8));
+    // 被排的叉保留多久。**原先写死 3 秒，太短了**——面板默认按住 Alt 才出现，
+    // 3 秒意味着那一眼没正好按下去就彻底错过。走常数表，用户嫌长嫌短都能自己改。
+    this.killed = this.killed.filter(k => clock - k.at < killedShow(this.C));
 
     // 我方真眼此刻的位置。用本包看到的而不是 this.own：真眼要是同一刻也没了，
     // 就不该再拿它当"真视还在"的凭据。
@@ -219,7 +224,12 @@ export class WardTracker {
         const conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
         return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)) };
       }),
-      killed: this.killed.slice(),
+      // 叉也带 conf，和敌方眼一个路子：**刚排的扎眼、快过期的几乎看不见**。
+      // 这样时长放到 20 秒也不糊——新旧一眼能分开，而不是一片同样实的叉。
+      killed: this.killed.map(k => ({
+        ...k,
+        conf: Math.max(0, Math.min(1, 1 - (clock - k.at) / killedShow(this.C))),
+      })),
     };
   }
 }

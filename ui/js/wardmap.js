@@ -63,9 +63,14 @@ export function renderWardMap(m) {
     `cx="${sx(o.x).toFixed(1)}" cy="${sy(o.y).toFixed(1)}" r="2.2"/>`;
   // 被排的画叉不画点：颜色已经表示归属（青=我方），"没了"交给形状。
   // 半径取和眼一样的 2.2，两者在图上才是同一个量级的东西。
+  //
+  // **叉也按 conf 淡化**（2026-09-23），和上面敌方眼同一个公式。原先是"实心显示
+  // N 秒然后啪地消失"，时长一放长就变成一片同样实的叉、分不出哪个是刚发生的。
+  // 淡化之后新旧一眼可分，时长才敢从 3 秒放到 20 秒。
   const cross = (o) => {
     const x = sx(o.x), y = sy(o.y), r = 2.2;
-    return `<g class="wm-kill">` +
+    const op = typeof o.conf === "number" ? ` opacity="${(0.12 + 0.88 * o.conf).toFixed(2)}"` : "";
+    return `<g class="wm-kill"${op}>` +
       `<line x1="${(x-r).toFixed(1)}" y1="${(y-r).toFixed(1)}" ` +
       `x2="${(x+r).toFixed(1)}" y2="${(y+r).toFixed(1)}"/>` +
       `<line x1="${(x+r).toFixed(1)}" y1="${(y-r).toFixed(1)}" ` +
