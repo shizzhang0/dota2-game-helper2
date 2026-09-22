@@ -20,9 +20,14 @@
 
 ## 常数外置
 
-`constants/normal.json` + `constants/turbo.json`：各事件的起始时间、周期、堆野窗口参数、
+`constants/normal.json` + `constants/turbo.json`：各事件的起始时间、周期、堆野周期、
 塔防冷却 300s。装机后落到 `%APPDATA%\dev.dota2helper2.app\constants\`，
 **改 JSON 重启生效，不必重新编译**——上一个项目正是死于常数写死在代码里，版本一改就静默失效。
+
+> **2026-09-22 删掉了 `stack.windowStart`。** 它从来没有被读过（`timers.js` 只用
+> `stack.every`），却会被 `constants::seed` 播种进每个用户的配置目录——
+> 用户改了它不会有任何效果。这正是 `prices.rs` 注释里说的那种形状：
+> **看上去像是参数、改了却不生效，比没有更坏**。
 
 **快速模式的神符间隔与正常模式一致**（赏金 / 中路 / 智慧，2026-09-02 进游戏核对）。
 

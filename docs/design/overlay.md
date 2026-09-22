@@ -954,7 +954,9 @@ PNG 用 zlib 手写。**边缘的颜色按覆盖到的子样本平均、透明�
    > 比起"把被排改成红叉"（只解决形状不解决颜色），这版把两个通道彻底分开了。
    >
    > **淡化让撞色变严重了，不是变轻。** 紫那个决定是在 v1.2.2 的敌方眼淡化之前做的；
-   > 现在敌方眼按置信度在 0.3~1.0 之间淡，一个淡到一半的红眼，亮度正好落进夜魇塔那一档。
+   > 当时敌方眼按置信度在 0.3~1.0 之间淡，一个淡到一半的红眼，亮度正好落进夜魇塔那一档。
+   > （下限 **2026-09-21 从 0.3 降到 0.12**，见 [wards.md](wards.md)——撞色因此更轻了，
+   > 但下面这个"连夜魇塔一起改"的决定仍然成立。）
    > 所以这次**连夜魇塔一起改**：去饱和压暗到 `#8C6A6A` / `.45`。
    >
    > **这推翻了当初「动的是眼不是塔」那条。** 那条的理由是"阵营色是 Dota 自己的，
@@ -1054,12 +1056,14 @@ PNG 用 zlib 手写。**边缘的颜色按覆盖到的子样本平均、透明�
   "show": { "mid": true, "bounty": true, "lotus": true, "wisdom": true,
             "stack": true, "glyph": true, "buyback": true, "econ": true,
             "wardmap": true },
+  "alwaysShow": false,
   "scale": 1.0,
   "opacity": 1.0,
   "panelBg": 0.72,
   "wardSize": 180,
-  "logLevel": "debug",
-  "recordMatches": false
+  "logLevel": "info",
+  "recordMatches": false,
+  "lang": "zh-CN"
 }
 ```
 
