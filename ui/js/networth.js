@@ -12,6 +12,11 @@ export function loadPrices() {
 
 const TRANSIT_TTL = 90;   // 秒（游戏时钟）：信使飞完全图也用不了这么久
 
+/** 会被队友代拿、而官方仍按 `purchaser` 算给买方的物品。见 noteProxy。
+    九局观战语料里「东西在别人包里」的全部价值几乎都是真视宝石：
+    gem 出现 5013 包、单价 900，其余是烟(50)、眼(0/50)、树苗(30) 这种零头。 */
+const PROXY_ITEMS = { gem: true };
+
 /** 买到手就送一张免费 TP 的东西。合成飞鞋、升二级飞鞋各送一张。 */
 const TP_GIFT_ITEMS = ["travel_boots", "travel_boots_2"];
 
@@ -201,6 +206,7 @@ export class EconTracker {
   constructor() { this.reset(); }
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
+    this.proxy = []; this.prevProxyHeld = null;   // 我买的、此刻不在我包里的宝石，见 noteProxy
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.dispenserValue = 0;        // 眼架里装的眼值多少钱（GSI 不告诉我们，只能自己跟）
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
@@ -430,6 +436,8 @@ export class EconTracker {
                        goldBefore === null ? 0 : goldBefore - gold,
                        (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)),
                        died);
+    this.noteProxy(state.items, prices, state.player, clock,
+                   goldBefore === null ? 0 : gold - goldBefore);
     this.noteVariants(state.items);
     this.noteBuyback(state, clock);
     this.noteTp(state.items, died || this.noteTpGift(state.items, clock), clock);
@@ -560,10 +568,58 @@ export class EconTracker {
     this.prevShard = has;
   }
 
+  /** 我买的真视宝石不在我包里了 —— 官方还照算给我，我们也得照算。
+   *
+   * **官方净资产按 `purchaser` 认人**，东西在谁手上不影响。辅助买了宝石让核心
+   * 背着（或者死了掉在地上）是常规操作，这时自视角就什么也看不见了。
+   * 实测 matchid 9006189153 的 slot2：27:46 宝石转给队友，一直到终局 15 分钟，
+   * 我们一路低 900。
+   *
+   * **只跟宝石。** 原本想做成通用的"东西没了就继续算"，做不成：物品从包里消失
+   * 最常见的原因是**被合成吃掉**，而组件不会再以同名回来，没有配方表就分不清
+   * 它和"送人了"。实测通用版把平均偏差从 39 炸到 1687，加了一堆补丁（总值不降、
+   * 成品按金额吸收组件、buff 物品豁免）之后仍然三局退步。
+   * 而语料说这一类的钱几乎全在宝石上——宝石不是任何东西的组件，也不是消耗品，
+   * 单跟它就够，且没有上面那些坑。
+   *
+   * 只接管 `TRANSIT_TTL` 之后的时间段：前 90 秒归在途账管（信使在送），不重叠。
+   */
+  noteProxy(items, prices, player, clock, goldUp) {
+    const mine = mySlot(player);
+    let held = 0;
+    for (const [k, it] of Object.entries(items || {})) {
+      if (!it || typeof it !== "object") continue;
+      if (!(k.startsWith("slot") || k.startsWith("stash"))) continue;
+      if (notOwnedBy(it, mine)) continue;
+      const name = (it.name || "").replace(/^item_/, "");
+      if (PROXY_ITEMS[name]) held++;
+    }
+    const prev = this.prevProxyHeld ?? held;
+    this.prevProxyHeld = held;
+    if (clock === null) return;
+    const cost = prices.gem?.cost ?? 900;
+    // 回到包里了：销账
+    for (let i = held - prev; i > 0 && this.proxy.length; i--) this.proxy.shift();
+    // 离开包里了。卖掉不算——Dota 卖价是半价。
+    for (let i = prev - held; i > 0; i--) {
+      if (goldUp >= cost / 2) break;
+      this.proxy.push({ at: clock });
+    }
+  }
+
+  proxyValue(prices, clock, gameState) {
+    // **官方赛后就不算了**：实测 m9006189153 进 POST_GAME 的那一包，slot2 的净资产
+    // 当场掉 899，而宝石还在队友包里。跟着它一起不算，否则终值凭空多 900。
+    if (clock === null || gameState === "DOTA_GAMERULES_STATE_POST_GAME") return 0;
+    const cost = prices.gem?.cost ?? 900;
+    return this.proxy.reduce((a, t) => a + (clock - t.at >= TRANSIT_TTL ? cost : 0), 0);
+  }
+
   total(state, prices, C, slot, stash) {
     const p = state.player || {}, h = state.hero || {};
     const inTransit = this.transit.reduce((a, t) => a + t.v, 0);
     let nw = (p.gold ?? 0) + slot + stash + inTransit + this.dispenserValue
+           + this.proxyValue(prices, this.lastClock, (state.map || {}).game_state)
            + this.spend.reduce((a, t) => a + t.v, 0)
            + this.boughtTp * (prices.tpscroll?.cost ?? 100);
     if (h.aghanims_shard) nw += shardValue(prices, C);

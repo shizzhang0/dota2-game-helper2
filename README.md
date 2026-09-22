@@ -87,7 +87,9 @@ Net worth (items + stash + ward dispenser + items in transit on the courier + go
 GPM and XPM.
 
 > Net worth is an **approximation**. GSI only pushes your own inventory, so items on
-> the ground or held by a teammate are invisible; consumables are discounted by
+> the ground or held by a teammate are invisible (**except the Gem of True Sight**,
+> which keeps counting toward you once it leaves your bag, as the game does);
+> consumables are discounted by
 > remaining charges, and consumed buffs (Aghanim's Shard/Scepter, Moon Shard) are
 > counted from the item they came from. The exact definition and the known error
 > sources are in [design/networth.md](docs/design/networth.md) (Chinese).
