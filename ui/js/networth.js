@@ -69,6 +69,22 @@ function soldFromStash(lost, dGold) {
  *
  * 注意瓶子有充能但不算消耗品，空瓶依然值全价，这里靠 consumable 标志区分。
  */
+/** 没标 consumable、但**用完就没**因而官方也按充能折价的物品。
+ *
+ *  判据不在数据里：`ItemQuality` 只把真·消耗品标成 consumable，而瓶子、
+ *  梅肯、夜叉同样有充能却**不折价**（空瓶仍值全价）。所以只能实测。
+ *  九局语料里逐个查过，符合"充能减一、官方物品值就掉 cost/charges"的只有雨滴：
+ *
+ *  | 物品 | 按充能折价 | 不折价 |
+ *  |---|---|---|
+ *  | `infused_raindrop` | **86 次** | 8 次 |
+ *  | `bottle` | 0 | 413 次 |
+ *  | `holy_locket` | 0 | 176 次 |
+ *  | `hand_of_midas` | 0 | 35 次 |
+ *
+ *  不折价那 8 次是同包里还有别的事在发生。 */
+const CHARGE_SCALED = { infused_raindrop: true };
+
 function itemCost(it, prices) {
   const n = it.name;
   if (!n || n === "empty") return 0;
@@ -76,7 +92,8 @@ function itemCost(it, prices) {
   if (!info) return 0;
   const base = info.cost || 0;
   const max = info.charges;
-  if (info.consumable && max > 0 && typeof it.charges === "number" && it.charges >= 0) {
+  const scaled = info.consumable || CHARGE_SCALED[n.replace(/^item_/, "")];
+  if (scaled && max > 0 && typeof it.charges === "number" && it.charges >= 0) {
     return Math.round(base * it.charges / max);
   }
   return base;
@@ -121,6 +138,12 @@ function shardValue(prices, C) {
 
 /** 把物品栏拆成"装备栏价值 / 储藏处价值"。中立物品不花钱（价格表里也确实是 0）；
  *  传送槽每局白送一个 TP，计入会让开局虚高 100。 */
+/** 传送槽里有几张卷轴。它不进 `slot`，但对"钱变成了什么"的判断是真资产。 */
+function tpCharges(items) {
+  const tp = (items || {}).teleport0;
+  return tp && tp.name === "item_tpscroll" ? (tp.charges ?? 1) : 0;
+}
+
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
   let slot = 0, stash = 0, wards = 0, dispenser = false;
@@ -207,6 +230,7 @@ export class EconTracker {
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
     this.proxy = []; this.prevProxyHeld = null;   // 我买的、此刻不在我包里的宝石，见 noteProxy
+    this.prevTpSlot = null;
     this.seenVariants = new Set();  // 本局在物品栏里见过的吞噬类物品，用来决定按哪个价计
     this.dispenserValue = 0;        // 眼架里装的眼值多少钱（GSI 不告诉我们，只能自己跟）
     this.dispenserGone = null;      // 架子从什么时候开始看不见了（信使在送）
@@ -432,9 +456,15 @@ export class EconTracker {
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     const died = this.noteDeaths(state.player);
+    // **传送槽也要算进资产。** 它不进 `slot`（价值由 boughtTp 单独记），
+    // 于是"花了 100 金、装备栏没多东西"的形状和"买了两个真眼进架子"一模一样——
+    // 实测 1789397873 的 slot1 每买一张 TP 就被误加 100 眼架，一路挂到终局。
+    const tpNow = tpCharges(state.items);
+    const tpUp = (tpNow - (this.prevTpSlot ?? tpNow)) * (prices.tpscroll?.cost ?? 100);
+    this.prevTpSlot = tpNow;
     this.noteDispenser(prices, wards, dispenser, placedSentries, clock,
                        goldBefore === null ? 0 : goldBefore - gold,
-                       (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)),
+                       (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
                        died);
     this.noteProxy(state.items, prices, state.player, clock,
                    goldBefore === null ? 0 : gold - goldBefore);
