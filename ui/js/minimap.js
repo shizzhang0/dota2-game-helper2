@@ -166,7 +166,10 @@ export class WardTracker {
       }
       this.own.delete(key);
     }
-    this.killed = this.killed.filter(k => clock - k.at < 3);
+    // 被排的 X 保留多久。**原先写死 3 秒，太短了**——排眼这件事的价值不在"刚刚发生"，
+    // 而在"那个点现在没视野了、并且对面在那儿有真眼"，看一眼小地图得来得及。
+    // 走常数表，用户嫌长嫌短都能自己改。
+    this.killed = this.killed.filter(k => clock - k.at < (this.C.wardKilledShow ?? 8));
 
     // 我方真眼此刻的位置。用本包看到的而不是 this.own：真眼要是同一刻也没了，
     // 就不该再拿它当"真视还在"的凭据。
