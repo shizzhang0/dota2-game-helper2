@@ -154,9 +154,10 @@
 
   见 [design/networth.md](design/networth.md) 的"卖出要先排除掉"。
 
-  **还剩一类漏判**：`infused_raindrop` 这种有充能但没标 consumable 的物品，
-  我们按全价算而官方按剩余充能折价，卖出时金钱对不上 V 也对不上 V/2。
-  那属于计价口径，不在这条里。
+  > 这里曾记过"还剩一类漏判"：`infused_raindrop` 有充能却没标 consumable，
+  > 我们按全价算而官方按剩余充能折价。那是计价口径问题，**2026-09-22 已修**
+  > （白名单 `CHARGE_SCALED`），见 [design/networth.md](design/networth.md)
+  > 的「有充能但没标消耗品的物品」。
 
 - **掉在地上的装备：无解**，GSI 只推自己物品栏，不用验。
   **2026-09-21 撞上了一个实例**：阵亡掉落的真视宝石（900），官方仍按 `purchaser`
