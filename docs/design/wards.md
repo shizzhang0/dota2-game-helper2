@@ -208,7 +208,7 @@ GSI **没有任何"眼被击杀"的事件**（三局 dump 里 `events` 只出现
 "wardObserverDuration": 360,
 "wardSentryDuration": 420,
 "wardKilledGrace": 5,
-"wardKilledShow": 8,
+"wardKilledShow": 20,
 "sentryTrueSight": 1050,
 "wardKillConfirm": 3,
 "wardKillSuppress": 15
@@ -243,6 +243,8 @@ GSI **没有任何"眼被击杀"的事件**（三局 dump 里 `events` 只出现
 原先是"实心显示 N 秒然后啪地消失"——时长一放长就变成一片同样实的叉、分不出
 哪个是刚发生的。淡化之后新旧一眼可分，时长才敢从 3 秒放到 20 秒。
 实测一个叉的不透明度：`0s 1.00 → 8s 0.65 → 16s 0.30 → 19s 0.16`。
+
+**2026-09-28 实战确认：20 秒合适，不调。**
 
 后两个是排眼事件用的：`wardKillConfirm` 是"多久之内确认过才算当前仍可见"
 （候选只取这一批，排眼需要真视），`wardKillSuppress` 是判定被排之后的压制时长
