@@ -207,6 +207,7 @@ function itemValues(items, prices, player) {
  *   · 炼金术士把神杖送给队友，受赠方也是**直接得到 buff**，物品栏里从没出现过东西
  *     → 这时 buff 代表一根神杖，值 4200。
  *   · 肉山掉的祝福是当物品捡起来的，消耗后同样只剩 buff，值 5800。
+ *     （7.41 已从游戏移除；下面仍认它，只为老录制回放时还能对。）
  *
  * 两种来源共用 modifier_item_ultimate_scepter_consumed 这一个名字，光看 buff 分不出，
  * 所以靠物品栏历史判断：见过祝福卷轴 / 祝福成品 / 肉山祝福 → 5800；
