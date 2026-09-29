@@ -15,7 +15,7 @@
 历史上编辑态那张一直截不出来（卡片比可用窗口高，`PrintWindow` 只渲染屏上部分）。
 这条路绕开了那个坑：headless 不走 PrintWindow，而且页签把卡片压到了 316px。
 """
-import argparse, http.server, json, os, shutil, socketserver, subprocess, sys, threading
+import argparse, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -204,6 +204,11 @@ def chrome_offset(browser, work):
         subprocess.run([browser, "--headless=new", "--disable-gpu", "--window-size=800,600",
                         "--virtual-time-budget=4000", f"http://127.0.0.1:{PORT}/probe.html"],
                        capture_output=True, timeout=60)
+        # Edge 的启动器可能先返回（见 shoot），等页面把视口报回来再关服务器
+        for _ in range(40):
+            if "viewport" in REPORT:
+                break
+            time.sleep(0.25)
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -248,6 +253,15 @@ def shoot(browser, url, dest, w, h, dx, dy):
          f"--screenshot={dest}", f"--window-size={w + dx},{h + dy}",
          "--virtual-time-budget=20000", url],
         capture_output=True, timeout=180)
+    # **Edge 154 的启动器会立刻返回**（实测 0.1 秒），截图由后台进程过一两秒才写出来。
+    # 原先返回就查文件，于是一张都截不到、还把旧图删了。等它出现且大小不再变。
+    last = -1
+    for _ in range(120):
+        size = dest.stat().st_size if dest.exists() else -1
+        if size > 0 and size == last:
+            break
+        last = size
+        time.sleep(0.5)
     if dest.exists():
         crop(dest, w, h)
     return dest.exists()

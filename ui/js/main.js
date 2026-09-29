@@ -8,6 +8,7 @@ import { initPanel, render, enableDrag, applyLayout } from "./render.js";
 import { WardTracker, deadTowers } from "./minimap.js";
 import { loadSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
+import { checkUpdate } from "./update.js";
 
 // 正式版没有控制台也开不出 devtools，前端异常必须转发给 Rust 写进日志
 const send = (lv, m) => {
@@ -99,6 +100,9 @@ function resetLayout(scale = cfg.scale ?? 1) {
   saveLayout(layout);
 }
 await initEditor(document.getElementById("editor"), exitEdit, resetLayout);
+// 启动时静默查一次新版本，结果只显示在开发页的版本号旁边。不等它：
+// 连不上要等满超时，而覆盖层不该因此晚一步出来（只在 Tauri 里查，见 update.js）
+checkUpdate();
 // 不判断 editMode：锁定态窗口穿透且没有焦点，压根收不到 keydown，
 // 只有编辑态才会走到这里；靠本地状态位反而可能因事件漏收而彻底失灵。
 addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });

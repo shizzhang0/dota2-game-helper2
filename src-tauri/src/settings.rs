@@ -87,6 +87,17 @@ pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
     let _ = app.emit("settings", merged); // 覆盖层监听后实时生效
 }
 
+/// 用默认浏览器打开 Releases 页，给开发区的「打开下载页」。
+///
+/// **地址写死在这里**，前端只能说"开它"，传不进任意 URL。
+/// `explorer <url>` 交给系统的默认浏览器，和 open_data_dir 同一个办法。
+#[tauri::command]
+pub fn open_release_page() {
+    let _ = std::process::Command::new("explorer")
+        .arg("https://github.com/shizzhang0/dota2-game-helper2/releases/latest")
+        .spawn();
+}
+
 /// 开配置目录**本身**，不是它下面某一个子目录。`records/`、`logs/` 和两份设置文件
 /// 是同级兄弟，给每个配一个按钮等于把文件树抄到卡片上；开父目录一次全覆盖，
 /// 而且是唯一通向日志的入口——理由见 design/overlay.md 的「设置」里的「开发区」那条。

@@ -160,6 +160,19 @@ import { EconTracker } from ".../ui/js/networth.js";
 `ui/js/source.js` 顶层没有副作用，所以在 Node 里 import 是安全的。
 **不要另写一份计算逻辑**，否则测的是复制品不是产品。
 
+## 发版
+
+1. 三处版本号一起改：`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`（`cargo build` 会跟着改）、
+   `src-tauri/tauri.conf.json`
+2. **`latest.json` 同步改**：`{ "version": "1.3.5", "dota": "7.41f" }`，Dota 版本取
+   `constants/patch.json`。它是「检查更新」的备用源（jsDelivr 从 `main` 取），
+   和版本号放在同一个 PR 里合进 main
+3. `cargo build --release --manifest-path src-tauri/Cargo.toml`
+4. 打 zip：exe + 两份 README，名字 `dota2-game-helper2-vX.Y.Z-windows-x64.zip`
+5. `gh release create vX.Y.Z`，**标题写成 `vX.Y.Z · Dota 7.41f`**——「检查更新」从标题里取
+   新版对齐的 Dota 版本，用户一看就知道这次更新和游戏更新有没有关系
+6. 把 zip 下载回来核对 SHA256
+
 ## 开发顺序（当初的路径，供参考）
 
 1. 回放服务器 → 前端开发不用开游戏

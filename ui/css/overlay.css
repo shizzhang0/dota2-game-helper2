@@ -376,6 +376,15 @@ html, body {
   margin-left: auto; font-weight: 400; color: var(--fg);
   font-variant-numeric: tabular-nums;
 }
+/* 版本号旁边的 NEW：查到新版才出现。借「完成」按钮那个青色，不另起一个颜色 */
+.ed-new {
+  margin-left: 6px; padding: 0 5px; border-radius: 4px;
+  background: var(--k-chance); color: #06202B; font-size: 10px; font-weight: 600;
+  cursor: default;
+}
+/* 状态单独一行：和两个按钮挤一行时英文的"Can't reach the update server"放不下 */
+.ed-upd-msg { color: var(--dim); font-size: 11px; min-height: 1em; }
+.editor button:disabled { opacity: .45; cursor: default; }
 .editor option { background: #0E1319; color: var(--fg); }
 .editor select, .editor button {
   background: rgba(255, 255, 255, .08); color: var(--fg);

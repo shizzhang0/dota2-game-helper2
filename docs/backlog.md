@@ -27,29 +27,6 @@
 现在写死 Alt（`GetAsyncKeyState(VK_MENU)`）与 `Ctrl+Alt+F10`（编辑态）。
 当初明确说"这一版先不做"。
 
-### 检查更新 —— 方案已定，先不做（2026-09-23）
-
-**只在用户点了之后查一次，不在启动时自动查。** 托盘菜单加一项「检查更新（当前 vX.Y.Z）」：
-点了之后请求一次 GitHub Releases API
-（`api.github.com/repos/shizzhang0/dota2-game-helper2/releases/latest`），
-拿 `tag_name` 和程序自己的版本号比，结果显示在托盘或开发区（如"有新版本 v1.3.5"），
-再点一次才用默认浏览器打开 Releases 页面。
-
-**为什么是"点了才查"**：README 和项目主页都把"运行时不联网、装完就能断网用"写成了
-对外承诺（v1.2 前后专门删掉了 OpenDota 请求和 `reqwest`）。启动时自动查会打破它，
-而这个覆盖层一局才开一次、版本也不常发，收益撑不起。用户主动点的那一次请求可以接受，
-但**README 那一行要同步改**，比如"❌ 后台联网（只有点了检查更新才会发一次请求）"。
-
-不需要自己的服务器：Releases API 不要 key，未认证按 IP 每小时 60 次，手动点绰绰有余。
-HTTP 客户端二选一：Rust 侧加一个小库，或前端直接 `fetch`（GitHub API 支持跨域，
-但要先确认 `tauri.conf.json` 的 CSP 放行 `api.github.com`）。
-
-**比较过、没选的**：
-- 只打开 Releases 页面、程序一个请求都不发——最保守，但要用户自己比版本号
-- GitHub Pages 放一个 `version.json`——没有频率限制，但每次发版多一步
-- Tauri 官方 updater 插件（带签名的 `latest.json`，能自动下载安装）——要签名密钥，
-  且 Windows 上要求 nsis/msi 安装包，得先做下面「安装包」那条
-
 ---
 
 ## 开发向
