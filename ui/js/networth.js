@@ -40,6 +40,8 @@ const BUYBACK_GRACE = 5;
 
 const DISPENSER_GRACE = 20;   // 秒：眼架被信使拿着时 GSI 看不见它，别急着把价值清零
 const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来吸收同一包里的被动收入
+/** 秒：卖出的退款最多比"储藏处少了东西"晚到多久。见 update() 里"退款晚到"那段。 */
+const SALE_LAG = 5;
 
 /** 储藏处少了 V，这是「卖掉了」还是「被信使取走了」？
  *
@@ -257,12 +259,14 @@ function hasMod(buffs, mods) {
  * GSI 完全看不见它。实测每局会造成 1~10 次凹陷，幅度 1000~5000，持续中位 6~29 秒。
  * 这里把从储藏处消失又没出现在装备栏的价值记下来，等它送达或超时再抹掉。
  *
- * 已知误差：从储藏处直接卖东西会让净资产虚高最多 90 秒（这个操作很少见）。
+ * 已知误差：从储藏处直接卖东西、而同一包恰好还有别的进账时认不出是卖出，
+ * 会虚高最多 90 秒（见 soldFromStash；放宽容差的尝试见 design/networth.md）。
  */
 export class EconTracker {
   constructor() { this.reset(); }
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
+    this.pkt = 0;      // 包序号：在途账记下自己是哪一包记的，"退款晚到"只认更早的包
     this.proxy = [];   // 我买的、此刻不在我包里的宝石，见 noteProxy
     this.prevProxySlot = null; this.prevProxyStash = null;
     this.prevTpSlot = null;
@@ -302,13 +306,25 @@ export class EconTracker {
    * buff 刚出现的那一刻，把对应价值从"在途"账上冲销。
    * 因为物品被合成/吞噬时会从物品栏凭空消失，长得和"被信使取走"一模一样，
    * 不冲销的话这部分价值会既算进 buff、又挂在在途账上，重复计到超时为止。
+   *
+   * `spare`：这一包花掉、却没变成看得见的装备的钱。
+   * **直接买下的阿哈利姆祝福当场就吃掉**，物品栏里一件神杖系物品都不会出现，
+   * 于是按"没见过 → 炼金送的神杖 4200"算，少 1600 一直挂到终局。实测 matchid
+   * 9020222524 的 slot2：31:45（死着）金钱 −5690，buff 同包出现，官方装备侧 +5800。
+   * 炼金送杖时一分钱不花，所以 buff 出现的同一包有一笔离 5800 比离 4200 更近的
+   * 说不清的支出，就当它是买的祝福。
    */
-  noteBuffs(hero, prices, C) {
+  noteBuffs(hero, prices, C, spare = 0) {
     const buffs = (hero || {}).permanent_buffs || {};
     for (const b of CONSUMED_BUFFS) {
       const active = hasMod(buffs, b.mods)
                      || (!!b.upgrade && hasMod(buffs, b.upgrade.mods));
       if (active && !this.activeBuffs.has(b.api)) {
+        const up = b.upgrade;
+        if (up) {
+          const hi = prices[up.api]?.cost, lo = prices[b.api]?.cost;
+          if (hi && lo && spare >= (hi + lo) / 2) this.seenVariants.add(up.api);
+        }
         this.activeBuffs.add(b.api);
         this.deliver(this.buffPrice(b, prices, C, buffs));
       } else if (!active) {
@@ -551,6 +567,9 @@ export class EconTracker {
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     const died = this.noteDeaths(state.player);
+    // 这一包花掉、却没变成看得见的装备的钱。prevSlot/prevStash 下面会被覆盖，先算好
+    const spare = goldBefore === null ? 0
+      : (goldBefore - gold) - ((slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)));
     // **传送槽也要算进资产。** 它不进 `slot`（价值由 boughtTp 单独记），
     // 于是"花了 100 金、装备栏没多东西"的形状和"买了两个真眼进架子"一模一样——
     // 实测 1789397873 的 slot1 每买一张 TP 就被误加 100 眼架，一路挂到终局。
@@ -581,6 +600,7 @@ export class EconTracker {
       return this.total(state, prices, C, slot, stash);
     }
     this.lastClock = clock;
+    this.pkt++;
 
     if (this.prevStash !== null) {
       // 减掉刚平移进眼架的那部分：储藏处少的是它，不是信使取走的（见 noteDispenser）
@@ -588,8 +608,19 @@ export class EconTracker {
       const gained = slot - this.prevSlot;      // 装备栏增加的价值
       const back = stash - this.prevStash;      // 储藏处变多了多少
       const paid = this.prevGold - gold;        // 这一包花了多少
-      if (lost > 0 && gained < lost && !soldFromStash(lost, gold - this.prevGold)) {
-        this.transit.push({ v: lost - Math.max(0, gained), at: clock });
+      const dGold = gold - this.prevGold;
+      // **退款晚到。** 储藏处少了东西和卖得的钱不一定落在同一包：前几包记下的在途账，
+      // 这一包金钱正好涨回它的全价或半价，就是卖掉了，撤掉那笔账。实测 matchid
+      // 9020222524 的 slot5：27:56 买羊刀进储藏处、27:58 消失、28:00 才退回 5208，
+      // 按信使取走记账，多算 5200 挂了 90 秒。九局语料加这条后**九局全升、零退步**。
+      // 只认更早的包记的账（`t.n < this.pkt`），同一包的已经由下面的判断管了。
+      if (dGold > 0) {
+        const i = this.transit.findIndex(t => t.n < this.pkt && clock - t.at <= SALE_LAG
+                                              && soldFromStash(t.v, dGold));
+        if (i >= 0) this.transit.splice(i, 1);
+      }
+      if (lost > 0 && gained < lost && !soldFromStash(lost, dGold)) {
+        this.transit.push({ v: lost - Math.max(0, gained), at: clock, n: this.pkt });
       } else if (gained > 0) {
         this.deliver(gained);                   // 装备栏变多 = 在途的东西到货了
       } else if (back > 0 && paid < back / 2) {
@@ -608,7 +639,7 @@ export class EconTracker {
     this.prevSlot = slot;
     this.prevStash = stash;
     this.prevGold = gold;
-    this.noteBuffs(state.hero, prices, C);
+    this.noteBuffs(state.hero, prices, C, spare);
     this.noteShard(state.hero, prices, C);
     const out = this.total(state, prices, C, slot, stash);
     this.noteSpend(out, gold, goldBefore, clock, died, state.hero,
