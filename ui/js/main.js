@@ -6,7 +6,7 @@ import { EventTracker, loadTowers } from "./events.js";
 import { loadPrices, EconTracker } from "./networth.js";
 import { initPanel, render, enableDrag, applyLayout } from "./render.js";
 import { WardTracker, deadTowers } from "./minimap.js";
-import { loadSettings, onSettingsChange } from "./settings.js";
+import { loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
 import { checkUpdate } from "./update.js";
 
@@ -23,7 +23,7 @@ if (isTauri()) {
 }
 
 const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker();
-let tracker = null, C = null, alt = false, last = null, editMode = false, forceShow = false;
+let tracker = null, C = null, alt = false, last = null, editMode = false;
 let wards = null;
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
 
@@ -148,7 +148,9 @@ setInterval(() => {
   // 断流就退回待机：宁可不显示，也不要显示一份冻结的旧数据（见 STALE_MS）。
   // 只是不渲染，**不重置各个 tracker**——数据回来时若还是同一局，接着算就是了；
   // 换局了 `newMatch` 自然会触发重置。
-  const stale = last !== null
+  // `HELPER2_FREEZE` 只有截图页面会设：切片"播完就停在最后一包"是故意的，不是断流。
+  // 不挡的话截图那一刻面板早已退回待机，截出来一片空白（tools/make_shots.py）。
+  const stale = !window.HELPER2_FREEZE && last !== null
              && Date.now() - lastAt > (last.info.paused ? STALE_PAUSED_MS : STALE_MS);
   const cur = stale ? IDLE : (last || IDLE);
   const { st, info } = cur;
@@ -157,9 +159,7 @@ setInterval(() => {
     // 「始终显示」**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
     // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
     // 编辑态则要绕过，摆位置这件事恰恰要在开游戏之前做。
-    // 开发页的 forceShow（v 键）保留绕过，那是开发时要的。
-    visible: (alt || cfg.alwaysShow || forceShow || editMode)
-          && (info.inMatch || forceShow || editMode),
+    visible: (alt || cfg.alwaysShow || editMode) && (info.inMatch || editMode),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
@@ -175,9 +175,19 @@ setInterval(() => {
     ` nw=${e.networth} gpm=${e.gpm}`;
 }, 250);
 
-// 开发快捷键：v 常显、e 编辑态（Tauri 下由全局热键控制编辑态）
+// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 始终显示、Ctrl+Alt+F10 编辑态，
+// v / e 是简写。**v 改的就是卡片上那个「始终显示」**，不另起一份状态——原先是独立的
+// forceShow，两者互不知道。见 design/overlay.md「只有一个值，卡片要跟着它变」。
+//
+// **只在带 body.dev 的开发页生效**（index.html 没有它）：Tauri 里这两个热键由 Rust 注册成
+// 全局热键，编辑态下 webview 有焦点也会收到同一个按键，这里再切一次就等于没切。
+// 项目主页的 demo 也不带，那里只该有 Alt。
 addEventListener("keydown", (ev) => {
   if (!document.body.classList.contains("dev")) return;
-  if (ev.key === "v") forceShow = !forceShow;
-  if (ev.key === "e") applyEdit(!editMode);
+  const hot = ev.ctrlKey && ev.altKey;
+  const toggleShow = hot ? ev.key === "F11" : ev.key === "v" && !ev.ctrlKey && !ev.altKey;
+  const toggleEdit = hot ? ev.key === "F10" : ev.key === "e" && !ev.ctrlKey && !ev.altKey;
+  if (toggleShow || toggleEdit) ev.preventDefault();   // F11 在浏览器里是全屏
+  if (toggleShow) saveSettings({ ...cfg, alwaysShow: !cfg.alwaysShow });
+  if (toggleEdit) applyEdit(!editMode);
 });

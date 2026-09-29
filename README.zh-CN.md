@@ -262,7 +262,7 @@ python tools/make_demo.py <录制> --from 60 --to 460           # 生成站点 d
 
 **回放服务器**起好后开 <http://127.0.0.1:8000/dev.html>，用真实 dump 驱动前端，
 不必反复进游戏。`?file=` 选文件、`?speed=` 调倍速、`?demo=` 换成静态文件回放；
-页面内 `v` 常显、`e` 编辑态、`b` 换背景。录制出来的 `.jsonl.gz` 可以直接喂给它，
+页面内 `v` / `Ctrl+Alt+F11` 切换始终显示、`e` / `Ctrl+Alt+F10` 编辑态（热键和正式版一致）、`b` 换背景。录制出来的 `.jsonl.gz` 可以直接喂给它，
 被强杀而截断的文件也能读。
 
 **Dota 更新后**跑一次 `sync_constants.py`：它从本机 Dota 的 VPK 重新生成价格表、

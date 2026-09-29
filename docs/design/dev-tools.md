@@ -66,7 +66,7 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 
 静态服务 `ui/` 与 `constants/`，并通过 SSE 重放 dump。
 打开 <http://127.0.0.1:8000/dev.html> 就能用真实对局数据驱动前端，不必反复进游戏。
-`?file=` 选文件、`?speed=` 调倍速；页面内 `v` 常显、`e` 编辑态、`b` 换背景。
+`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 切换始终显示（和卡片上的勾是同一个值）、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
 
 两处实现上必须注意：
 
