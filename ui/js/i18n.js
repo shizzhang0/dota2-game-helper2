@@ -1,6 +1,6 @@
 import { isTauri, fetchConstant } from "./source.js";
 
-// 界面语言。词条走"常数外置"那套，和其他常数表同一个目录、同一套播种与补齐逻辑。
+// 界面语言。词条走"常数外置"那套，和其他常数表同一个命令、只读内嵌的那份。
 // 只覆盖这张设置卡片——覆盖层上一个字都没有，托盘那两条在 Rust 侧自己读。
 const FALLBACK = "zh-CN";
 const cache = {};

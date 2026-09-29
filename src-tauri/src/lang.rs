@@ -1,7 +1,7 @@
 //! 界面语言。只覆盖两处：编辑态卡片（前端自己读）和托盘菜单（这里读）。
 //! 覆盖层上一个字都没有，代码里的中文全是注释和日志，都不进语言包。
 //!
-//! 词条走"常数外置"那套，和其他常数表一起播种、一起补齐新增的键。
+//! 词条走"常数外置"那套：放在 JSON 里、编译期内嵌，和其他常数表一样只读内嵌的那份。
 //! 见 docs/design/overlay.md 的「多语言」。
 
 use windows::Win32::Globalization::GetUserDefaultLocaleName;
@@ -31,7 +31,7 @@ pub fn current(app: &tauri::AppHandle) -> String {
 pub fn t(app: &tauri::AppHandle, key: &str) -> String {
     let lang = current(app);
     let pick = |v: &serde_json::Value| v.get(key).and_then(|s| s.as_str()).map(str::to_string);
-    pick(&crate::constants::read(app, &format!("lang.{lang}")))
-        .or_else(|| pick(&crate::constants::read(app, &format!("lang.{FALLBACK}"))))
+    pick(&crate::constants::read(&format!("lang.{lang}")))
+        .or_else(|| pick(&crate::constants::read(&format!("lang.{FALLBACK}"))))
         .unwrap_or_else(|| key.to_string())
 }
