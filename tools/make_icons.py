@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""从图标的几何定义生成整套图标（PNG + ICO + ICNS）。
+"""从图标的几何定义生成图标（PNG + ICO），只生成用得上的五个。
+
+Windows 应用商店的 Square*Logo / StoreLogo、macOS 的 icns 都不生成：
+这个程序只出 Windows 版、发 zip。见 docs/design/overlay.md 的图标一节。
 
 本机没有 Pillow / cairosvg / ImageMagick，所以这里自带一个极小的光栅化器：
 形状全是可解析判定的（多边形、圆角矩形、带缺口的圆环），4×4 超采样抗锯齿，
@@ -7,7 +10,12 @@ PNG 用 zlib 手写。装了图形库反而要多一层依赖，而这套形状�
 
 改图标就改下面的常量，然后 `python tools/make_icons.py`。
 """
-import math, os, struct, zlib
+import math, os, struct, sys, zlib
+
+# 下面打印有中文，cp1252 控制台会 UnicodeEncodeError（文件其实已写完，退出码却是 1）
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8")
+    except Exception: pass
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "src-tauri", "icons")
 
@@ -124,22 +132,9 @@ def ico(entries):
     return head + table + blobs
 
 
-def icns(entries):
-    body = b"".join(t + struct.pack(">I", 8 + len(d)) + d for t, d in entries)
-    return b"icns" + struct.pack(">I", 8 + len(body)) + body
-
-
-NAMED = {
-    "32x32.png": 32, "64x64.png": 64, "128x128.png": 128,
-    "128x128@2x.png": 256, "icon.png": 512, "StoreLogo.png": 50,
-    "Square30x30Logo.png": 30, "Square44x44Logo.png": 44,
-    "Square71x71Logo.png": 71, "Square89x89Logo.png": 89,
-    "Square107x107Logo.png": 107, "Square142x142Logo.png": 142,
-    "Square150x150Logo.png": 150, "Square284x284Logo.png": 284,
-    "Square310x310Logo.png": 310,
-}
+# 前三个是 tauri.conf.json 的 bundle.icon 引用的，icon.png 给 README 和项目主页
+NAMED = {"32x32.png": 32, "128x128.png": 128, "128x128@2x.png": 256, "icon.png": 512}
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
-ICNS = [(b"ic11", 32), (b"ic12", 64), (b"ic07", 128), (b"ic13", 256), (b"ic14", 512)]
 
 if __name__ == "__main__":
     raw, cache = {}, {}
@@ -159,5 +154,3 @@ if __name__ == "__main__":
     entries = [(s, get(s) if s >= 256 else dib(s, pixels(s))) for s in ICO_SIZES]
     open(os.path.join(OUT, "icon.ico"), "wb").write(ico(entries))
     print(f"{'icon.ico':<24} {ICO_SIZES}  (<256 用 DIB，256 用 PNG)")
-    open(os.path.join(OUT, "icon.icns"), "wb").write(icns([(t, get(s)) for t, s in ICNS]))
-    print(f"{'icon.icns':<24} {[s for _, s in ICNS]}")
