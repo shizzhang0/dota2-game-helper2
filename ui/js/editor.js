@@ -1,5 +1,6 @@
 import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings } from "./settings.js";
 import { isTauri, fetchConstant } from "./source.js";
+import { checkUpdate, lastUpdate, onUpdate, openReleasePage } from "./update.js";
 import { icon, CELL_ICON } from "./icons.js";
 import { t, loadLang, LANGS } from "./i18n.js";
 
@@ -128,6 +129,36 @@ function initRecords(stat, btn) {
   refresh();
 }
 
+/** 开发区的检查更新：版本号旁边的 NEW、两个按钮、一行状态。设计见 design/overlay.md「检查更新」。
+
+    启动那次由 main.js 发起，这里只负责显示——**卡片可能在结果回来之前或之后建**，
+    切语言还会整卡重建，所以建的时候先套用 `lastUpdate()`，再订阅之后的变化。
+    订阅在模块级只留一份：重建时先退掉旧的，不然每切一次语言多挂一个监听。 */
+let offUpdate = null;
+function initUpdate(badge, msg, checkBtn, relBtn) {
+  if (!isTauri()) { checkBtn.disabled = relBtn.disabled = true; return; }
+  const text = { checking: "card.updChecking", latest: "card.updLatest",
+                 new: "card.updNew", fail: "card.updFail" };
+  const show = (r) => {
+    if (!r) return;
+    msg.textContent = text[r.state] ? t(text[r.state]) : "";
+    checkBtn.disabled = r.state === "checking";
+    if (r.state === "new") {
+      badge.hidden = false;
+      badge.textContent = `NEW ${r.version}`;
+      badge.title = r.dota ? `${t("card.updDota")} ${r.dota}` : "";
+    } else if (r.state === "latest") {
+      badge.hidden = true;
+    }
+    // 失败时 NEW 不动：之前查到过的新版不会因为这次没连上就不存在了
+  };
+  offUpdate?.();
+  offUpdate = onUpdate(show);
+  show(lastUpdate());
+  checkBtn.addEventListener("click", () => checkUpdate());
+  relBtn.addEventListener("click", openReleasePage);
+}
+
 export async function initEditor(cardEl, onDone, onReset) {
   card = cardEl; doneCb = onDone; resetCb = onReset;
   await build(await loadSettings());
@@ -188,8 +219,14 @@ async function build(s) {
         ${s.devTools ? `<button id="edClear" type="button">${t("card.clearRec")}</button>` : ""}
         <button id="edDir" type="button">${t("card.openDir")}</button>
       </div>
-      <div class="ed-row ed-ver">${t("card.appVersion")}<b id="edAppVer">—</b></div>
+      <div class="ed-row ed-ver">${t("card.appVersion")}<b id="edAppVer">—</b><span
+        class="ed-new" id="edNew" hidden></span></div>
       <div class="ed-row ed-ver">${t("card.dotaVersion")}<b id="edDotaVer">—</b></div>
+      <div class="ed-row">
+        <button id="edUpd" type="button">${t("card.checkUpdate")}</button>
+        <button id="edRel" type="button">${t("card.openRelease")}</button>
+      </div>
+      <div class="ed-upd-msg" id="edUpdMsg"></div>
     </div>
     <div class="ed-foot">
       <span class="ed-hint">${t("card.hint")}</span>
@@ -295,6 +332,7 @@ async function build(s) {
   });
   if (record) initRecords($("edRecStat"), $("edClear"));
   else recRefresh = null;
+  initUpdate($("edNew"), $("edUpdMsg"), $("edUpd"), $("edRel"));
   $("edDone").addEventListener("click", doneCb);
 
   const bar = card.querySelector(".ed-bar");
