@@ -167,7 +167,7 @@ draggable, and a settings card floats up. The card has four pages, switched by i
 | ![Display](docs/images/card-show.png) | ![Panel](docs/images/card-panel.png) |
 | **Display** — a toggle for each of the nine cells | **Panel** — always show, language, scale, opacity, backdrop, map size, reset |
 | ![Legend](docs/images/card-legend.png) | ![Developer](docs/images/card-dev.png) |
-| **Legend** — what every colour and shape on the map means | **Developer** — log level, match recording, data folder, versions |
+| **Legend** — what every colour and shape on the map means | **Developer** — log level, data folder, versions |
 
 Changes apply immediately, no restart. The card itself can be dragged by its title bar.
 
@@ -190,7 +190,7 @@ All under `%APPDATA%\dev.dota2helper2.app\`:
 | `settings.json` | Everything from the card |
 | `layout.json` | Where each of the four blocks sits |
 | `logs/` | Run log (rotates past 5 MB, one backup kept) |
-| `records/` | Match recordings (off by default). **One file per match**, with the match id in the name: `raw_<secs>_m<matchid>.jsonl.gz` |
+| `records/` | Match recordings, **for development**: the switch only appears on the Developer tab after adding `"devTools": true` to `settings.json` by hand. One file per match: `raw_<secs>_m<matchid>.jsonl.gz` |
 
 ### Uninstalling
 

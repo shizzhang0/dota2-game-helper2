@@ -18,6 +18,9 @@ fn defaults() -> serde_json::Value {
         "wardSize": 180,
         "logLevel": "info",
         "recordMatches": false,
+        // 开发者开关，界面上没有：手写进 settings.json 才显示录制、录制器才工作。
+        // 见 design/overlay.md「设置」里「开发区」那条
+        "devTools": false,
         "lang": crate::lang::system_default()
     })
 }
@@ -64,9 +67,11 @@ pub fn toggle_always_show(app: &tauri::AppHandle) {
     crate::logf!(crate::log::Level::Info, "[settings] 始终显示 = {now}");
 }
 
+/// 写盘时**盖在盘上那份之上**，不是盖在默认值之上。前端只收卡片上有的控件，
+/// 原先盖在默认值上，手写进去的 `devTools` 在卡片上随便动一下就被抹掉了。
 #[tauri::command]
 pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
-    let mut merged = defaults();
+    let mut merged = load(&app);
     merge(&mut merged, &value);
     if let Some(p) = path(&app) {
         if let Some(dir) = p.parent() {

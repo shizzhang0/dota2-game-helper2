@@ -10,7 +10,7 @@ export const DEFAULTS = {
   show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
   alwaysShow: false,
   scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
-  logLevel: "info", recordMatches: false, lang: "zh-CN",
+  logLevel: "info", recordMatches: false, devTools: false, lang: "zh-CN",
 };
 
 export async function loadSettings() {
@@ -22,7 +22,10 @@ export async function loadSettings() {
 
 export function saveSettings(v) {
   if (isTauri()) return window.__TAURI__.core.invoke("set_settings", { value: v });
-  localStorage.setItem("settings", JSON.stringify(v));
+  // 盖在已存的那份之上，和 Rust 的 set_settings 一样：卡片不收的键（devTools）要留住
+  let old = {};
+  try { old = JSON.parse(localStorage.getItem("settings") || "{}"); } catch { /* 坏了就当没有 */ }
+  localStorage.setItem("settings", JSON.stringify({ ...old, ...v }));
   dispatchEvent(new CustomEvent("settings", { detail: v }));   // 浏览器开发时自发自收
 }
 
