@@ -192,6 +192,21 @@ All under `%APPDATA%\dev.dota2helper2.app\`:
 | `logs/` | Run log (rotates past 5 MB, one backup kept) |
 | `records/` | Match recordings, **for development**: the switch only appears on the Developer tab after adding `"devTools": true` to `settings.json` by hand. One file per match: `raw_<secs>_m<matchid>.jsonl.gz` |
 
+### Upgrading
+
+When a newer version exists, **NEW** appears next to the version on the Developer tab of the
+edit-mode card; press Download page to get the zip.
+
+1. **Quit the app first**: right-click the tray icon → Quit. While it runs the exe is locked
+   and can't be replaced
+2. **Overwrite** the old `dota2-game-helper2.exe` with the new one, then start it
+
+Settings, placement and logs live in `%APPDATA%\dev.dota2helper2.app\` and survive the
+upgrade; the GSI config on the Dota side is checked on every start, so nothing to redo there.
+
+> Upgrading from **1.3.4 or earlier**: the `constants\` folder in the data directory is no
+> longer read and can be deleted.
+
 ### Uninstalling
 
 No installer means no uninstaller — delete three things:
