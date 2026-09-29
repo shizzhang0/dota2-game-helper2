@@ -303,7 +303,8 @@ async function build(s) {
   lang.addEventListener("change", async () => {
     const next = collect();
     await saveSettings(next);
-    await build(next);
+    // 重建要带上卡片不收的键（devTools）：只用 collect() 的话，录制那几行切完语言就没了
+    await build({ ...s, ...next });
     if (!card.hidden) { pinPaneHeight(); place(); }   // 中英文卡片不一样宽也不一样高
   });
 
