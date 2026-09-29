@@ -288,8 +288,8 @@ python tools/make_demo.py <recording> --from 60 --to 460      # build the site d
 
 **The replay server** serves <http://127.0.0.1:8000/dev.html> and drives the front end
 from a real dump, so you don't have to keep launching the game. `?file=` picks the
-file, `?speed=` the rate, `?demo=` switches to static-file replay; in the page `v` toggles
-Always show, `e` is edit mode, `b` cycles backgrounds. Recorded `.jsonl.gz` files work
+file, `?speed=` the rate, `?demo=` switches to static-file replay; in the page `v` / `Ctrl+Alt+F11` toggles
+Always show, `e` / `Ctrl+Alt+F10` is edit mode (the same hotkeys as the app), `b` cycles backgrounds. Recorded `.jsonl.gz` files work
 directly, including ones truncated by a hard kill.
 
 **After a Dota patch** run `sync_constants.py`: it regenerates the price table from the

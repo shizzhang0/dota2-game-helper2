@@ -175,12 +175,19 @@ setInterval(() => {
     ` nw=${e.networth} gpm=${e.gpm}`;
 }, 250);
 
-// 开发快捷键：v 切换始终显示、e 编辑态（Tauri 下由全局热键控制编辑态）
-// **v 改的就是卡片上那个「始终显示」**，不另起一份状态——原先是独立的 forceShow，
-// 两者互不知道：勾着始终显示时按 v 毫无反应，用 v 打开后卡片上的勾也不变。
-// 见 design/overlay.md「只有一个值，卡片要跟着它变」。
+// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 始终显示、Ctrl+Alt+F10 编辑态，
+// v / e 是简写。**v 改的就是卡片上那个「始终显示」**，不另起一份状态——原先是独立的
+// forceShow，两者互不知道。见 design/overlay.md「只有一个值，卡片要跟着它变」。
+//
+// **只在带 body.dev 的开发页生效**（index.html 没有它）：Tauri 里这两个热键由 Rust 注册成
+// 全局热键，编辑态下 webview 有焦点也会收到同一个按键，这里再切一次就等于没切。
+// 项目主页的 demo 也不带，那里只该有 Alt。
 addEventListener("keydown", (ev) => {
   if (!document.body.classList.contains("dev")) return;
-  if (ev.key === "v") saveSettings({ ...cfg, alwaysShow: !cfg.alwaysShow });
-  if (ev.key === "e") applyEdit(!editMode);
+  const hot = ev.ctrlKey && ev.altKey;
+  const toggleShow = hot ? ev.key === "F11" : ev.key === "v" && !ev.ctrlKey && !ev.altKey;
+  const toggleEdit = hot ? ev.key === "F10" : ev.key === "e" && !ev.ctrlKey && !ev.altKey;
+  if (toggleShow || toggleEdit) ev.preventDefault();   // F11 在浏览器里是全屏
+  if (toggleShow) saveSettings({ ...cfg, alwaysShow: !cfg.alwaysShow });
+  if (toggleEdit) applyEdit(!editMode);
 });
