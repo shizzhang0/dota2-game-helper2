@@ -156,7 +156,8 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
   offUpdate = onUpdate(show);
   show(lastUpdate());
   checkBtn.addEventListener("click", () => checkUpdate());
-  relBtn.addEventListener("click", openReleasePage);
+  // 先退出编辑态：编辑态下覆盖层置顶且不穿透鼠标，打开的浏览器被压在下面点不到
+  relBtn.addEventListener("click", () => { doneCb?.(); openReleasePage(); });
 }
 
 export async function initEditor(cardEl, onDone, onReset) {
@@ -335,7 +336,9 @@ async function build(s) {
     saveSettings(collect());
     resetCb(DEFAULTS.scale);
   });
+  // 先退出编辑态再开：编辑态下覆盖层置顶且不穿透鼠标，资源管理器被压在下面点不到
   $("edDir").addEventListener("click", () => {
+    doneCb?.();
     if (isTauri()) window.__TAURI__.core.invoke("open_data_dir");
   });
   if (record) initRecords($("edRecStat"), $("edClear"));
