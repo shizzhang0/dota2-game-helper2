@@ -741,6 +741,13 @@ Dota 各语言版本通用的缩写，等于在刚清空的面板上重新放回
 > 看起来像"Windows 图标缓存没刷新"，其实是根本没重新生成。
 > 查法：解 PE 的资源表，把 RT_ICON 的字节和 `icons/icon.ico` 逐条比。
 
+> **只生成用得上的那几个**（2026-09-29 精简）。脚手架那套里有 9 个 `Square*Logo.png`
+> 和 `StoreLogo.png`（Windows 应用商店 MSIX 用）、`icon.icns`（macOS 用）、`64x64.png`（没人引用），
+> 这个程序只出 Windows 版、发的是 zip，将来的安装包也是 nsis，一个都用不上。
+> 现在只剩：`icon.ico`（exe 与托盘）、`32x32.png` / `128x128.png` / `128x128@2x.png`
+> （`tauri.conf.json` 的 `bundle.icon` 引用）、`icon.png`（两份 README 和项目主页）。
+> `make_icons.py` 跟着只写这五个，否则一跑又全回来。
+
 本机没有 Pillow / cairosvg / ImageMagick，所以 `make_icons.py` 自带一个极小的
 光栅化器：形状全可解析判定（多边形、圆角矩形、带缺口的圆环），4×4 超采样，
 PNG 用 zlib 手写。**边缘的颜色按覆盖到的子样本平均、透明度按覆盖率，两者分开算**——

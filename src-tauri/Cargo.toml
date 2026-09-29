@@ -12,8 +12,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
-# preserve_order：常数表要写回磁盘且供人手编，默认的 BTreeMap 会把键按字母重排，
-# 把 midRune/bounty/lotus 这种逻辑分组彻底打散
+# preserve_order：settings.json 要写回磁盘，默认的 BTreeMap 会把键按字母重排，
+# 打散 settings::defaults() 里写好的顺序（常数表 2026-09-29 起不再落盘，这条理由只剩设置文件）
 serde_json = { version = "1", features = ["preserve_order"] }
 flate2 = "1"
 tiny_http = "0.12"
