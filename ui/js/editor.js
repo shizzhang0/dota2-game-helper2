@@ -181,10 +181,11 @@ async function build(s) {
           <option value="error">error</option><option value="warn">warn</option>
           <option value="info">info</option><option value="debug">${t("card.logDebug")}</option>
         </select></label>
+      ${s.devTools ? `
       <label class="ed-row"><input id="edRecord" type="checkbox">${t("card.record")}</label>
-      <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b></div>
+      <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b></div>` : ""}
       <div class="ed-row">
-        <button id="edClear" type="button">${t("card.clearRec")}</button>
+        ${s.devTools ? `<button id="edClear" type="button">${t("card.clearRec")}</button>` : ""}
         <button id="edDir" type="button">${t("card.openDir")}</button>
       </div>
       <div class="ed-row ed-ver">${t("card.appVersion")}<b id="edAppVer">—</b></div>
@@ -204,7 +205,8 @@ async function build(s) {
   ward.value = s.wardSize ?? DEFAULTS.wardSize;
   bg.value = s.panelBg ?? DEFAULTS.panelBg;
   log.value = s.logLevel ?? DEFAULTS.logLevel;
-  record.checked = !!s.recordMatches;
+  // 录制那几行只在 devTools 为真时才建（见 design/overlay.md「开发区」），不建就是 null
+  if (record) record.checked = !!s.recordMatches;
   always.checked = !!s.alwaysShow;
   lang.value = s.lang ?? DEFAULTS.lang;
 
@@ -223,7 +225,7 @@ async function build(s) {
     wardSize: Number(ward.value),
     panelBg: Number(bg.value),
     logLevel: log.value,
-    recordMatches: record.checked,
+    recordMatches: record ? record.checked : !!s.recordMatches,
     lang: lang.value,
   });
 
@@ -258,7 +260,7 @@ async function build(s) {
   }
   // 拨录制开关会新建或收尾一个文件，数字跟着变。**延后一点再拉**：
   // saveSettings 在 Tauri 下是异步 invoke，Rust 那边要先 refresh() 完才有结果。
-  record.addEventListener("input", () => setTimeout(() => recRefresh?.(), 300));
+  record?.addEventListener("input", () => setTimeout(() => recRefresh?.(), 300));
   // 语言换了整卡重建。用手上这份设置重建，不重新 loadSettings()——
   // 上面那次保存在 Tauri 下是异步的 invoke，读回来可能还是旧的 lang。
   lang.addEventListener("change", async () => {
@@ -290,7 +292,8 @@ async function build(s) {
   $("edDir").addEventListener("click", () => {
     if (isTauri()) window.__TAURI__.core.invoke("open_data_dir");
   });
-  initRecords($("edRecStat"), $("edClear"));
+  if (record) initRecords($("edRecStat"), $("edClear"));
+  else recRefresh = null;
   $("edDone").addEventListener("click", doneCb);
 
   const bar = card.querySelector(".ed-bar");

@@ -151,7 +151,11 @@ pub fn init(app: &tauri::AppHandle) {
 /// 按当前设置开关录制。**由 `set_settings` 直接调用**，所以拨动开关立刻生效，
 /// 不再等 GSI 推包——那正是原先失灵的根源。
 pub fn refresh(app: &tauri::AppHandle) {
-    let want = crate::settings::load(app)["recordMatches"].as_bool().unwrap_or(false);
+    // **录制是开发者工具**：`devTools` 为真才认 `recordMatches`。万一开关早先被打开过，
+    // 没有 `devTools` 也不录——一局 4~90 MB，普通用户用不上。
+    let s = crate::settings::load(app);
+    let want = s["devTools"].as_bool().unwrap_or(false)
+        && s["recordMatches"].as_bool().unwrap_or(false);
     let mut g = REC.lock().unwrap();
     let Some(r) = g.as_mut() else { return };
     if want == r.enabled {
