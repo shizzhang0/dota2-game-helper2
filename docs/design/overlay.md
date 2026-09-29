@@ -1173,19 +1173,16 @@ Dota2版本   7.41f
 **请求从前端发，不从 Rust 发。** 前端的 `fetch` 跑在 WebView2 里，代理设置和 Edge 完全一样
 （系统代理、PAC 都认）；而 Rust 的 HTTP 库默认不读 Windows 系统代理。很多用户能上 GitHub
 靠的是系统代理，从 Rust 发就会出现"浏览器打得开、程序连不上"。顺带不用加依赖。
-`tauri.conf.json` 的 CSP 是 `null`，GitHub API 与 jsDelivr 都带 `Access-Control-Allow-Origin: *`。
+`tauri.conf.json` 的 CSP 是 `null`，GitHub API 带 `Access-Control-Allow-Origin: *`。
 
-**两个源，按顺序试，每个 4 秒超时**，先成功的算数：
+**只查 GitHub**：`api.github.com/repos/shizzhang0/dota2-game-helper2/releases/latest`，4 秒超时。
+取 `tag_name`；新版对齐的 Dota 版本从 Release 标题里取（`v1.3.5 · Dota 7.41f`，见 dev-tools.md「发版」）。
+不要 key，未登录按 IP 每小时 60 次，一次启动一次请求绰绰有余；接口本身跳过草稿和预发布。
 
-| | 地址 | 取什么 |
-|---|---|---|
-| ① | `api.github.com/repos/shizzhang0/dota2-game-helper2/releases/latest` | `tag_name`；Dota 版本从 Release 标题里取（`v1.3.5 · Dota 7.41f`） |
-| ② | `cdn.jsdelivr.net/gh/shizzhang0/dota2-game-helper2@main/latest.json` | `{ "version", "dota" }`，发版时写（见 dev-tools.md「发版」） |
-
-① 不要 key，未登录按 IP 每小时 60 次，一次启动一次请求绰绰有余；接口本身跳过草稿和预发布。
-② 是给连不上 api.github.com 的人多一条路，**国内可用性也不稳定，不保证一定通**；
-jsDelivr 对分支引用有缓存，发版后要过一阵才更新，对"有没有新版"这件事够用。
-Gitee 镜像最稳，但要多维护一个仓库，先不做，等真有人反馈连不上再说。
+> **曾经加过 jsDelivr 备用源，后来去掉了**（2026-09-29 用户定）。它要仓库里多一个 `latest.json`、
+> 发版多一步，而国内对 jsDelivr 的可用性同样不稳定，换来的"多一条路"不确定。
+> 连不上就显示"连不上更新服务器"，「打开下载页」仍在——浏览器能上就能下。
+> Gitee 镜像同理先不做，等真有人反馈连不上再说。
 
 版本比较按三段数字（`v` 前缀去掉）。**只在 Tauri 里查**：浏览器开发和 GitHub Pages
 的 demo 用的是同一份 `ui/js`，那里没有"程序版本"，也不该替访客去请求 GitHub。

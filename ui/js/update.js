@@ -5,31 +5,22 @@ import { isTauri } from "./source.js";
     **请求从前端发**：WebView2 的 fetch 和 Edge 用同一套代理设置（系统代理、PAC），
     而 Rust 的 HTTP 库默认不读 Windows 系统代理——很多人能上 GitHub 靠的就是它。
 
-    两个源按顺序试，先成功的算数。结果只有三种：
+    **只查 GitHub**（曾有 jsDelivr 备用源，去掉了，理由见设计文档）。结果只有三种：
       { state: "new", version, dota }  有新版（dota 可能是 null，取不到就不显示）
       { state: "latest" }              已是最新
-      { state: "fail" }                两个源都连不上 */
+      { state: "fail" }                连不上 */
 const REPO = "shizzhang0/dota2-game-helper2";
 const TIMEOUT_MS = 4000;
 
-const SOURCES = [
-  // ① Releases API。Dota 版本从 Release 标题里取：发版时写成 `v1.3.5 · Dota 7.41f`
-  async (signal) => {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`,
-                          { signal, headers: { Accept: "application/vnd.github+json" } });
-    if (!r.ok) throw new Error(`github ${r.status}`);
-    const j = await r.json();
-    const dota = /Dota\s*([0-9][0-9.]*[a-z]?)/i.exec(j.name || "");
-    return { version: j.tag_name, dota: dota ? dota[1] : null };
-  },
-  // ② jsDelivr 上仓库里的 latest.json，发版时和版本号一起改。给连不上 api.github.com 的人多一条路
-  async (signal) => {
-    const r = await fetch(`https://cdn.jsdelivr.net/gh/${REPO}@main/latest.json`, { signal });
-    if (!r.ok) throw new Error(`jsdelivr ${r.status}`);
-    const j = await r.json();
-    return { version: j.version, dota: j.dota ?? null };
-  },
-];
+/** Releases API。Dota 版本从 Release 标题里取：发版时写成 `v1.3.5 · Dota 7.41f` */
+async function fromGithub(signal) {
+  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`,
+                        { signal, headers: { Accept: "application/vnd.github+json" } });
+  if (!r.ok) throw new Error(`github ${r.status}`);
+  const j = await r.json();
+  const dota = /Dota\s*([0-9][0-9.]*[a-z]?)/i.exec(j.name || "");
+  return { version: j.tag_name, dota: dota ? dota[1] : null };
+}
 
 /** `v1.3.5` / `1.3.5` → [1, 3, 5]；认不出来返回 null */
 function parse(v) {
@@ -43,17 +34,16 @@ function newer(a, b) {
 }
 
 async function fetchLatest() {
-  for (const src of SOURCES) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
-    try {
-      const r = await src(ctl.signal);
-      if (parse(r.version)) return r;
-    } catch { /* 换下一个源 */ } finally {
-      clearTimeout(timer);
-    }
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fromGithub(ctl.signal);
+    return parse(r.version) ? r : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
-  return null;
 }
 
 /** 最近一次的结果，给开发页建卡片时直接套用（切语言会整卡重建） */
