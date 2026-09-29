@@ -1,4 +1,4 @@
-import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings } from "./settings.js";
+import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { isTauri, fetchConstant } from "./source.js";
 import { checkUpdate, lastUpdate, onUpdate, openReleasePage } from "./update.js";
 import { icon, CELL_ICON } from "./icons.js";
@@ -162,6 +162,14 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
 export async function initEditor(cardEl, onDone, onReset) {
   card = cardEl; doneCb = onDone; resetCb = onReset;
   await build(await loadSettings());
+  // **「始终显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
+  // 不跟的话卡片攥着旧值，进编辑态随便动一下别的，collect() 就把旧值存回去，
+  // 刚切的状态被悄悄改回。**只同步这一个**：其余控件只有卡片自己改，而拖滑块时
+  // settings 事件是异步回来的，套回去滑块会往回跳。按 id 现查，切语言会整卡重建。
+  onSettingsChange((v) => {
+    const el = card.querySelector("#edAlways");
+    if (el && typeof v?.alwaysShow === "boolean") el.checked = v.alwaysShow;
+  });
 }
 
 /** 建卡片和绑事件必须是同一个函数：切语言要整个 innerHTML 重建，

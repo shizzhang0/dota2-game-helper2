@@ -102,17 +102,20 @@ SHOT_HTML = """<!doctype html>
   }
   localStorage.setItem("layout", JSON.stringify(layout));
   // 设置也钉死，免得图随环境变
+  // 块的特写要一直显示；卡片那几张不开，免得「面板」页上始终显示的勾被截成勾上的
   localStorage.setItem("settings", JSON.stringify({
     scale: 1, opacity: 1, panelBg: 0.72, wardSize: 180,
-    lang: qs.get("lang") || "en",
+    lang: qs.get("lang") || "en", alwaysShow: want !== "card",
   }));
   window.HELPER2_DEMO = "demo.jsonl";
+  // 切片播完就停在最后一包，这是故意的——别让 main.js 当成断流把面板藏掉。
+  // 断流检测（v1.3.4）上线后没重拍过面板图，那之后这几张其实一直截成空白
+  window.HELPER2_FREEZE = true;
 </script>
 <script type="module" src="ui/js/main.js"></script>
 <script>
   const tab = qs.get("tab");
   addEventListener("load", () => setTimeout(() => {
-    dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));   // 常显
     setTimeout(() => {
       if (want === "card") {
         document.getElementById("panel").style.display = "none";
