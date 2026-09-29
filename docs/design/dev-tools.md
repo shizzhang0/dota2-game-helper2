@@ -166,8 +166,7 @@ import { EconTracker } from ".../ui/js/networth.js";
    `src-tauri/tauri.conf.json`
 2. `cargo build --release --manifest-path src-tauri/Cargo.toml`
 3. 打 zip：exe + 两份 README，名字 `dota2-game-helper2-vX.Y.Z-windows-x64.zip`
-4. `gh release create vX.Y.Z`，**标题写成 `vX.Y.Z · Dota 7.41f`**（Dota 版本取 `constants/patch.json`）——「检查更新」从标题里取
-   新版对齐的 Dota 版本，用户一看就知道这次更新和游戏更新有没有关系
+4. `gh release create vX.Y.Z`，标题就是 `vX.Y.Z`。「检查更新」只读 tag，标题和正文怎么写都不影响它
 5. 把 zip 下载回来核对 SHA256
 
 ## 开发顺序（当初的路径，供参考）

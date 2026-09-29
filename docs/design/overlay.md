@@ -1197,7 +1197,7 @@ PNG 用 zlib 手写。**边缘的颜色按覆盖到的子样本平均、透明�
 放在开发页，版本号那一行旁边：
 
 ```
-程序版本    1.3.4  NEW v1.3.5      ← 有新版才出现；悬停看新版对齐的 Dota 版本
+程序版本    1.3.4  NEW v1.3.5      ← 有新版才出现
 Dota2版本   7.41f
 [检查更新] [打开下载页]  已是最新 / 正在检查… / 有新版本 / 连不上更新服务器
 ```
@@ -1214,7 +1214,11 @@ Dota2版本   7.41f
 `tauri.conf.json` 的 CSP 是 `null`，GitHub API 带 `Access-Control-Allow-Origin: *`。
 
 **只查 GitHub**：`api.github.com/repos/shizzhang0/dota2-game-helper2/releases/latest`，4 秒超时。
-取 `tag_name`；新版对齐的 Dota 版本从 Release 标题里取（`v1.3.5 · Dota 7.41f`，见 dev-tools.md「发版」）。
+只取 `tag_name`。
+
+> **曾经从 Release 标题里取新版对齐的 Dota 版本**（标题写成 `v1.3.5 · Dota 7.41f`），
+> 放在 NEW 的悬停提示里。2026-09-29 用户定去掉：标题不想带 Dota 版本，而挪到正文去解析
+> 又多一条发版约定，为一个悬停提示不值。v1.3.5 的程序仍会从标题里找，找不到就不显示，没有副作用。
 不要 key，未登录按 IP 每小时 60 次，一次启动一次请求绰绰有余；接口本身跳过草稿和预发布。
 
 > **曾经加过 jsDelivr 备用源，后来去掉了**（2026-09-29 用户定）。它要仓库里多一个 `latest.json`、
