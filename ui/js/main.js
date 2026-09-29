@@ -145,21 +145,22 @@ setInterval(() => {
   // 不要在这里提前 return：退出编辑态时若恰好没有 GSI 数据，
   // render 就再也不会被调用，面板会永远停在编辑态的样子上。
   // 有 IDLE 占位，照常渲染即可（visible 自然算成 false，面板隐藏）。
-  // 断流就退回待机：宁可不显示，也不要显示一份冻结的旧数据（见 STALE_MS）。
-  // 只是不渲染，**不重置各个 tracker**——数据回来时若还是同一局，接着算就是了；
-  // 换局了 `newMatch` 自然会触发重置。
+  // 断流就藏起来：宁可不显示，也不要显示一份冻结的旧数据（见 STALE_MS）。
+  // **只藏面板，不换数据**：原先换成空的 IDLE，而各个 tracker 不跟着清，结果只有净资产
+  // 归零、其余停在最后一刻，编辑态里看到半份 0 半份旧值；对账要看的正是最后那个净资产。
+  // 不重置 tracker——数据回来时若还是同一局，接着算就是了；换局了 `newMatch` 自然会重置。
   // `HELPER2_FREEZE` 只有截图页面会设：切片"播完就停在最后一包"是故意的，不是断流。
-  // 不挡的话截图那一刻面板早已退回待机，截出来一片空白（tools/make_shots.py）。
+  // 不挡的话截图那一刻面板早已藏起来，截出来一片空白（tools/make_shots.py）。
   const stale = !window.HELPER2_FREEZE && last !== null
              && Date.now() - lastAt > (last.info.paused ? STALE_PAUSED_MS : STALE_MS);
-  const cur = stale ? IDLE : (last || IDLE);
+  const cur = last || IDLE;
   const { st, info } = cur;
   const e = cur.econ;
   render({
     // 「始终显示」**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
     // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
-    // 编辑态则要绕过，摆位置这件事恰恰要在开游戏之前做。
-    visible: (alt || cfg.alwaysShow || editMode) && (info.inMatch || editMode),
+    // 编辑态则要绕过，摆位置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
+    visible: editMode || ((alt || cfg.alwaysShow) && info.inMatch && !stale),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
