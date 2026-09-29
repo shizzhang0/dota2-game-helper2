@@ -211,7 +211,7 @@ This is a **pure receiver**. That isn't a promise, it's a checklist you can veri
 | ❌ Modify game files | ✅ Write one GSI config file (the mechanism Valve built for this) |
 | ❌ Inject into the process / hook graphics APIs | ✅ Be an ordinary transparent always-on-top window |
 | ❌ Simulate any input | ✅ Passively poll the Alt key state |
-| ❌ Phone home in the background | ✅ Keep every constant locally — works offline once installed. The one request: **on startup it asks GitHub once whether a newer version exists**, sends no personal data, and silently gives up if it can't reach it |
+| ❌ Phone home in the background | ✅ Keep every constant locally — works offline once installed. The only network access is the update check: **on startup it asks GitHub once whether a newer version exists**, and again when you press Check for updates on the Developer tab; it sends no personal data and silently gives up if it can't reach it |
 
 GSI is an official Valve interface; Logitech and Razer drivers use the same mechanism.
 **During a match it only pushes your own data**, so by design it cannot be used to
