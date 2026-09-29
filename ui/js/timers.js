@@ -4,7 +4,7 @@ import { isTauri, fetchConstant } from "./source.js";
 const cache = {};
 export function loadConstants(mode) {
   if (!cache[mode]) {
-    // Tauri 下走命令，常数表存在用户配置目录里，改完重启即可生效（不必重新编译）
+    // Tauri 下走命令，读编译期内嵌的那份（不落配置目录，见 design/timers.md「常数外置」）
     cache[mode] = isTauri()
       ? window.__TAURI__.core.invoke("get_constants", { name: mode })
       : fetchConstant(`${mode}.json`);

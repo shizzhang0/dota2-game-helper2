@@ -82,8 +82,8 @@ pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
     let _ = app.emit("settings", merged); // 覆盖层监听后实时生效
 }
 
-/// 开配置目录**本身**，不是它下面某一个子目录。`constants/`、`records/`、`logs/`
-/// 是同级兄弟，给每个配一个按钮等于把文件树抄到卡片上；开父目录一次覆盖三个，
+/// 开配置目录**本身**，不是它下面某一个子目录。`records/`、`logs/` 和两份设置文件
+/// 是同级兄弟，给每个配一个按钮等于把文件树抄到卡片上；开父目录一次全覆盖，
 /// 而且是唯一通向日志的入口——理由见 design/overlay.md 的「设置」里的「开发区」那条。
 #[tauri::command]
 pub fn open_data_dir(app: tauri::AppHandle) {

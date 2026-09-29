@@ -210,7 +210,7 @@ def build_prices(items_txt, ids_txt):
 
 
 def dump_prices(prices):
-    """一行一个物品：既能看 git diff，也方便用户手改配置目录里那份。"""
+    """一行一个物品：git diff 一眼能看出哪件物品改了价。"""
     lines = [f'  {json.dumps(k)}: {json.dumps(v, separators=(", ", ": "))}'
              for k, v in sorted(prices.items())]
     return "{\n" + ",\n".join(lines) + "\n}\n"

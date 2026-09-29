@@ -118,7 +118,7 @@ fn main() {
 
             tray::setup(app.handle())?;
 
-            constants::seed(app.handle());
+            constants::log_version();
             record::init(app.handle());          // 必须在 gsi 之前：第一包来的时候它得已经在
             gsi::spawn(app.handle().clone());
             altkey::spawn(app.handle().clone());
