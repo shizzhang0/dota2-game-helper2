@@ -20,3 +20,6 @@ __pycache__/
 
 # 站点组装产物，由 tools/build_site.py 生成
 dist/
+
+# Claude Code 的本地配置（如内置浏览器启动回放服务器的 launch.json），只在本机有意义
+.claude/
