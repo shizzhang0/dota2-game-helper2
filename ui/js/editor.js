@@ -146,7 +146,6 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
     if (r.state === "new") {
       badge.hidden = false;
       badge.textContent = `NEW ${r.version}`;
-      badge.title = r.dota ? `${t("card.updDota")} ${r.dota}` : "";
     } else if (r.state === "latest") {
       badge.hidden = true;
     }

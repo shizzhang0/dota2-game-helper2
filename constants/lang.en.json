@@ -30,7 +30,6 @@
   "card.updLatest": "Up to date",
   "card.updNew": "Update available",
   "card.updFail": "Can't reach the update server",
-  "card.updDota": "New version matches Dota",
   "card.hint": "Drag blocks to arrange · Drag the title bar to move · ESC to exit",
   "card.done": "Done",
   "show.mid": "Mid rune",

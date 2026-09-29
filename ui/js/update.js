@@ -6,20 +6,19 @@ import { isTauri } from "./source.js";
     而 Rust 的 HTTP 库默认不读 Windows 系统代理——很多人能上 GitHub 靠的就是它。
 
     **只查 GitHub**（曾有 jsDelivr 备用源，去掉了，理由见设计文档）。结果只有三种：
-      { state: "new", version, dota }  有新版（dota 可能是 null，取不到就不显示）
+      { state: "new", version }        有新版
       { state: "latest" }              已是最新
       { state: "fail" }                连不上 */
 const REPO = "shizzhang0/dota2-game-helper2";
 const TIMEOUT_MS = 4000;
 
-/** Releases API。Dota 版本从 Release 标题里取：发版时写成 `v1.3.5 · Dota 7.41f` */
+/** Releases API，只看 tag。标题和正文怎么写都不影响检查结果 */
 async function fromGithub(signal) {
   const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`,
                         { signal, headers: { Accept: "application/vnd.github+json" } });
   if (!r.ok) throw new Error(`github ${r.status}`);
   const j = await r.json();
-  const dota = /Dota\s*([0-9][0-9.]*[a-z]?)/i.exec(j.name || "");
-  return { version: j.tag_name, dota: dota ? dota[1] : null };
+  return { version: j.tag_name };
 }
 
 /** `v1.3.5` / `1.3.5` → [1, 3, 5]；认不出来返回 null */
@@ -69,7 +68,7 @@ export function checkUpdate() {
     const mine = parse(v.app);
     if (!latest || !mine) last = { state: "fail" };
     else if (newer(parse(latest.version), mine)) {
-      last = { state: "new", version: latest.version.replace(/^v?/, "v"), dota: latest.dota };
+      last = { state: "new", version: latest.version.replace(/^v?/, "v") };
     } else last = { state: "latest" };
     for (const cb of listeners) cb(last);
     return last;
