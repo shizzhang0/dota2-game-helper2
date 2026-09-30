@@ -60,6 +60,42 @@ function soldFromStash(lost, dGold) {
 }
 
 /**
+ * 储藏处这一包消失了几件，金钱的涨幅对不上**总价**（全价或半价）时，看其中**某几件**
+ * 能不能对上：同一包里一部分卖掉、一部分被信使取走。返回卖掉那部分的价值，没有就是 0。
+ *
+ * 实测 m9021770981 的 slot2：7:17 买大剑和一张卷轴进储藏处，7:19 两样一起消失、
+ * 金钱 +1004——大剑反悔退了全款，卷轴被取走。按总价判不出卖出，两样都记进在途，
+ * 卖掉的那 1000 一直多算。储藏处最多 6 格，枚举组合很便宜；取对得上的**最大**那组。
+ *
+ * **卖掉的那部分至少 `PART_SOLD_MIN`。** 便宜东西的价格和补刀收入在一个量级：
+ * m9008173445 的 slot5 11:33 信使取走净化药水（60）和食人魔之斧，同一包补刀 +46，
+ * 离药水半价 30 只差 16，落在 ±20 里就被当成卖掉了。和"放宽容差"那次是同一类误判。
+ */
+const PART_SOLD_MIN = 200;
+function soldPart(gone, dGold) {
+  if (!(dGold > 0) || gone.length < 2 || gone.length > 6) return 0;
+  let best = 0;
+  for (let mask = 1; mask < (1 << gone.length) - 1; mask++) {
+    let s = 0;
+    for (let i = 0; i < gone.length; i++) if (mask & (1 << i)) s += gone[i];
+    if (s >= PART_SOLD_MIN && s > best && soldFromStash(s, dGold)) best = s;
+  }
+  return best;
+}
+
+/** prev 里有、now 里没有的那几件（按名字+充能配对，重复的逐个抵） */
+function vanished(prev, now) {
+  const left = new Map();
+  for (const x of now) left.set(x.key, (left.get(x.key) || 0) + 1);
+  const out = [];
+  for (const x of prev) {
+    const n = left.get(x.key) || 0;
+    if (n > 0) left.set(x.key, n - 1); else out.push(x.cost);
+  }
+  return out;
+}
+
+/**
  * 单件物品的价值。消耗品按充能数折算——`价格 × 当前充能 ÷ 满充能`。
  * 这一个公式同时管两件事：
  *   · **用剩的**（吃树 1/3 → 30）不值一整份的钱
@@ -179,6 +215,7 @@ function appearedValue(now, prev) {
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
   let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false;
+  const stashItems = [];   // 储藏处逐件 { key, cost }，给"同一包里卖掉一部分"用，见 soldPart
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
     if (k.startsWith("neutral") || k.startsWith("preserved_neutral") || k.startsWith("teleport")) continue;
@@ -193,9 +230,10 @@ function itemValues(items, prices, player) {
     if (name === "ward_sentry" || name === "ward_observer") {
       if (k.startsWith("stash")) wardsStash += cost; else wards += cost;
     }
-    if (k.startsWith("stash")) stash += cost; else slot += cost;
+    if (k.startsWith("stash")) { stash += cost; stashItems.push({ key: `${name}|${it.charges ?? ""}`, cost }); }
+    else slot += cost;
   }
-  return { slot, stash, wards, wardsStash, dispenser };
+  return { slot, stash, wards, wardsStash, dispenser, stashItems };
 }
 
 /**
@@ -266,6 +304,7 @@ export class EconTracker {
   constructor() { this.reset(); }
   reset() {
     this.prevSlot = null; this.prevStash = null; this.transit = []; this.lastClock = null;
+    this.prevStashItems = null;
     this.pkt = 0;      // 包序号：在途账记下自己是哪一包记的，"退款晚到"只认更早的包
     this.proxy = [];   // 我买的、此刻不在我包里的宝石，见 noteProxy
     this.prevProxySlot = null; this.prevProxyStash = null;
@@ -285,6 +324,8 @@ export class EconTracker {
     this.prevShard = false;         // 上一包有没有魔晶，用来冲销吃掉时留下的在途账
     this.prevGifts = new Set();     // 上一包身上有哪几种"买了送 TP"的东西
     this.giftAt = null;             // 最近一次拿到"送 TP 的东西"的时刻
+    this.giftGiven = new Set();     // 哪几种鞋已经送过了——每种只送一次，挪回装备栏不再送
+    this.giftPending = false;       // 送了但 TP 还没见涨，窗口过了就把已有的一张转成白送
     this.spend = [];                // 说不清去向的支出：钱花了、东西还没出现（见 noteSpend）
     this.lastBuyback = null;        // 最近一次自己买活的时刻，买活掉的钱不是花钱
     this.seenBuybacks = new Set();  // 买活事件去重，GSI 会连着几十包重复推同一条
@@ -413,17 +454,51 @@ export class EconTracker {
    *
    * **鞋到手之后留一个 `TP_GIFT_WINDOW` 秒的窗口**：赠品不一定和鞋落在同一包，
    * 实测有差一包的（见那个常量的注释）。
+   *
+   * **只看装备栏的 6 格**（2026-09-30 改）。赠品是在鞋**进入装备栏**那一刻给的，
+   * 鞋在背包（slot6~8）或储藏处时不给。实测 m9021653069 的 slot9：20:34 买下飞鞋、
+   * 装备栏满了进背包，20:57 挪进装备栏，TP 才在同一包 +1——原先按"出现在任何地方"
+   * 算，窗口早过了，这张被当成自购，终值一直多 100。十局里 25 次赠送全部落在
+   * "进装备栏"的那一包或下一包。
+   *
+   * **每种鞋只送一次**：从背包挪回装备栏不再送，十局里 3 次挪回，官方都没动。
+   * 所以只认"第一次进装备栏"，免得挪来挪去时恰好买的 TP 被当成白送。
    */
   noteTpGift(items, clock) {
     const now = new Set();
-    for (const o of Object.values(items || {})) {
+    for (const [k, o] of Object.entries(items || {})) {
+      if (!/^slot[0-5]$/.test(k)) continue;
       if (!o || typeof o !== "object") continue;
       const n = String(o.name || "").replace(/^item_/, "");
       if (TP_GIFT_ITEMS.includes(n)) now.add(n);
     }
-    if ([...now].some(n => !this.prevGifts.has(n))) this.giftAt = clock;
+    const fresh = [...now].filter(n => !this.prevGifts.has(n) && !this.giftGiven.has(n));
+    if (fresh.length) {
+      this.giftAt = clock;
+      this.giftPending = true;
+      for (const n of fresh) this.giftGiven.add(n);
+    }
     this.prevGifts = now;
     return this.giftAt !== null && clock !== null && clock - this.giftAt <= TP_GIFT_WINDOW;
+  }
+
+  /**
+   * 飞鞋送的那张**没加上**时，官方把手上已有的一张算成白送。
+   *
+   * 十局里第一次拿到飞鞋共 29 次，26 次 TP 当场 +1；另 3 次 TP 没涨（1→1），而官方装备价值
+   * **同一包 −100**——鞋子加卷轴合成飞鞋本身不改变价值，少的只能是 TP。实测 m9021653069 的
+   * slot7（痛苦女王）7:02 合成飞鞋，TP 仍是 1 张，官方 −100，之后我们一直多 100。
+   * 为什么没加上不清楚（冷却、张数都不一致），但官方的处理三次都一样。
+   *
+   * 等窗口过完再判：赠品可能晚一包到。到了就什么都不做；没到就把队列里一张自购的改成白送。
+   */
+  settleTpGift(gotFreeTp, clock) {
+    if (!this.giftPending) return;
+    if (gotFreeTp) { this.giftPending = false; return; }
+    if (clock === null || this.giftAt === null || clock - this.giftAt <= TP_GIFT_WINDOW) return;
+    const i = this.tpQueue.indexOf(true);
+    if (i >= 0) { this.tpQueue[i] = false; this.boughtTp = this.tpQueue.filter(Boolean).length; }
+    this.giftPending = false;
   }
 
   noteTp(items, free, clock) {
@@ -563,7 +638,7 @@ export class EconTracker {
     if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
       this.reset();
     }
-    const { slot, stash, wards, wardsStash, dispenser } = itemValues(state.items, prices, state.player);
+    const { slot, stash, wards, wardsStash, dispenser, stashItems } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     const died = this.noteDeaths(state.player);
@@ -584,7 +659,9 @@ export class EconTracker {
                    goldBefore === null ? 0 : gold - goldBefore);
     this.noteVariants(state.items);
     this.noteBuyback(state, clock);
-    this.noteTp(state.items, died || this.noteTpGift(state.items, clock), clock);
+    const tpFree = died || this.noteTpGift(state.items, clock);
+    this.noteTp(state.items, tpFree, clock);
+    this.settleTpGift(tpUp > 0 && tpFree, clock);
 
     // 号角前 clock_time 不单调（选人/策略阶段先倒计时一轮，再重置到 -90 数到 0），
     // 用它算超时不成立，这一段只记录状态、不做在途推断。
@@ -595,6 +672,7 @@ export class EconTracker {
       this.prevBase = null;
       this.prevSlot = slot;
       this.prevStash = stash;
+      this.prevStashItems = stashItems;
       this.prevGold = gold;
       this.lastClock = clock;
       return this.total(state, prices, C, slot, stash);
@@ -620,7 +698,10 @@ export class EconTracker {
         if (i >= 0) this.transit.splice(i, 1);
       }
       if (lost > 0 && gained < lost && !soldFromStash(lost, dGold)) {
-        this.transit.push({ v: lost - Math.max(0, gained), at: clock, n: this.pkt });
+        // 同一包里卖掉一部分、另一部分被取走：卖掉的那部分不进在途账
+        const sold = soldPart(vanished(this.prevStashItems || [], stashItems), dGold);
+        const v = lost - sold - Math.max(0, gained);
+        if (v > 0) this.transit.push({ v, at: clock, n: this.pkt });
       } else if (gained > 0) {
         this.deliver(gained);                   // 装备栏变多 = 在途的东西到货了
       } else if (back > 0 && paid < back / 2) {
@@ -635,9 +716,24 @@ export class EconTracker {
         this.deliver(back);
       }
       this.transit = this.transit.filter(t => clock - t.at < TRANSIT_TTL);
+      // **信使把 TP 送进了传送槽，要销掉它在储藏处消失时记的那笔在途账。**
+      // 传送槽不算进 `slot`，上面"装备栏变多 = 到货"那条管不到它；而 noteTp 又会把这张
+      // 当成自购的记上 100——同一张 TP 记了两遍，直到在途账超时。常见的形状是传送途中
+      // 买一张：手上那张正在用，新买的进了储藏处，信使取走，几秒后到手。实测
+      // m9021653069 的 slot9：16:23 买进储藏处、16:24 被取走、16:32 进传送槽，之后一直多 100。
+      // 只销**金额是 TP 整数倍、且不超过这次到手张数**的账，别的在途东西不碰。
+      if (tpUp > 0 && !tpFree) {
+        const cost = prices.tpscroll?.cost ?? 100;
+        let left = tpUp;
+        for (let i = this.transit.length - 1; i >= 0 && left > 0; i--) {
+          const v = this.transit[i].v;
+          if (v > 0 && v <= left && v % cost === 0) { this.transit.splice(i, 1); left -= v; }
+        }
+      }
     }
     this.prevSlot = slot;
     this.prevStash = stash;
+    this.prevStashItems = stashItems;
     this.prevGold = gold;
     this.noteBuffs(state.hero, prices, C, spare);
     this.noteShard(state.hero, prices, C);
