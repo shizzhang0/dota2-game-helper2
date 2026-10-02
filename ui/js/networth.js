@@ -42,6 +42,8 @@ const DISPENSER_GRACE = 20;   // 秒：眼架被信使拿着时 GSI 看不见它
 const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来吸收同一包里的被动收入
 /** 秒：卖出的退款最多比"储藏处少了东西"晚到多久。见 update() 里"退款晚到"那段。 */
 const SALE_LAG = 5;
+/** 金：退款晚到那条只认这个数以上的在途账，理由同 PART_SOLD_MIN。 */
+const LATE_SALE_MIN = 200;
 
 /** 储藏处少了 V，这是「卖掉了」还是「被信使取走了」？
  *
@@ -692,9 +694,16 @@ export class EconTracker {
       // 9020222524 的 slot5：27:56 买羊刀进储藏处、27:58 消失、28:00 才退回 5208，
       // 按信使取走记账，多算 5200 挂了 90 秒。九局语料加这条后**九局全升、零退步**。
       // 只认更早的包记的账（`t.n < this.pkt`），同一包的已经由下面的判断管了。
+      //
+      // **只认全价、且至少 `LATE_SALE_MIN`**（2026-10-03 收紧）。逐次审查这条规则时发现：
+      // 64 次触发里 54 次帮倒忙，几乎全是 50~200 的小钱（一半是 100 的 TP）被同包的补刀、
+      // 助攻收入凑巧对上，其中不少对的是"半价"。"刚买就退"按游戏规则是 10 秒内全额，
+      // 半价卖出的东西早在储藏处待过，同一包的由下面的判断管；200 以下和每包几十到一百多
+      // 的收入分不开（同 `PART_SOLD_MIN`）。收紧后两次大的真退款（1350、400）都还在。
       if (dGold > 0) {
         const i = this.transit.findIndex(t => t.n < this.pkt && clock - t.at <= SALE_LAG
-                                              && soldFromStash(t.v, dGold));
+                                              && t.v >= LATE_SALE_MIN
+                                              && Math.abs(dGold - t.v) <= SELL_TOL);
         if (i >= 0) this.transit.splice(i, 1);
       }
       if (lost > 0 && gained < lost && !soldFromStash(lost, dGold)) {
