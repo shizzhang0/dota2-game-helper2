@@ -42,6 +42,8 @@ const DISPENSER_GRACE = 20;   // 秒：眼架被信使拿着时 GSI 看不见它
 const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来吸收同一包里的被动收入
 /** 秒：卖出的退款最多比"储藏处少了东西"晚到多久。见 update() 里"退款晚到"那段。 */
 const SALE_LAG = 5;
+/** 秒：记下"说不清的支出"之后多久之内，金钱涨回同样的数额算反悔退款。见 noteSpend。 */
+const REFUND_WINDOW = 6;
 
 /** 储藏处少了 V，这是「卖掉了」还是「被信使取走了」？
  *
@@ -784,6 +786,17 @@ export class EconTracker {
     // 从 70.9% 掉到 66.1%、平均|差| 44→56、终值 0→689，其余各局基本不动。
     const got = base - prev;
     if (got > 0) this.deliverSpend(got);
+
+    // **反悔退款也要销账。** 买了又在 10 秒内卖回，东西若始终没在任何一包里露面，
+    // 这本账只见"钱花了"、不见"钱回来"，会一直挂到终局。包越稀越容易这样：
+    // m9021653069 的 slot2 2 倍速录制里，24:37 金钱 −392（卷轴在两包之间进了储藏处
+    // 又被信使取走），24:42 +408 全额退回，此后一直多 392；同一局 1 倍速看得见卷轴，没事。
+    // 只认全额（±SELL_TOL）：10 秒内卖回才全额，半价那种东西早就出现过了。
+    const back = gold - goldBefore;
+    if (back > 0) {
+      const i = this.spend.findIndex(t => clock - t.at <= REFUND_WINDOW && Math.abs(back - t.v) <= SELL_TOL);
+      if (i >= 0) this.spend.splice(i, 1);
+    }
 
     if (dead) { out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0); return; }
 
