@@ -602,6 +602,19 @@ export class EconTracker {
         for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
           if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
         }
+      } else if (!died) {
+        // **同一包里买眼又买了别的**（2026-10-04 补）。上面那条要求"装备/储藏处没多东西"，
+        // 同包还买了看得见的东西就整个放弃。实测 m9029221681 的 slot2（米拉娜）5:36
+        // 付 166 = 两瓶净化药水 120（进储藏处）+ 一个真眼 50（并进眼架）− 4 被动收入，
+        // 这个真眼被漏掉，之后一直少 50——自己打的录制和回放录制都一样。
+        // 这时看"付掉的钱 − 看得见的增加"剩多少，剩下约 50 的整数倍就是进了架子的真眼。
+        // 沿用上面的 ±SENTRY_TOL 和 SENTRY_MAX_BUY，没有另调参数。
+        // 十一份观战录制逐次审查：触发 11 次，8 次帮忙（分布在 7 份录制）、3 次帮倒忙，
+        // 那 3 次都是后面"眼架送到身上、和散装真眼合并"那步本来就多算，不是认错了眼。
+        const spare = paid - assetUp;
+        for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
+          if (Math.abs(spare - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
+        }
       }
       this.dispenserValue = Math.max(0, this.dispenserValue - placedSentries * sentry);
     }
