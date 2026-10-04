@@ -69,6 +69,11 @@ fn files(app: &tauri::AppHandle) -> Vec<std::path::PathBuf> {
         .collect()
 }
 
+/// 主菜单的包：没有 `map`，`player` 是空对象。
+fn is_menu(v: &serde_json::Value) -> bool {
+    v.get("map").is_none() && v.get("player").and_then(|p| p.as_object()).is_some_and(|o| o.is_empty())
+}
+
 /// 这一包说自己属于哪一局。`"0"` 和空串当作"不知道"——主菜单就是这个样子。
 fn match_id(v: &serde_json::Value) -> Option<String> {
     let s = v.get("map")?.get("matchid")?.as_str()?;
@@ -180,10 +185,18 @@ pub fn write(app: &tauri::AppHandle, v: &serde_json::Value) {
     if !r.enabled {
         return;
     }
+    // **回到主菜单就收尾**，这一包不写。主菜单的包是 `{"provider", "player":{}, "events":[]}`：
+    // 没有 `map`、`player` 是空对象；对局中途从不出现（十三份录制核对过）。
+    // 不这样做的话，主菜单 30 秒一个的心跳会让断流看门狗（`IDLE_SECS` = 40）永远等不到，
+    // 自己打完一局文件就一直开着。见 design/overlay.md「回到主菜单就收尾」。
+    if r.sink.is_some() && is_menu(v) {
+        r.close("回到主菜单");
+        return;
+    }
     // 换局就收尾，下面会懒建新文件。**两个都是真 matchid 且不相等**才算换局：
-    // `map` 段可能整包缺席（GSI 推的是增量），主菜单里的 matchid 是 "0" 或没有，
-    // 这些一律当"不知道"，跟着当前文件走——宁可让菜单数据粘在某一局的尾巴上，
-    // 也不要凭空造出一堆碎文件。
+    // `map` 段可能整包缺席（GSI 推的是增量），matchid 也可能是 "0" 或没有，
+    // 这些一律当"不知道"，跟着当前文件走，不要凭空造出一堆碎文件。
+    // （主菜单的包已经在上面收尾了，走不到这里。）
     let id = match_id(v);
     if let (Some(now), Some(cur)) = (id.as_deref(), r.match_id.as_deref()) {
         if now != cur {
