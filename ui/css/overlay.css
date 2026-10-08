@@ -36,7 +36,7 @@ html, body {
 }
 
 /* ── 块 ─────────────────────────────────────────────
-   四个可独立摆位的块。位置一律由 JS 写 left/top，CSS 不给默认坐标——
+   三个可独立摆位的块（买活与塔防贴着顶栏画，不在其中，见文末）。位置一律由 JS 写 left/top，CSS 不给默认坐标——
    默认摆位要按视口比例算（见 render.js 的 defaultLayout）。
    transform-origin 是左上角：缩放时块从自己的左上角长大，存的坐标才不会失真。 */
 
@@ -108,8 +108,7 @@ html, body {
 }
 .cell[data-urgency="now"] .ring-fg { stroke-width: 6; }
 
-/* 数字在环下面、图标压在环里——两者的位置是对调过的。
-   min-height 不能省：塔防 ready 态数字为空，不留高度那一格会比旁边矮、整行跳。 */
+/* 数字在环下面、图标压在环里——两者的位置是对调过的。 */
 .num {
   margin-top: 2px;
   min-height: 21px;
@@ -136,35 +135,6 @@ html, body {
 .inline-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .cell.wide .lab { display: flex; align-items: center; justify-content: center; flex: none; }
 
-/* 买活不能照搬：它是**五个值**，图标摆进那一行就成了"第六个东西"，
-   混进数据里了。所以它的图标回到下方当标签——而且这样正好和塔防的倒计时
-   落在同一水平线上，两格反而对齐了。 */
-[data-cell="buyback"] .lab { margin-top: 2px; min-height: 21px; }
-/* 圆点原本什么容器都没有，旁边塔防却有个很重的圆环，两边一比就"飘"。
-   给它一个圆角框——那是圆环在这种形态下的对应物。
-
-   框**撑满格子高度**，把塔防"环 + 倒计时"的结构镜像一遍：框顶对齐圆环顶、
-   框底对齐倒计时底，圆点居中到圆环那一带、箭头落到倒计时那一行。
-   曾试过让框贴着内容再垂直居中，结果和圆环、倒计时两边都没对齐。 */
-.bb-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  /* 边框取 --k-chance（#65D9F7，"敌方缺失 = 机会"）的 32%，和框里的图标同色系。
-     不用满强度：框是容器不是数据，太亮会和旁边塔防那个红色进度环抢，
-     也会让人误以为它自己在表达某种状态。 */
-  border: 1px solid rgba(101, 217, 247, .32);
-  border-radius: 10px;
-  padding: 0 8px;
-}
-/* 框宽 = 圆点 5×16 + 间距 4×5 + 内边距 16 + 边框 2 = 118，格子必须比它宽，
-   否则框会溢出格子、顶到块的内边距上 */
-/* 圆点吃掉箭头以外的全部高度并居中——它的中心因此落在圆环中心那条线上 */
-[data-cell="buyback"] .dots { flex: 1; height: auto; }
-/* 塔防和买活是两种不同形态的格子，6px 的通用间距太挤，会读成一组 */
-[data-cell="buyback"] { margin-left: 8px; }
-
 /* 必须写成 `.cell .lab svg`：上面那条 `.cell svg { width: 52px }` 是给圆环用的，
    特异度 (0,1,1) 会把图标撑成 52px——就是眼位地图踩过的同一个坑。
    这条是 (0,2,1)，压得住。
@@ -181,24 +151,7 @@ html, body {
 
 /* 宽度写死：净资产从 4 位涨到 5 位时若让宽度自适应，居中面板会整体横移，读数时抖动 */
 .cell.wide { justify-content: space-between; opacity: 1; }
-.cell[data-cell="buyback"] { width: 122px; }   /* 容得下 .bb-box 的 118px，见下 */
 .cell.econ { width: 116px; }
-
-/* ── 敌方买活 ────────────────────────────────────────── */
-
-.dots { display: flex; gap: 5px; height: 52px; align-items: center; }
-.dot { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 16px; opacity: .5; }
-.dot[data-on="1"] { opacity: 1; }
-.dot i {
-  display: block; width: 10px; height: 10px; border-radius: 50%;
-  background: var(--slot, #888);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
-}
-.dot[data-on="1"] i { outline: 2px solid var(--k-chance); outline-offset: 1px; }
-.dot span {
-  font-size: 10px; line-height: 1; color: var(--k-chance);
-  text-shadow: 0 0 3px #000; min-height: 10px;
-}
 
 /* ── 经济 ───────────────────────────────────────────── */
 
@@ -212,25 +165,73 @@ html, body {
   text-align: left;
 }
 .econ .lab { color: #FFD76A; }
-[data-cell="buyback"] .lab { color: var(--k-chance); }
-/* 比净资产那个大：它下方没有别的东西，而旁边塔防同一水平线上是 18px 的倒计时，
-   16px 的描边图标在旁边显得轻飘。
-   **必须写在上面那条 `.cell .lab svg.ico` 之后**——两条特异度都是 (0,3,1)，
-   靠顺序取胜。这个文件里同类的坑已经出现三次了（圆环压图标、真眼空心、这条）。 */
-[data-cell="buyback"] .lab svg.ico { width: 20px; height: 20px; }
-
-/* 塔防 ready：盾填实。数字位这时是空的（数字位永远只放数字），
-   光靠"环画满"不够显眼，而填实是个不用文字的状态差——
-   放 READY 会在刚清空的面板上重新塞回一个要翻译的词。 */
-[data-cell="glyph"][data-urgency="now"] .lab svg.ico {
-  fill: currentColor;
-  fill-opacity: .3;
-}
-
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 
 @media (prefers-reduced-motion: reduce) {
-  .block, .ring-fg { transition: none; }
+  .block, .ring-fg, .tb, .tb-glyph i { transition: none; }
+}
+
+/* ── 贴着顶栏的买活与塔防 ─────────────────────────────
+   位置由 topbar.js 按 Dota 顶栏的几何算，这里只管长相。
+   大小吃 --hud-k（屏高 / 1080），**不吃用户的缩放滑块**：这一层要和头像一样大，
+   面板调大调小它不该跟着变。透明度照吃，那是"整个覆盖层多显眼"。 */
+
+.tb {
+  position: fixed;
+  top: 0;
+  pointer-events: none;          /* 编辑态也不收鼠标：它不能拖，位置跟着游戏走 */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .12s linear, visibility 0s linear .12s;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+}
+.tb.on {
+  opacity: var(--panel-opacity, 1);
+  visibility: visible;
+  transition: opacity .12s linear;
+}
+
+/* 买活：头像正下方一个小框，回转箭头 + 剩余冷却。只在冷却中出现——
+   没在冷却的人底下什么都没有，比十个暗着的占位安静得多。
+   **十个人同一个颜色**（2026-10-08 定）：敌我看它在哪一侧就知道，
+   按槽位上色既多余（头像顶上已有槽位色条），有几种颜色在暗图上也读不出。 */
+.tb-bb {
+  transform: translate(-50%, -50%) scale(var(--hud-k, 1));
+  display: flex; align-items: center; gap: 3px;
+  padding: 2px 5px;
+  border: 1px solid rgba(101, 217, 247, .43);
+  border-radius: 5px;
+  background: rgba(10, 14, 20, .84);
+  color: var(--k-chance);
+  font-size: 13px; font-weight: 600; line-height: 1;
+  white-space: nowrap;
+}
+.tb-bb svg.ico { width: 12px; height: 12px; stroke-width: 2.2; filter: drop-shadow(0 0 2px #000); }
+.tb-bb[data-v="0"] { display: none; }
+/* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
+.tb-bb[data-v="slot"] { border-style: dashed; opacity: .6; }
+
+/* 敌方塔防：顶栏左端那块空底板（自己打的时候敌方永远在左）。盾 + 剩余冷却，底边一条线代替原先的圆环。
+   原生底板是带纹理的灰，红字直接压上去不够清楚，所以垫一层深色。 */
+.tb-glyph {
+  transform: scale(var(--hud-k, 1));
+  transform-origin: top left;
+  box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(8, 10, 14, .66);
+  color: var(--k-threat);
+  font-size: 17px; font-weight: 600; line-height: 1;
+}
+.tb-glyph svg.ico { width: 20px; height: 20px; opacity: .6; filter: drop-shadow(0 0 2px #000); }
+.tb-glyph span:empty { display: none; }
+/* ready：盾填实、点亮，数字位空着（数字位永远只放数字） */
+.tb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; width: 22px; height: 22px; }
+/* 剩下多少冷却线就有多长。线贴着外端（左边，远离中线那头），越来越短 */
+.tb-glyph i {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: currentColor;
+  transform-origin: left center;
+  transition: transform .9s linear;
 }
 
 /* ── 眼位小地图 ─────────────────────────────────────── */
@@ -248,7 +249,7 @@ html, body {
   height: var(--ward-size, 180px);
   display: block;
 }
-/* 地图自己的底跟着「底板」滑块一起淡——写死 .35 的话，底板拉到 0 时四个块都透了，
+/* 地图自己的底跟着「底板」滑块一起淡——写死 .35 的话，底板拉到 0 时所有块都透了，
    只剩这一块灰方块浮在画面中间。系数 .5 让默认的 .72 落回 .36，和原来同一档。 */
 .wm-bg { fill: rgba(0, 0, 0, calc(var(--block-bg, .72) * .5)); }
 .wm-tower { fill: #9AA6B4; opacity: .55; }

@@ -91,7 +91,7 @@ function exitEdit() {
   applyEdit(false);
   if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
 }
-// 四块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
+// 块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
 // scale 由调用方传入：卡片刚把设置存下去，cfg 要等 settings 事件回来才更新。
 function resetLayout(scale = cfg.scale ?? 1) {
   const next = applyLayout(null, scale);
@@ -164,8 +164,8 @@ setInterval(() => {
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
-    buybacks: tracker ? tracker.enemyBuybacks(info) : [],
-    enemyBase: info.myTeam === 2 ? 5 : 0,
+    buybacks: tracker ? tracker.buybacks(info) : [],
+    myTeam: info.myTeam,
     econ: e,
     settings: cfg,
     wardmap: wards ? { wards: wards.list(info), dead: deadTowers(st, towers) } : null,

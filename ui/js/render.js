@@ -1,25 +1,24 @@
 import { initWardMap, renderWardMap } from "./wardmap.js";
 import { icon, CELL_ICON } from "./icons.js";
+import { initTopbar, renderTopbar } from "./topbar.js";
 
 // Alt 面板渲染。DOM 只在 initPanel 建一次，render 仅改文本/类名/CSS 变量，避免每帧重建。
-const SLOT_COLORS = ["#3375FF", "#66FFBF", "#BF00BF", "#F3F00B", "#FF6B00",
-                     "#FE86C2", "#A1B447", "#65D9F7", "#008321", "#A46900"];
 const R = 26, CIRC = 2 * Math.PI * R;
 const TIMER_IDS = ["mid", "bounty", "lotus", "wisdom", "stack"];
 
-// 四个可独立摆位的块。cells 用来判断"这一块是不是该整体隐藏"。
+// 三个可独立摆位的块。cells 用来判断"这一块是不是该整体隐藏"。
+// 敌方塔防和买活不在这里：它们贴着 Dota 的顶栏画、位置跟着游戏走，见 topbar.js。
 export const BLOCKS = [
   { id: "timers",  cells: ["mid", "bounty", "lotus", "wisdom", "stack"] },
-  { id: "enemy",   cells: ["glyph", "buyback"] },
   { id: "econ",    cells: ["econ"] },
   { id: "wardmap", cells: ["wardmap"] },
 ];
 
-// 块被整体隐藏时 offsetWidth 为 0，算默认摆位会把四块全挤到左上角。
+// 块被整体隐藏时 offsetWidth 为 0，算默认摆位会把所有块全挤到左上角。
 // 这张表只用于兜底，取的是 1× 下实测的 offsetWidth/offsetHeight（含 1px 边框）。
 // econ 比另两个矮，是因为它那格没有圆环、CSS 里写死了 height: 52px。
 const NOMINAL = {
-  timers: { w: 350, h: 85 }, enemy:   { w: 196, h: 85 },
+  timers: { w: 350, h: 85 },
   econ:   { w: 142, h: 70 }, wardmap: { w: 214, h: 213 },   // wardmap 随 wardSize 变，这是默认 180 时的值
 };
 
@@ -39,14 +38,6 @@ function ring(id) {
 
 const INNER = {
   timers: () => TIMER_IDS.map(ring).join(""),
-  enemy: () => ring("glyph") + `
-    <div class="cell wide" data-cell="buyback">
-      <div class="bb-box">
-        <div class="dots">${[0, 1, 2, 3, 4].map(i =>
-          `<div class="dot" data-i="${i}"><i></i><span>--</span></div>`).join("")}</div>
-        <div class="lab">${icon("buyback")}</div>
-      </div>
-    </div>`,
   econ: () => `
     <div class="cell wide econ" data-cell="econ">
       <div class="inline-row">
@@ -66,8 +57,6 @@ export function initPanel(container, towers) {
     `<div class="block" data-block="${b.id}">${INNER[b.id]()}</div>`).join("");
 
   els = { blocks: {}, cells: {},
-          dots: [...root.querySelectorAll(".dot")].map(d => ({
-            root: d, span: d.querySelector("span") })),
           nw: root.querySelector(".nw"),
           gpm: root.querySelector(".gpm"),
           xpm: root.querySelector(".xpm") };
@@ -77,6 +66,7 @@ export function initPanel(container, towers) {
       lab: c.querySelector(".lab"), fg: c.querySelector(".ring-fg") };
   }
   initWardMap(root.querySelector('[data-cell="wardmap"]'), towers);
+  initTopbar(root);
   prev = {};
 }
 
@@ -106,7 +96,7 @@ export function render(m) {
   const cfg = m.settings || {};
   const show = cfg.show || {};
   scale = cfg.scale ?? 1;
-  // CSS 变量沿 DOM 树继承，设在容器上四个块都吃得到；缩放与透明度都走合成器，不触发重排
+  // CSS 变量沿 DOM 树继承，设在容器上每一块都吃得到（贴顶栏那一层也吃）；缩放与透明度都走合成器，不触发重排
   root.style.setProperty("--panel-scale", scale);
   root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
   root.style.setProperty("--ward-size", `${cfg.wardSize ?? 180}px`);
@@ -140,36 +130,7 @@ export function render(m) {
     if (prev[t.id + ".o"] !== off) { prev[t.id + ".o"] = off; c.fg.style.strokeDashoffset = off; }
   }
 
-  // 敌方塔防：ready 是威胁态，点亮；冷却中压暗并显示剩余
-  const g = els.cells.glyph, gm = m.glyph || { ready: true, remaining: 0, total: 300 };
-  // 数字位永远只放数字：ready 时留空，靠环画满 + 盾点亮表达
-  set(g.num, "g.n", gm.ready ? "" : fmt(gm.remaining));
-  setHtml(g.lab, "g.l", icon("glyph"));
-  const gu = gm.ready ? "now" : "far";
-  if (prev["g.u"] !== gu) { prev["g.u"] = gu; g.root.dataset.urgency = gu; }
-  if (prev["g.k"] !== 1) { prev["g.k"] = 1; g.root.style.setProperty("--accent", "var(--k-threat)"); }
-  // 冷却总长由 events.js 给，**不在这里写死**：开局那次是 270 不是 300，
-  // 而且常数写进渲染层正是上一个项目栽过的那个跟头。
-  const gf = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 300)));
-  const goff = (CIRC * (1 - gf)).toFixed(1);
-  if (prev["g.o"] !== goff) { prev["g.o"] = goff; g.fg.style.strokeDashoffset = goff; }
-
-  // 敌方买活：点亮 = 该敌人买活在冷却（可强杀），是机会态
-  const byIdx = {};
-  for (const b of m.buybacks || []) byIdx[b.slot % 5] = b;
-  els.dots.forEach((d, i) => {
-    const b = byIdx[i];
-    if (prev["d" + i + ".c"] !== (b ? 1 : 0)) {
-      prev["d" + i + ".c"] = b ? 1 : 0;
-      d.root.dataset.on = b ? "1" : "0";
-    }
-    const color = SLOT_COLORS[(m.enemyBase ?? 5) + i] || "#888";
-    if (prev["d" + i + ".col"] !== color) {
-      prev["d" + i + ".col"] = color;
-      d.root.style.setProperty("--slot", color);
-    }
-    set(d.span, "d" + i + ".t", b ? fmt(b.remaining) : "");
-  });
+  renderTopbar(root, m, show);
 
   const e = m.econ || { networth: 0, gpm: 0, xpm: 0 };
   set(els.nw, "e.nw", e.networth.toLocaleString("en-US"));
@@ -188,7 +149,7 @@ function box(id) {
 
 /** 把坐标钳进视口。块比视口还大时钳到 0，不让它跑到负数。 */
 function clamp(id, p) {
-  // 视口量不出来时绝不能钳：那会把四块全压到 (0,0)，而调用方会把结果回存，
+  // 视口量不出来时绝不能钳：那会把所有块全压到 (0,0)，而调用方会把结果回存，
   // 用户摆好的位置就没了。实测浏览器里改完窗口尺寸的头一帧 innerWidth 确实是 0。
   if (!innerWidth || !innerHeight) return { x: Math.round(p.x), y: Math.round(p.y) };
   const { w, h } = box(id);
@@ -196,21 +157,20 @@ function clamp(id, p) {
            y: Math.round(Math.min(Math.max(0, p.y), Math.max(0, innerHeight - h))) };
 }
 
-/** 默认摆位：timers 与 enemy 都水平居中、上下叠放；econ 与 wardmap 靠左边缘叠放。
+/** 默认摆位：timers 水平居中；econ 与 wardmap 靠左边缘叠放。
     全部按视口比例算，不写死像素——换分辨率也成立。
-    y0 取屏高 7.5% 是为了让开 Dota 顶部计分板（1080 屏上是 81px）。
+    y0 取屏高 8% 是为了让开 Dota 顶栏**和挂在头像下面的买活那一行**
+    （1080 屏上买活行底边在 83px，见 topbar.js；原先没有那一行时是 7.5%）。
 
-    **左边那列从第二行起，不从 y0 起**：与 enemy 同高。原先 econ 顶在 y0，
-    实机上偏高（2026-09-14 实测后按用户摆好的位置改，他把 econ 正好放到了
-    与 enemy 相同的 y）。写成"对齐 enemy 那一行"而不是记住那个像素值，
-    换分辨率、换缩放都还成立。 */
+    **左边那列从第二行起，不从 y0 起**。原先 econ 顶在 y0，实机上偏高
+    （2026-09-14 实测后按用户摆好的位置改，他把 econ 放到了 timers 下面那一行）。
+    写成"timers 下面那一行"而不是记住那个像素值，换分辨率、换缩放都还成立。 */
 function defaultLayout() {
-  const W = innerWidth, H = innerHeight, y0 = Math.round(H * 0.075), GAP = 10;
-  const t = box("timers"), e = box("enemy"), c = box("econ");
+  const W = innerWidth, H = innerHeight, y0 = Math.round(H * 0.08), GAP = 10;
+  const t = box("timers"), c = box("econ");
   const row2 = Math.round(y0 + t.h + GAP);
   return {
     timers:  { x: Math.round((W - t.w) / 2), y: y0 },
-    enemy:   { x: Math.round((W - e.w) / 2), y: row2 },
     econ:    { x: 16, y: row2 },
     wardmap: { x: 16, y: Math.round(row2 + c.h + GAP) },
   };
