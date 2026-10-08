@@ -119,8 +119,9 @@ html, body {
 /* 去掉底板、缩小之后整排太淡（用户实测"不仔细看不出来"），参照 Dota Plus 的符文倒计时改：
    · 每个圆一块**带颜色的暗底盘**：径向渐变，中心混进三成多自己的颜色，往外渐暗到边缘化开。
      Dota Plus 显眼靠的就是这个；试过平涂黑圆片，像在画面上挖了个洞，用户嫌丑
-   · 进度环收细到 3（Dota Plus 也是细环），颜色仍跟着图标走——我们的图标是线条画，
-     颜色是分辨五个符的主要线索；最后 10 秒加粗到 5 提醒
+   · 进度环粗 5（缩完约 3.6px），颜色跟着图标走——我们的图标是线条画，
+     颜色是分辨五个符的主要线索；最后 10 秒加粗到 7 提醒。
+     试过学 Dota Plus 收细到 3，实战看不清（缩完只剩 2px 出头）
    · 不再按远近压暗：.78 是当初有底板时为了拉开层级，没底板时它只是让一切更难看清
    · 整个环加一圈黑色投影，和文字的 text-shadow 同一个道理
    格子从 60 收到 52，放大到 0.72 之后整排仍夹在两侧买活之间。
@@ -128,14 +129,17 @@ html, body {
 [data-block="timers"] .cell { width: 52px; }
 [data-block="timers"] .cell[data-urgency] { opacity: 1; }
 [data-block="timers"] .cell > svg { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
-[data-block="timers"] .cell .ring-fg { stroke-width: 3; }
-[data-block="timers"] .cell[data-urgency="now"] .ring-fg { stroke-width: 5; }
+[data-block="timers"] .cell .ring-fg { stroke-width: 5; }
+[data-block="timers"] .cell[data-urgency="now"] .ring-fg { stroke-width: 7; }
 [data-block="timers"] .cell:not(.wide) .lab {
   border-radius: 50%;
-  /* closest-side = 26px，88% 处收边，正好落在环的内侧 */
+  /* 底盘叠在圆环**上面**（.lab 在 svg 之后），所以半径必须收在环的内侧边缘以内，
+     否则会把环盖掉一半——之前环看着细，主要就是被它盖的。
+     环半径 26/60 × 52px = 22.5px，线宽 5 → 内侧边缘约 20.3px；
+     closest-side = 26px，76% ≈ 19.8px 处收边 */
   background: radial-gradient(circle closest-side,
     color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
-    rgba(10, 13, 18, .85) 86%, transparent 90%);
+    rgba(10, 13, 18, .85) 72%, transparent 76%);
 }
 
 /* 有圆环的格子：图标压在环中央（环内径 48px，放得下 24px）。

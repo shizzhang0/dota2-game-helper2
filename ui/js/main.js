@@ -80,8 +80,17 @@ connectSource(async (pkt) => {
   wards.C = C;
   wards.update(st, info);
   if (info.newMatch) econ.reset();
+  // **游戏结束后净资产定格在结束那一包**（2026-10-09）。遗迹倒下、状态变成 POST_GAME 之后，
+  // Dota 还会接着往金钱里加（时钟已经停了），GSI 照推——m9035205154 里结束后十几包
+  // 从 9017 涨到 9069，而结算画面 / OpenDota 定格在 9015。不停住的话，赛后进编辑态
+  // 对账看到的就是一路涨上去的数。只算结束的第一包，之后沿用它；
+  // 包大约 2 秒一个，和结算值会差几块（那一局差 2）。
+  const ended = info.gameState === "DOTA_GAMERULES_STATE_POST_GAME";
+  const frozen = ended && last?.info.gameState === "DOTA_GAMERULES_STATE_POST_GAME"
+                 && last.info.matchid === info.matchid;
   // 插眼数要在 wards.update 之后取：净资产靠它把眼架里的存货扣掉
-  last = { st, info, econ: econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
+  last = { st, info, econ: frozen ? last.econ
+                                  : econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
   lastAt = Date.now();
 });
 

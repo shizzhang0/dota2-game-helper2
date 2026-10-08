@@ -126,5 +126,9 @@ export function renderWardMap(m, opt, edit) {
   // 淡化之后新旧一眼可分，时长才敢从 3 秒放到 20 秒（2026-10-08 再放到 45 秒）。
   const cross = (o) => crossIcon(sx(o.x), sy(o.y), R_DOT,
     typeof o.conf === "number" ? ` opacity="${(0.12 + 0.88 * o.conf).toFixed(2)}"` : "");
-  wardLayer.innerHTML = w.enemy.map(dot).join("") + w.killed.map(cross).join("");
+  // **有视野的敌方眼不画**（2026-10-09）：那时原生小地图正画着它，再画一遍就叠在一起。
+  // 一离开视野原生的图标就没了，我们的标记在同一个位置接上——视野盲区（被树挡住之类）
+  // 里的眼，正是这一层该出场的时候。代价是离开视野后最多晚一包（1~2 秒）才出现。
+  wardLayer.innerHTML = w.enemy.filter(o => !o.visible).map(dot).join("") +
+                        w.killed.map(cross).join("");
 }
