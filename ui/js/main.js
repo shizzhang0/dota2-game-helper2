@@ -4,7 +4,7 @@ import { MatchTracker } from "./match.js";
 import { loadConstants, computeTimers } from "./timers.js";
 import { EventTracker, loadTowers } from "./events.js";
 import { loadPrices, EconTracker } from "./networth.js";
-import { initPanel, render, enableDrag, applyLayout } from "./render.js";
+import { initPanel, render } from "./render.js";
 import { WardTracker, deadTowers } from "./minimap.js";
 import { loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
@@ -48,40 +48,6 @@ let cfg = await loadSettings();
 onSettingsChange(v => { cfg = v; });
 initPanel(document.getElementById("panel"), towers);
 
-// ── 面板位置：Tauri 存配置文件，浏览器开发时存 localStorage ──
-async function loadLayout() {
-  let raw = null;
-  try {
-    raw = isTauri() ? JSON.parse(await window.__TAURI__.core.invoke("load_layout"))
-                    : JSON.parse(localStorage.getItem("layout") || "{}");
-  } catch { raw = null; }
-  // 老格式是整块面板的单坐标 {x, y}。沿用为 timers 的位置，其余三块取默认值——
-  // 不迁的话用户已经摆好的位置会直接丢。
-  if (raw && typeof raw.x === "number") return { timers: { x: raw.x, y: raw.y } };
-  return raw;
-}
-function saveLayout(all) {
-  const s = JSON.stringify(all);
-  if (isTauri()) window.__TAURI__.core.invoke("save_layout", { layout: s });
-  else localStorage.setItem("layout", s);
-}
-const savedLayout = await loadLayout();
-let layout = applyLayout(savedLayout, cfg.scale ?? 1);
-// 迁移与钳位的结果要落盘，否则每次启动都要重算一遍。但只在结果确实变了时才写——
-// applyLayout 返回 null 表示视口还没量出来、这次没摆，那更不能写。
-if (layout && JSON.stringify(layout) !== JSON.stringify(savedLayout)) saveLayout(layout);
-enableDrag((id, pos) => { layout[id] = pos; saveLayout(layout); });
-
-// 视口尺寸变了要重新钳位（换分辨率、拔掉副屏）；同时兜住"启动时视口还没量出来"，
-// 那种情况下上面这次 applyLayout 什么都没做，得靠这里补上。
-addEventListener("resize", () => {
-  const next = applyLayout(layout || savedLayout, cfg.scale ?? 1);
-  if (!next) return;
-  const changed = JSON.stringify(next) !== JSON.stringify(layout);
-  layout = next;
-  if (changed) saveLayout(layout);
-});
-
 function applyEdit(on) {
   editMode = on;
   setEditorOpen(on);
@@ -94,15 +60,7 @@ function exitEdit() {
   applyEdit(false);
   if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
 }
-// 块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
-// scale 由调用方传入：卡片刚把设置存下去，cfg 要等 settings 事件回来才更新。
-function resetLayout(scale = cfg.scale ?? 1) {
-  const next = applyLayout(null, scale);
-  if (!next) return;                     // 视口没准备好，别把负坐标写进去
-  layout = next;
-  saveLayout(layout);
-}
-await initEditor(document.getElementById("editor"), exitEdit, resetLayout);
+await initEditor(document.getElementById("editor"), exitEdit);
 // 启动时静默查一次新版本，结果只显示在开发页的版本号旁边。不等它：
 // 连不上要等满超时，而覆盖层不该因此晚一步出来（只在 Tauri 里查，见 update.js）
 checkUpdate();
@@ -135,8 +93,8 @@ onAltChange((d) => {
   alt = d;
 });
 
-// 没有 GSI 数据时的占位，用于编辑态摆位置——调位置这件事恰恰要在开游戏之前做，
-// 若等到有数据才渲染，没开 Dota 时面板根本不出现，也就无从拖动。
+// 没有 GSI 数据时的占位，用于编辑态——调设置、看位置对不对，恰恰要在开游戏之前做，
+// 若等到有数据才渲染，没开 Dota 时面板根本不出现。
 const IDLE = {
   st: {},
   info: { matchid: null, clock: null, gameState: null, inMatch: false, spectating: false,
@@ -162,7 +120,7 @@ setInterval(() => {
   render({
     // 「始终显示」**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
     // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
-    // 编辑态则要绕过，摆位置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
+    // 编辑态则要绕过，调设置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
     visible: editMode || ((alt || cfg.alwaysShow) && info.inMatch && !stale),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],

@@ -48,11 +48,10 @@ html, body {
   align-items: stretch;
   gap: 6px;
   padding: 8px 12px;
-  /* 底板可以一路调到全透明。描边跟着一起淡出——底板没了却留一圈白线，
-     会变成一个空的方框浮在画面上。系数 0.14 是让默认的 .72 正好落回 --hair 的 .10。
-     注意这和「整体透明度」不是一回事：那条会把文字图标一起调淡，这条只动底板。 */
-  background: rgba(8, 10, 14, var(--block-bg, .72));
-  border: 1px solid rgba(255, 255, 255, calc(var(--block-bg, .72) * .14));
+  /* **没有底板**（2026-10-08 起）。原先是一块可调深浅的深色底（「底板」滑块），
+     用户嫌多余：文字和数字都带了 text-shadow，压在游戏画面上照样读得清。
+     border 留着透明的一像素，是为了块的尺寸和以前一样，存下的摆位不会因此偏一像素。 */
+  border: 1px solid transparent;
   border-radius: 10px;
   pointer-events: none;          /* 锁定态整窗穿透 */
   opacity: 0;
@@ -67,15 +66,13 @@ html, body {
 /* 编辑态**不要**写 opacity: 1。它会盖掉上面 .block.on 的 var(--panel-opacity)，
    而透明度滑块只能在编辑态里够到——结果就是"拖了没反应"，永远看不到效果。
    把设置并进编辑态本来就是为了不盲调，这条却一直漏在外面。
-   透明度下限是 0.3，编辑态下仍然看得见、拖得动。 */
+   透明度下限是 0.3，编辑态下仍然看得见。 */
+/* 编辑态只描一圈虚线，让人看到块在哪；不再能拖（位置跟着 Dota 的界面走，见 render.js） */
 .block.edit {
-  pointer-events: auto;
-  cursor: grab;
   outline: 1px dashed var(--k-chance);
   outline-offset: 3px;
   visibility: visible;
 }
-.block.edit:active { cursor: grabbing; }
 
 /* .block 与 .cell 的 display:flex 会盖过浏览器默认的 [hidden]{display:none}，
    隐藏显示项时必须显式声明，否则设置里关掉的格子照样显示 */
@@ -117,6 +114,12 @@ html, body {
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
 }
 .cell[data-urgency="now"] .num { color: var(--accent); }
+/* 倒计时**只留圆环、不显示数字**（2026-10-08 起）：圆环本身就是进度条，
+   去掉数字才能缩到塞进顶栏计时牌底下那块空地 */
+[data-block="timers"] .num { display: none; }
+/* 块缩到 0.5 之后 24px 的图标只剩 12px，认不清。环内径 48，放得下 32（缩完 16）。
+   特异度 (0,5,1)，压过 `.cell:not(.wide) .lab svg.ico` 那条 24px，不靠顺序 */
+[data-block="timers"] .cell:not(.wide) .lab svg.ico { width: 32px; height: 32px; }
 
 /* 有圆环的格子：图标压在环中央（环内径 48px，放得下 24px）。
    放大到 24px 顺带解决了描边过细的风险——0.8× 时描边从 0.79px 变成 1.36px。
@@ -155,9 +158,12 @@ html, body {
 
 /* ── 经济 ───────────────────────────────────────────── */
 
-.econ { justify-content: center; gap: 1px; height: 52px; }
+/* 原先写死 52px 高、和倒计时那一排圆环对齐；两块分开放之后用不着了。
+   而且 `.cell.wide` 的 space-between 特异度更高，会把金额顶到上沿、GPM 压到下沿，
+   中间空出一截——所以这里用 .cell.econ 压回去，让两行贴着。 */
+.cell.econ { justify-content: flex-start; gap: 2px; height: auto; }
 .nw {
-  font-size: 22px; font-weight: 600; color: #FFD76A;
+  font-size: 22px; font-weight: 600; color: #FFD76A; line-height: 1.1;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
   /* 钉住宽度：图标在左边之后，数字从 4 位涨到 5 位会把币往左推。
      这和"格子宽度写死防抖动"是同一个理由，只是尺度小了一层。 */
@@ -191,17 +197,17 @@ html, body {
   transition: opacity .12s linear;
 }
 
-/* 买活：头像正下方一个小框，回转箭头 + 剩余冷却。只在冷却中出现——
+/* 买活：头像正下方，回转箭头 + 剩余冷却。只在冷却中出现——
    没在冷却的人底下什么都没有，比十个暗着的占位安静得多。
+   **没有底和边框**（2026-10-08 起），和倒计时、净资产一样只靠 text-shadow 读清。
    **十个人同一个颜色**（2026-10-08 定）：敌我看它在哪一侧就知道，
    按槽位上色既多余（头像顶上已有槽位色条），有几种颜色在暗图上也读不出。 */
 .tb-bb {
   transform: translate(-50%, -50%) scale(var(--hud-k, 1));
   display: flex; align-items: center; gap: 3px;
   padding: 2px 5px;
-  border: 1px solid rgba(101, 217, 247, .43);
+  border: 1px solid transparent;   /* 编辑态的占位要画虚线框，平时留一个透明的，尺寸不跳 */
   border-radius: 5px;
-  background: rgba(10, 14, 20, .84);
   color: var(--k-chance);
   font-size: 13px; font-weight: 600; line-height: 1;
   white-space: nowrap;
@@ -209,7 +215,7 @@ html, body {
 .tb-bb svg.ico { width: 12px; height: 12px; stroke-width: 2.2; filter: drop-shadow(0 0 2px #000); }
 .tb-bb[data-v="0"] { display: none; }
 /* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
-.tb-bb[data-v="slot"] { border-style: dashed; opacity: .6; }
+.tb-bb[data-v="slot"] { border: 1px dashed rgba(101, 217, 247, .6); opacity: .6; }
 
 /* 敌方塔防：顶栏左端那块空底板（自己打的时候敌方永远在左）。盾 + 剩余冷却，底边一条线代替原先的圆环。
    原生底板是带纹理的灰，红字直接压上去不够清楚，所以垫一层深色。 */

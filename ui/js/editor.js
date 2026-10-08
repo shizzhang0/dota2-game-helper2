@@ -13,7 +13,7 @@ import { wardIcon } from "./wardmap.js";
 // 而它会把 pointerup 改派到捕获元素，click 便落不到内部的按钮上。
 // 整块可拖会打死「完成」按钮、九个复选框、三个滑块和两个下拉框——
 // 「完成」失效等于编辑态出不去。见 design/overlay.md 的第 3 号坑。
-let card = null, doneCb = null, resetCb = null;
+let card = null, doneCb = null;
 
 /** 重拉录制统计。由 `initRecords` 装上，打开卡片和拨录制开关时调用——见那里的注释。 */
 let recRefresh = null;
@@ -161,8 +161,8 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
   relBtn.addEventListener("click", () => { doneCb?.(); openReleasePage(); });
 }
 
-export async function initEditor(cardEl, onDone, onReset) {
-  card = cardEl; doneCb = onDone; resetCb = onReset;
+export async function initEditor(cardEl, onDone) {
+  card = cardEl; doneCb = onDone;
   await build(await loadSettings());
   // **「始终显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
   // 不跟的话卡片攥着旧值，进编辑态随便动一下别的，collect() 就把旧值存回去，
@@ -204,9 +204,6 @@ async function build(s) {
       <label class="ed-row">${t("card.opacity")}
         <input id="edOpacity" type="range" min="0.3" max="1" step="0.05">
         <output id="edOpacityOut"></output></label>
-      <label class="ed-row">${t("card.bg")}
-        <input id="edBg" type="range" min="0" max="1" step="0.02">
-        <output id="edBgOut"></output></label>
       <label class="ed-row"><input id="edMmLarge" type="checkbox">${t("card.mmLarge")}</label>
       <label class="ed-row"><input id="edMmRight" type="checkbox">${t("card.mmRight")}</label>
       <div class="ed-row ed-ver" id="edMmSrc"></div>
@@ -245,11 +242,10 @@ async function build(s) {
 
   const $ = (id) => card.querySelector("#" + id);
   const scale = $("edScale"), opacity = $("edOpacity"),
-        bg = $("edBg"), log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
+        log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
         always = $("edAlways"), mmLarge = $("edMmLarge"), mmRight = $("edMmRight");
   scale.value = s.scale ?? DEFAULTS.scale;
   opacity.value = s.opacity ?? DEFAULTS.opacity;
-  bg.value = s.panelBg ?? DEFAULTS.panelBg;
   log.value = s.logLevel ?? DEFAULTS.logLevel;
   // 录制那几行只在 devTools 为真时才建（见 design/overlay.md「开发区」），不建就是 null
   if (record) record.checked = !!s.recordMatches;
@@ -270,7 +266,6 @@ async function build(s) {
   const sync = () => {
     $("edScaleOut").textContent = Number(scale.value).toFixed(2) + "×";
     $("edOpacityOut").textContent = Math.round(Number(opacity.value) * 100) + "%";
-    $("edBgOut").textContent = Math.round(Number(bg.value) * 100) + "%";
   };
   const collect = () => ({
     show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
@@ -281,7 +276,6 @@ async function build(s) {
     // 灰着的时候显示的是 Dota 的值，别把它当成用户的兜底选项存下去
     minimapLarge: mmLarge.disabled ? !!s.minimapLarge : mmLarge.checked,
     minimapRight: mmRight.disabled ? !!s.minimapRight : mmRight.checked,
-    panelBg: Number(bg.value),
     logLevel: log.value,
     recordMatches: record ? record.checked : !!s.recordMatches,
     lang: lang.value,
@@ -329,25 +323,22 @@ async function build(s) {
     if (!card.hidden) { pinPaneHeight(); place(); }   // 中英文卡片不一样宽也不一样高
   });
 
-  // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 四条滑块 + 三块摆位。
+  // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 两条滑块 + 小地图兜底选项。
+  // （块的位置 2026-10-08 起跟着 Dota 的界面走、不能拖，也就没有摆位要还原了。）
   // **「始终显示」也还原成关**：它是外观行为、和滑块同类，而"按住 Alt 才显示"
   // 是产品的默认形态；还原它不会造成任何数据损失。
   // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
   // **语言也不动**：重置回中文会让看不懂中文的用户无法退出这个状态，
-  // 他得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
-  // 摆位要按**新的**缩放重算，而 main.js 里的 cfg 靠 settings 事件异步刷新、
-  // 这会儿还是旧值，所以把 scale 直接传过去，别让它自己去读。
+  // 用户得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
   $("edReset").addEventListener("click", () => {
     for (const el of card.querySelectorAll("[data-show]")) el.checked = DEFAULTS.show[el.dataset.show];
     always.checked = DEFAULTS.alwaysShow;
     scale.value = DEFAULTS.scale;
     opacity.value = DEFAULTS.opacity;
-    bg.value = DEFAULTS.panelBg;
     if (!mmLarge.disabled) mmLarge.checked = DEFAULTS.minimapLarge;
     if (!mmRight.disabled) mmRight.checked = DEFAULTS.minimapRight;
     sync();
     saveSettings(collect());
-    resetCb(DEFAULTS.scale);
   });
   // 先退出编辑态再开：编辑态下覆盖层置顶且不穿透鼠标，资源管理器被压在下面点不到
   $("edDir").addEventListener("click", () => {

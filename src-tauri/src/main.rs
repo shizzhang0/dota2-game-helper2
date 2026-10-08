@@ -21,14 +21,6 @@ use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 /// 编辑态：可拖拽调位置；锁定态整窗鼠标穿透
 static EDIT: AtomicBool = AtomicBool::new(false);
 
-#[tauri::command]
-fn save_layout(app: tauri::AppHandle, layout: String) {
-    if let Ok(dir) = app.path().app_config_dir() {
-        let _ = std::fs::create_dir_all(&dir);
-        let _ = std::fs::write(dir.join("layout.json"), layout);
-    }
-}
-
 /// 设置编辑态。热键、托盘菜单、面板上的「完成」按钮共用这一份，别各存一份状态。
 ///
 /// 注意：这里**绝不能**调用 global_shortcut 的 register/unregister。
@@ -73,15 +65,6 @@ pub fn toggle_edit(app: &tauri::AppHandle) {
 #[tauri::command]
 fn exit_edit(app: tauri::AppHandle) {
     set_edit(&app, false);
-}
-
-#[tauri::command]
-fn load_layout(app: tauri::AppHandle) -> String {
-    app.path()
-        .app_config_dir()
-        .ok()
-        .and_then(|d| std::fs::read_to_string(d.join("layout.json")).ok())
-        .unwrap_or_else(|| "{}".to_string())
 }
 
 fn main() {
@@ -138,9 +121,7 @@ fn main() {
             record::records_stat,
             record::clear_records,
             log::log_front,
-            exit_edit,
-            save_layout,
-            load_layout
+            exit_edit
         ])
         .build(tauri::generate_context!())
         .expect("tauri build")

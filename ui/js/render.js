@@ -6,7 +6,7 @@ import { initTopbar, renderTopbar } from "./topbar.js";
 const R = 26, CIRC = 2 * Math.PI * R;
 const TIMER_IDS = ["mid", "bounty", "lotus", "wisdom", "stack"];
 
-// 两个可独立摆位的块。cells 用来判断"这一块是不是该整体隐藏"。
+// 两个块。cells 用来判断"这一块是不是该整体隐藏"。位置固定，见下面的 placeBlocks。
 // 敌方塔防、买活和眼位不在这里：它们贴着 Dota 自己的顶栏 / 小地图画、位置跟着游戏走，
 // 见 topbar.js 和 wardmap.js。
 export const BLOCKS = [
@@ -14,15 +14,7 @@ export const BLOCKS = [
   { id: "econ",    cells: ["econ"] },
 ];
 
-// 块被整体隐藏时 offsetWidth 为 0，算默认摆位会把所有块全挤到左上角。
-// 这张表只用于兜底，取的是 1× 下实测的 offsetWidth/offsetHeight（含 1px 边框）。
-// econ 比 timers 矮，是因为它那格没有圆环、CSS 里写死了 height: 52px。
-const NOMINAL = {
-  timers: { w: 350, h: 85 },
-  econ:   { w: 142, h: 70 },
-};
-
-let root = null, els = null, prev = {}, scale = 1;
+let root = null, els = null, prev = {};
 
 function ring(id) {
   return `<div class="cell" data-cell="${id}" data-urgency="far">
@@ -54,7 +46,7 @@ export function initPanel(container, towers) {
   root.removeAttribute("hidden");
   root.innerHTML = BLOCKS.map(b =>
     `<div class="block" data-block="${b.id}">${INNER[b.id]()}</div>`).join("") +
-    // 眼位那一层不是块：没有底板、不能拖，位置由 wardmap.js 按原生小地图算。
+    // 眼位那一层不是块：不能拖，位置由 wardmap.js 按原生小地图算。
     // 仍然带 data-cell，显示项开关照常管它
     `<div class="mm" data-cell="wardmap"></div>`;
 
@@ -97,17 +89,14 @@ export function render(m) {
   if (!root) return;
   const cfg = m.settings || {};
   const show = cfg.show || {};
-  scale = cfg.scale ?? 1;
   // CSS 变量沿 DOM 树继承，设在容器上每一块都吃得到（贴顶栏那一层也吃）；缩放与透明度都走合成器，不触发重排
-  root.style.setProperty("--panel-scale", scale);
   root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
-  root.style.setProperty("--block-bg", cfg.panelBg ?? 0.72);
   for (const [id, cell] of Object.entries(els.cells)) {
     cell.root.hidden = show[id] === false;
   }
   for (const b of BLOCKS) {
     const el = els.blocks[b.id];
-    el.hidden = b.cells.every(id => show[id] === false);   // 整块关掉时连底板一起消失
+    el.hidden = b.cells.every(id => show[id] === false);   // 格子全关掉时整块消失（编辑态的虚线框也不留）
     el.classList.toggle("on", !!m.visible);
     el.classList.toggle("edit", !!m.editMode);
   }
@@ -131,6 +120,7 @@ export function render(m) {
     if (prev[t.id + ".o"] !== off) { prev[t.id + ".o"] = off; c.fg.style.strokeDashoffset = off; }
   }
 
+  placeBlocks(cfg.scale ?? 1);
   renderTopbar(root, m, show);
 
   const e = m.econ || { networth: 0, gpm: 0, xpm: 0 };
@@ -145,85 +135,39 @@ export function render(m) {
                             m.minimap || { large: false, right: false }, !!m.editMode);
 }
 
-/** 块在屏幕上的实际占位（offsetWidth 不含 transform，要自己乘缩放） */
-function box(id) {
-  const el = els.blocks[id];
-  return { w: (el.offsetWidth  || NOMINAL[id].w) * scale,
-           h: (el.offsetHeight || NOMINAL[id].h) * scale };
-}
+/** 两块的位置也贴着 Dota 自己的界面走（2026-10-08 起），不再能拖、不再存 layout.json。
+    和顶栏、小地图同一个路子：量出 1080 高下的锚点，任何分辨率都乘 `屏高/1080`。
+    块的大小同样按屏高缩放，再乘用户的「缩放」滑块——这样换分辨率时它和游戏界面一起变大变小。
+      · 倒计时：紧贴顶栏中间那块计时牌下面、水平居中，圆环顶边在 44（计时牌底边约 41）。
+        只有圆环没有数字，整排宽约 ±87，夹在两侧最靠中线的买活（±118 起）之间
+      · 净资产：Dota 左上角「击 / 死 / 助」那块面板下面，空开 10——面板底边在 102、文字左边缘在 8.6
+        （量自 2560×1600 的实战截图）。金币图标和那几个字左对齐，读起来是同一组个人数据 */
+const TIMERS_TOP = 44, ECON_TOP = 112, ECON_LEFT = 8.6;
+// 各块自己的基准大小。倒计时原先 0.62：圆环直径约 32，去掉数字之后一排五个刚好塞进
+// 计时牌下面、两侧买活中间那块空地（用户指定的位置，2026-10-08）；之后又嫌大，缩到 0.5（直径约 26）
+const BASE = { timers: 0.5, econ: 1 };
+// 块的边框 1 + 上内边距 8：内容顶边离块顶边多远（未缩放）
+const INSET = 9;
 
-/** 把坐标钳进视口。块比视口还大时钳到 0，不让它跑到负数。 */
-function clamp(id, p) {
-  // 视口量不出来时绝不能钳：那会把所有块全压到 (0,0)，而调用方会把结果回存，
-  // 用户摆好的位置就没了。实测浏览器里改完窗口尺寸的头一帧 innerWidth 确实是 0。
-  if (!innerWidth || !innerHeight) return { x: Math.round(p.x), y: Math.round(p.y) };
-  const { w, h } = box(id);
-  return { x: Math.round(Math.min(Math.max(0, p.x), Math.max(0, innerWidth  - w))),
-           y: Math.round(Math.min(Math.max(0, p.y), Math.max(0, innerHeight - h))) };
-}
-
-/** 默认摆位：timers 水平居中；econ 靠左边缘。
-    全部按视口比例算，不写死像素——换分辨率也成立。
-    y0 取屏高 8% 是为了让开 Dota 顶栏**和挂在头像下面的买活那一行**
-    （1080 屏上买活行底边在 83px，见 topbar.js；原先没有那一行时是 7.5%）。
-
-    **左边那列从第二行起，不从 y0 起**。原先 econ 顶在 y0，实机上偏高
-    （2026-09-14 实测后按用户摆好的位置改，用户把 econ 放到了 timers 下面那一行）。
-    写成"timers 下面那一行"而不是记住那个像素值，换分辨率、换缩放都还成立。 */
-function defaultLayout() {
-  const W = innerWidth, H = innerHeight, y0 = Math.round(H * 0.08), GAP = 10;
-  const t = box("timers");
-  const row2 = Math.round(y0 + t.h + GAP);
-  return {
-    timers:  { x: Math.round((W - t.w) / 2), y: y0 },
-    econ:    { x: 16, y: row2 },
+function placeBlocks(userScale) {
+  const W = innerWidth, H = innerHeight;
+  if (!W || !H) return;
+  const k = H / 1080;
+  // 缩放写在各块自己身上（不再写在容器上），因为两块的基准不一样
+  const sc = (id) => {
+    const s = k * userScale * BASE[id];
+    if (prev["ps." + id] !== s) { prev["ps." + id] = s; els.blocks[id].style.setProperty("--panel-scale", s); }
+    return s;
   };
-}
-
-/** 摆位。视口量不出来时返回 null，表示"这次没摆"——调用方据此跳过写盘。
-    实测浏览器里 navigate 之后的头几百毫秒 innerWidth 确实是 0，那时 defaultLayout
-    会算出负坐标（(0 - 350) / 2 = -175），一旦被回存就毁掉了摆好的位置。 */
-export function applyLayout(saved, panelScale = 1) {
-  scale = panelScale;                    // 在首次 render 之前就要知道缩放，否则 box() 算错
-  if (!innerWidth || !innerHeight) return null;
-  const def = defaultLayout(), out = {};
-  for (const b of BLOCKS) {
-    const p = saved?.[b.id];
-    out[b.id] = clamp(b.id, typeof p?.x === "number" ? p : def[b.id]);
-    const el = els.blocks[b.id];
-    el.style.left = `${out[b.id].x}px`;
-    el.style.top  = `${out[b.id].y}px`;
-  }
-  return out;
-}
-
-// 编辑态拖拽：逐块绑定，只改 left/top，松手回调保存该块
-export function enableDrag(onDrop) {
-  for (const b of BLOCKS) {
-    const el = els.blocks[b.id];
-    let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false;
-    el.addEventListener("pointerdown", (ev) => {
-      if (!el.classList.contains("edit")) return;
-      dragging = true; el.setPointerCapture(ev.pointerId);
-      sx = ev.clientX; sy = ev.clientY;
-      // 读 style 而不是 getBoundingClientRect：块被 scale 过，rect 的宽高含缩放，
-      // 混着用会在缩放不为 1 时逐次漂移
-      ox = parseFloat(el.style.left) || 0; oy = parseFloat(el.style.top) || 0;
-    });
-    el.addEventListener("pointermove", (ev) => {
-      if (!dragging) return;
-      el.style.left = `${ox + ev.clientX - sx}px`;
-      el.style.top  = `${oy + ev.clientY - sy}px`;
-    });
-    el.addEventListener("pointerup", (ev) => {
-      if (!dragging) return;
-      dragging = false; el.releasePointerCapture(ev.pointerId);
-      // 落点也钳一次：否则拖出屏幕的块要等到下次启动才回得来，本次会话里就丢了
-      const p = clamp(b.id, { x: parseFloat(el.style.left) || 0,
-                              y: parseFloat(el.style.top)  || 0 });
-      el.style.left = `${p.x}px`;
-      el.style.top  = `${p.y}px`;
-      onDrop(b.id, p);
-    });
-  }
+  const put = (el, x, y) => {
+    const l = `${Math.round(x)}px`, t = `${Math.round(y)}px`;
+    if (el.style.left !== l) el.style.left = l;
+    if (el.style.top !== t) el.style.top = t;
+  };
+  // 宽度每轮现量：显示项开关会让块变窄，字体加载前后也不一样。offsetWidth 是未缩放的值
+  const t = els.blocks.timers, st = sc("timers");
+  put(t, W / 2 - t.offsetWidth * st / 2, TIMERS_TOP * k - INSET * st);
+  // 金币图标在块里的横向偏移（未缩放）：.lab 的 offsetParent 是 .cell（position: relative）
+  const cell = els.cells.econ.root, lab = cell.querySelector(".lab"), se = sc("econ");
+  put(els.blocks.econ, ECON_LEFT * k - (cell.offsetLeft + lab.offsetLeft) * se, ECON_TOP * k - INSET * se);
 }

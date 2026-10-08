@@ -14,7 +14,6 @@ fn defaults() -> serde_json::Value {
         "alwaysShow": false,
         "scale": 1.0,
         "opacity": 1.0,
-        "panelBg": 0.72,
         // 小地图的兜底选项：只在读不到 Dota 自己的设置时才用，见 dotacfg.rs
         "minimapLarge": false,
         "minimapRight": false,
