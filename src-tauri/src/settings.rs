@@ -8,7 +8,7 @@ fn path(app: &tauri::AppHandle) -> Option<PathBuf> {
 /// 默认值。读盘时缺什么补什么，所以老配置文件遇上新增字段也能直接用。
 fn defaults() -> serde_json::Value {
     serde_json::json!({
-        "show": { "mid": true, "bounty": true, "lotus": true, "wisdom": true,
+        "show": { "mid": true, "bounty": true, "wisdom": true, "lotus": true,
                   "stack": true, "glyph": true, "buyback": true, "econ": true,
                   "wardmap": true },
         "alwaysShow": false,

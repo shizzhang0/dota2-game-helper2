@@ -1,7 +1,7 @@
 import { isTauri } from "./source.js";
 
 // 只有键，显示名在语言包的 show.* 里。顺序就是卡片上九个勾的顺序。
-export const SHOW_KEYS = ["mid", "bounty", "lotus", "wisdom", "stack",
+export const SHOW_KEYS = ["mid", "bounty", "wisdom", "lotus", "stack",
                           "glyph", "buyback", "econ", "wardmap"];
 
 // lang 缺省给中文：Rust 侧的 defaults() 会按系统语言填好这个字段，

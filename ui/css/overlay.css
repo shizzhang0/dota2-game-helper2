@@ -115,7 +115,28 @@ html, body {
 [data-block="timers"] .num { display: none; }
 /* 块缩到 0.5 之后 24px 的图标只剩 12px，认不清。环内径 48，放得下 32（缩完 16）。
    特异度 (0,5,1)，压过 `.cell:not(.wide) .lab svg.ico` 那条 24px，不靠顺序 */
-[data-block="timers"] .cell:not(.wide) .lab svg.ico { width: 32px; height: 32px; }
+[data-block="timers"] .cell:not(.wide) .lab svg.ico { width: 32px; height: 32px; stroke-width: 2.1; }
+/* 去掉底板、缩小之后整排太淡（用户实测"不仔细看不出来"），参照 Dota Plus 的符文倒计时改：
+   · 每个圆一块**带颜色的暗底盘**：径向渐变，中心混进三成多自己的颜色，往外渐暗到边缘化开。
+     Dota Plus 显眼靠的就是这个；试过平涂黑圆片，像在画面上挖了个洞，用户嫌丑
+   · 进度环收细到 3（Dota Plus 也是细环），颜色仍跟着图标走——我们的图标是线条画，
+     颜色是分辨五个符的主要线索；最后 10 秒加粗到 5 提醒
+   · 不再按远近压暗：.78 是当初有底板时为了拉开层级，没底板时它只是让一切更难看清
+   · 整个环加一圈黑色投影，和文字的 text-shadow 同一个道理
+   格子从 60 收到 52，放大到 0.72 之后整排仍夹在两侧买活之间。
+   特异度都比通用那几条高，不靠顺序 */
+[data-block="timers"] .cell { width: 52px; }
+[data-block="timers"] .cell[data-urgency] { opacity: 1; }
+[data-block="timers"] .cell > svg { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
+[data-block="timers"] .cell .ring-fg { stroke-width: 3; }
+[data-block="timers"] .cell[data-urgency="now"] .ring-fg { stroke-width: 5; }
+[data-block="timers"] .cell:not(.wide) .lab {
+  border-radius: 50%;
+  /* closest-side = 26px，88% 处收边，正好落在环的内侧 */
+  background: radial-gradient(circle closest-side,
+    color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
+    rgba(10, 13, 18, .85) 86%, transparent 90%);
+}
 
 /* 有圆环的格子：图标压在环中央（环内径 48px，放得下 24px）。
    放大到 24px 顺带解决了描边过细的风险——0.8× 时描边从 0.79px 变成 1.36px。
