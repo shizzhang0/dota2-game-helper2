@@ -27,7 +27,7 @@ const CFG: &str = r#""dota2-game-helper2"
 }
 "#;
 
-fn steam_path() -> Option<PathBuf> {
+pub(crate) fn steam_path() -> Option<PathBuf> {
     let key = RegKey::predef(HKEY_CURRENT_USER)
         .open_subkey(r"Software\Valve\Steam")
         .ok()?;

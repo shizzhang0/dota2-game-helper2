@@ -2,6 +2,7 @@
 
 mod altkey;
 mod constants;
+mod dotacfg;
 mod gsi;
 mod gsicfg;
 mod lang;
@@ -128,6 +129,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             constants::get_constants,
             constants::get_versions,
+            dotacfg::dota_hud,
             prices::get_item_prices,
             settings::get_settings,
             settings::set_settings,

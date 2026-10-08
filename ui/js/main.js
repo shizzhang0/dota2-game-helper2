@@ -26,6 +26,16 @@ const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker
 let tracker = null, C = null, alt = false, last = null, editMode = false;
 let wards = null;
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
+let dotaHud = null;          // Dota 自己的 HUD 设置（小地图在哪、多大、分辨率），见 dotacfg.rs
+
+// 启动时读一次，之后每局开始再读——玩家可能在两局之间改了设置。
+// 浏览器里没有这个命令，保持 null，用到的地方退回卡片里的设置。
+async function readDotaHud() {
+  if (!isTauri()) return;
+  try { dotaHud = await window.__TAURI__.core.invoke("dota_hud"); }
+  catch (e) { send("warn", `[dotacfg] ${e}`); }
+}
+readDotaHud();
 
 // **断流多久算断。** Dota 崩了、被关掉、或者网络断了之后不会有任何通知，
 // `last` 会一直留着最后一包——按住 Alt 仍然显示一份**冻结**的旧面板：
@@ -110,7 +120,7 @@ addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });
 connectSource(async (pkt) => {
   const st = pool.update(pkt);
   const info = match.update(st);
-  if (info.newMatch) pool.reset();
+  if (info.newMatch) { pool.reset(); readDotaHud(); }
   C = await loadConstants(info.modeOrDefault);
   if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
   tracker.C = C;                       // 模式判定完成后热切常数
