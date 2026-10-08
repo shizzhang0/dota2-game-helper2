@@ -4,7 +4,7 @@ import { checkUpdate, lastUpdate, onUpdate, openReleasePage } from "./update.js"
 import { icon, CELL_ICON } from "./icons.js";
 import { t, loadLang, LANGS } from "./i18n.js";
 import { minimapOpts, onDotaHud } from "./dotahud.js";
-import { wardIcon } from "./wardmap.js";
+import { wardIcon, crossIcon } from "./wardmap.js";
 
 // 编辑态的设置卡片。与 .block 平级而非其子节点——块受 --panel-scale 缩放，
 // 卡片跟着缩到 2× 或 0.8× 都没法用。
@@ -33,15 +33,14 @@ function showIcon(k) {
   return icon(CELL_ICON[k], 13);
 }
 
-// 图例。刻意复用地图自己的画法（wardIcon 和 wm-kill）——
+// 图例。刻意复用地图自己的画法（wardIcon 和 crossIcon）——
 // 另写一套形状颜色迟早会和地图对不上。只在编辑态可见，游戏中不占任何屏幕空间。
 // 眼位贴到原生小地图上之后只剩这三样：塔和我方眼原生就画着，我们不再画。
 const LEGEND = [
   [wardIcon("observer", 5, 5, 1.9), "enemyObs"],
   [wardIcon("sentry", 5, 5, 1.9),   "enemySentry"],
   // 被排的是叉不是点——图例必须跟着地图的形状走，否则这张卡片就骗人了
-  [`<g class="wm-kill"><line x1="2.2" y1="2.2" x2="7.8" y2="7.8"/>`
-   + `<line x1="7.8" y1="2.2" x2="2.2" y2="7.8"/></g>`,           "killed"],
+  [crossIcon(5, 5, 2.8),            "killed"],
 ];
 const legendHTML = () => LEGEND.map(([shape, key]) =>
   `<span><svg viewBox="0 0 10 10" aria-hidden="true">${shape}</svg>${t("legend." + key)}</span>`).join("");

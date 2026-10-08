@@ -45,6 +45,17 @@ export function wardIcon(kind, x, y, scale = 1, extra = "") {
       `<path class="wm-eye-lid" d="M-1.55 .3Q0 1.8 1.55 .3"/></g>`;
 }
 
+/** 我方眼被排掉的叉：**绿色 + 黑描边**（2026-10-08 起，原先是青色）。
+    绿色是原生小地图上我方眼的颜色、黑描边也和原生图标一样——读起来就是"这里原来有个我方眼，没了"，
+    和品红眼睛（敌方、还在）正好对称：颜色分敌我，形状分在不在。
+    青色的毛病是压在河道上看不见：简易背景下河道正是浅蓝，而河道恰恰是最常插眼的地方。
+    图例复用这个函数。 */
+export function crossIcon(x, y, r = R_DOT, extra = "") {
+  const d = `M${(x - r).toFixed(1)} ${(y - r).toFixed(1)}L${(x + r).toFixed(1)} ${(y + r).toFixed(1)}` +
+            `M${(x + r).toFixed(1)} ${(y - r).toFixed(1)}L${(x - r).toFixed(1)} ${(y + r).toFixed(1)}`;
+  return `<g class="wm-kill"${extra}><path class="wm-kill-under" d="${d}"/><path class="wm-kill-line" d="${d}"/></g>`;
+}
+
 const sx = x => (x + HALF) / (HALF * 2) * SIZE;
 const sy = y => (1 - (y + HALF) / (HALF * 2)) * SIZE;
 
@@ -108,20 +119,12 @@ export function renderWardMap(m, opt, edit) {
   // 治本要知道眼什么时候到期，而 GSI 给不了；这里能做的只有把不确定画出来。
   const dot = (o) => wardIcon(o.kind, sx(o.x).toFixed(1), sy(o.y).toFixed(1), 1,
     typeof o.conf === "number" ? ` opacity="${(0.12 + 0.88 * o.conf).toFixed(2)}"` : "");
-  // 被排的画叉不画点：青色说明"是我的"，叉说明"没了"。
-  // 半径 R_DOT 比眼略小，两者在图上是同一个量级的东西。
+  // 被排的画叉不画点（见 crossIcon）。半径 R_DOT 比眼略小，两者在图上是同一个量级的东西。
   //
   // **叉也按 conf 淡化**（2026-09-23），和上面敌方眼同一个公式。原先是"实心显示
   // N 秒然后啪地消失"，时长一放长就变成一片同样实的叉、分不出哪个是刚发生的。
-  // 淡化之后新旧一眼可分，时长才敢从 3 秒放到 20 秒。
-  const cross = (o) => {
-    const x = sx(o.x), y = sy(o.y), r = R_DOT;
-    const op = typeof o.conf === "number" ? ` opacity="${(0.12 + 0.88 * o.conf).toFixed(2)}"` : "";
-    return `<g class="wm-kill"${op}>` +
-      `<line x1="${(x-r).toFixed(1)}" y1="${(y-r).toFixed(1)}" ` +
-      `x2="${(x+r).toFixed(1)}" y2="${(y+r).toFixed(1)}"/>` +
-      `<line x1="${(x+r).toFixed(1)}" y1="${(y-r).toFixed(1)}" ` +
-      `x2="${(x-r).toFixed(1)}" y2="${(y+r).toFixed(1)}"/></g>`;
-  };
+  // 淡化之后新旧一眼可分，时长才敢从 3 秒放到 20 秒（2026-10-08 再放到 45 秒）。
+  const cross = (o) => crossIcon(sx(o.x), sy(o.y), R_DOT,
+    typeof o.conf === "number" ? ` opacity="${(0.12 + 0.88 * o.conf).toFixed(2)}"` : "");
   wardLayer.innerHTML = w.enemy.map(dot).join("") + w.killed.map(cross).join("");
 }

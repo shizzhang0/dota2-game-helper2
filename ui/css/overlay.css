@@ -201,21 +201,23 @@ html, body {
    没在冷却的人底下什么都没有，比十个暗着的占位安静得多。
    **没有底和边框**（2026-10-08 起），和倒计时、净资产一样只靠 text-shadow 读清。
    **十个人同一个颜色**（2026-10-08 定）：敌我看它在哪一侧就知道，
-   按槽位上色既多余（头像顶上已有槽位色条），有几种颜色在暗图上也读不出。 */
+   按槽位上色既多余（头像顶上已有槽位色条），有几种颜色在暗图上也读不出。
+   **金黄色**：原先是青色，去掉底框之后压在游戏画面上不够显眼（用户实测）。
+   买活本来就是花钱的事，和净资产金额同一色系；比金额那个 #FFD76A 略饱和一点，更跳 */
 .tb-bb {
   transform: translate(-50%, -50%) scale(var(--hud-k, 1));
   display: flex; align-items: center; gap: 3px;
   padding: 2px 5px;
   border: 1px solid transparent;   /* 编辑态的占位要画虚线框，平时留一个透明的，尺寸不跳 */
   border-radius: 5px;
-  color: var(--k-chance);
+  color: #FFD34D;
   font-size: 13px; font-weight: 600; line-height: 1;
   white-space: nowrap;
 }
 .tb-bb svg.ico { width: 12px; height: 12px; stroke-width: 2.2; filter: drop-shadow(0 0 2px #000); }
 .tb-bb[data-v="0"] { display: none; }
 /* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
-.tb-bb[data-v="slot"] { border: 1px dashed rgba(101, 217, 247, .6); opacity: .6; }
+.tb-bb[data-v="slot"] { border: 1px dashed rgba(255, 211, 77, .6); opacity: .6; }
 
 /* 敌方塔防：顶栏左端那块空底板（自己打的时候敌方永远在左）。盾 + 剩余冷却，底边一条线代替原先的圆环。
    原生底板是带纹理的灰，红字直接压上去不够清楚，所以垫一层深色。 */
@@ -271,8 +273,10 @@ html, body {
 .wm-eye-ball  { fill: #000; stroke: #000; stroke-width: .5; stroke-linejoin: round; }
 .wm-eye-pupil { fill: var(--w); }
 .wm-eye-lid   { fill: none; stroke: var(--w); stroke-width: .7; stroke-linecap: round; }
-/* 我方眼刚被排掉：青色的叉。青说明"是我的"，叉说明"没了"。 */
-.wm-kill { stroke: #65D9F7; stroke-width: 1; stroke-linecap: round; fill: none; }
+/* 我方眼刚被排掉：绿色的叉 + 黑描边，和原生小地图上我方眼同色同描边（见 wardmap.js 的 crossIcon） */
+.wm-kill path { fill: none; stroke-linecap: round; }
+.wm-kill-under { stroke: #000; stroke-width: 1.7; }
+.wm-kill-line  { stroke: #3CFF3C; stroke-width: .95; }
 
 /* ── 编辑态：设置卡片 ───────────────────────────────── */
 
