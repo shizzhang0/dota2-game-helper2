@@ -5,8 +5,6 @@
   "card.alwaysShow": "始终显示",
   "card.alwaysShowHint": "不按 Alt 也一直显示面板（仅对局中）",
   "card.lang": "语言",
-  "card.scale": "缩放",
-  "card.opacity": "整体",
   "card.mmLarge": "使用特大尺寸小地图",
   "card.mmRight": "小地图靠右",
   "card.mmFromDota": "小地图：已按 Dota 里的设置摆放",

@@ -59,14 +59,10 @@ html, body {
   transition: opacity .12s linear, visibility 0s linear .12s;
 }
 .block.on {
-  opacity: var(--panel-opacity, 1);
+  opacity: 1;
   visibility: visible;
   transition: opacity .12s linear;
 }
-/* 编辑态**不要**写 opacity: 1。它会盖掉上面 .block.on 的 var(--panel-opacity)，
-   而透明度滑块只能在编辑态里够到——结果就是"拖了没反应"，永远看不到效果。
-   把设置并进编辑态本来就是为了不盲调，这条却一直漏在外面。
-   透明度下限是 0.3，编辑态下仍然看得见。 */
 /* 编辑态只描一圈虚线，让人看到块在哪；不再能拖（位置跟着 Dota 的界面走，见 render.js） */
 .block.edit {
   outline: 1px dashed var(--k-chance);
@@ -179,8 +175,7 @@ html, body {
 
 /* ── 贴着顶栏的买活与塔防 ─────────────────────────────
    位置由 topbar.js 按 Dota 顶栏的几何算，这里只管长相。
-   大小吃 --hud-k（屏高 / 1080），**不吃用户的缩放滑块**：这一层要和头像一样大，
-   面板调大调小它不该跟着变。透明度照吃，那是"整个覆盖层多显眼"。 */
+   大小吃 --hud-k（屏高 / 1080）：这一层要和头像一样大。 */
 
 .tb {
   position: fixed;
@@ -192,7 +187,7 @@ html, body {
   text-shadow: 0 0 3px #000, 0 1px 2px #000;
 }
 .tb.on {
-  opacity: var(--panel-opacity, 1);
+  opacity: 1;
   visibility: visible;
   transition: opacity .12s linear;
 }
@@ -255,7 +250,7 @@ html, body {
   transition: opacity .12s linear, visibility 0s linear .12s;
 }
 .mm.on {
-  opacity: var(--panel-opacity, 1);
+  opacity: 1;
   visibility: visible;
   transition: opacity .12s linear;
 }

@@ -90,7 +90,6 @@ export function render(m) {
   const cfg = m.settings || {};
   const show = cfg.show || {};
   // CSS 变量沿 DOM 树继承，设在容器上每一块都吃得到（贴顶栏那一层也吃）；缩放与透明度都走合成器，不触发重排
-  root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
   for (const [id, cell] of Object.entries(els.cells)) {
     cell.root.hidden = show[id] === false;
   }
@@ -120,7 +119,7 @@ export function render(m) {
     if (prev[t.id + ".o"] !== off) { prev[t.id + ".o"] = off; c.fg.style.strokeDashoffset = off; }
   }
 
-  placeBlocks(cfg.scale ?? 1);
+  placeBlocks();
   renderTopbar(root, m, show);
 
   const e = m.econ || { networth: 0, gpm: 0, xpm: 0 };
@@ -137,7 +136,9 @@ export function render(m) {
 
 /** 两块的位置也贴着 Dota 自己的界面走（2026-10-08 起），不再能拖、不再存 layout.json。
     和顶栏、小地图同一个路子：量出 1080 高下的锚点，任何分辨率都乘 `屏高/1080`。
-    块的大小同样按屏高缩放，再乘用户的「缩放」滑块——这样换分辨率时它和游戏界面一起变大变小。
+    块的大小同样按屏高缩放——换分辨率时它和游戏界面一起变大变小。
+    （原先还乘一个用户的「缩放」滑块、另有「整体透明度」滑块，2026-10-08 一并去掉：
+    位置和大小都已经跟着游戏界面定好了，再给一个能调的旋钮只会把它调歪。）
       · 倒计时：紧贴顶栏中间那块计时牌下面、水平居中，圆环顶边在 44（计时牌底边约 41）。
         只有圆环没有数字，整排宽约 ±104，夹在两侧最靠中线的买活（±118 起）之间
       · 净资产：Dota 左上角「击 / 死 / 助」那块面板的**右边**，和它的两行字齐平。
@@ -151,13 +152,13 @@ const BASE = { timers: 0.6, econ: 1 };
 // 块的边框 1 + 上内边距 8：内容顶边离块顶边多远（未缩放）
 const INSET = 9;
 
-function placeBlocks(userScale) {
+function placeBlocks() {
   const W = innerWidth, H = innerHeight;
   if (!W || !H) return;
   const k = H / 1080;
   // 缩放写在各块自己身上（不再写在容器上），因为两块的基准不一样
   const sc = (id) => {
-    const s = k * userScale * BASE[id];
+    const s = k * BASE[id];
     if (prev["ps." + id] !== s) { prev["ps." + id] = s; els.blocks[id].style.setProperty("--panel-scale", s); }
     return s;
   };

@@ -6,12 +6,12 @@ import { t, loadLang, LANGS } from "./i18n.js";
 import { minimapOpts, onDotaHud } from "./dotahud.js";
 import { wardIcon, crossIcon } from "./wardmap.js";
 
-// 编辑态的设置卡片。与 .block 平级而非其子节点——块受 --panel-scale 缩放，
+// 编辑态的设置卡片。与 .block 平级而非其子节点——块按屏高缩放（--panel-scale），
 // 卡片跟着缩到 2× 或 0.8× 都没法用。
 //
 // 卡片自己也能拖，但**只能靠顶部标题栏**：拖拽要 setPointerCapture，
 // 而它会把 pointerup 改派到捕获元素，click 便落不到内部的按钮上。
-// 整块可拖会打死「完成」按钮、九个复选框、三个滑块和两个下拉框——
+// 整块可拖会打死「完成」按钮、复选框和下拉框——
 // 「完成」失效等于编辑态出不去。见 design/overlay.md 的第 3 号坑。
 let card = null, doneCb = null;
 
@@ -165,8 +165,8 @@ export async function initEditor(cardEl, onDone) {
   await build(await loadSettings());
   // **「始终显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
   // 不跟的话卡片攥着旧值，进编辑态随便动一下别的，collect() 就把旧值存回去，
-  // 刚切的状态被悄悄改回。**只同步这一个**：其余控件只有卡片自己改，而拖滑块时
-  // settings 事件是异步回来的，套回去滑块会往回跳。按 id 现查，切语言会整卡重建。
+  // 刚切的状态被悄悄改回。**只同步这一个**：其余控件只有卡片自己改，而改控件时
+  // settings 事件是异步回来的，套回去控件会往回跳。按 id 现查，切语言会整卡重建。
   onSettingsChange((v) => {
     const el = card.querySelector("#edAlways");
     if (el && typeof v?.alwaysShow === "boolean") el.checked = v.alwaysShow;
@@ -197,12 +197,6 @@ async function build(s) {
       <label class="ed-row">${t("card.lang")}
         <select id="edLang">${LANGS.map(([v, name]) =>
           `<option value="${v}">${name}</option>`).join("")}</select></label>
-      <label class="ed-row">${t("card.scale")}
-        <input id="edScale" type="range" min="0.8" max="2" step="0.05">
-        <output id="edScaleOut"></output></label>
-      <label class="ed-row">${t("card.opacity")}
-        <input id="edOpacity" type="range" min="0.3" max="1" step="0.05">
-        <output id="edOpacityOut"></output></label>
       <label class="ed-row"><input id="edMmLarge" type="checkbox">${t("card.mmLarge")}</label>
       <label class="ed-row"><input id="edMmRight" type="checkbox">${t("card.mmRight")}</label>
       <div class="ed-row ed-ver" id="edMmSrc"></div>
@@ -240,11 +234,8 @@ async function build(s) {
     </div>`;
 
   const $ = (id) => card.querySelector("#" + id);
-  const scale = $("edScale"), opacity = $("edOpacity"),
-        log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
+  const         log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
         always = $("edAlways"), mmLarge = $("edMmLarge"), mmRight = $("edMmRight");
-  scale.value = s.scale ?? DEFAULTS.scale;
-  opacity.value = s.opacity ?? DEFAULTS.opacity;
   log.value = s.logLevel ?? DEFAULTS.logLevel;
   // 录制那几行只在 devTools 为真时才建（见 design/overlay.md「开发区」），不建就是 null
   if (record) record.checked = !!s.recordMatches;
@@ -262,16 +253,10 @@ async function build(s) {
   };
   mmRefresh();
 
-  const sync = () => {
-    $("edScaleOut").textContent = Number(scale.value).toFixed(2) + "×";
-    $("edOpacityOut").textContent = Math.round(Number(opacity.value) * 100) + "%";
-  };
   const collect = () => ({
     show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
       .map(el => [el.dataset.show, el.checked])),
     alwaysShow: always.checked,
-    scale: Number(scale.value),
-    opacity: Number(opacity.value),
     // 灰着的时候显示的是 Dota 的值，别把它当成用户的兜底选项存下去
     minimapLarge: mmLarge.disabled ? !!s.minimapLarge : mmLarge.checked,
     minimapRight: mmRight.disabled ? !!s.minimapRight : mmRight.checked,
@@ -299,7 +284,6 @@ async function build(s) {
   for (const b of tabs) b.addEventListener("click", () => selectTab(b.dataset.tab));
   selectTab(activeTab);
 
-  sync();
   // 建完再填：切语言会重建这两个节点，所以要等到这一刻才去拿它们
   versions().then(v => {
     const put = (id, val) => { const el = card.querySelector("#" + id); if (el && val) el.textContent = val; };
@@ -307,7 +291,7 @@ async function build(s) {
     put("edDotaVer", v.dota);
   });
   for (const el of card.querySelectorAll("input, select")) {
-    el.addEventListener("input", () => { sync(); saveSettings(collect()); });
+    el.addEventListener("input", () => saveSettings(collect()));
   }
   // 拨录制开关会新建或收尾一个文件，数字跟着变。**延后一点再拉**：
   // saveSettings 在 Tauri 下是异步 invoke，Rust 那边要先 refresh() 完才有结果。
@@ -322,9 +306,9 @@ async function build(s) {
     if (!card.hidden) { pinPaneHeight(); place(); }   // 中英文卡片不一样宽也不一样高
   });
 
-  // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 两条滑块 + 小地图兜底选项。
+  // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 小地图兜底选项。
   // （块的位置 2026-10-08 起跟着 Dota 的界面走、不能拖，也就没有摆位要还原了。）
-  // **「始终显示」也还原成关**：它是外观行为、和滑块同类，而"按住 Alt 才显示"
+  // **「始终显示」也还原成关**：它是外观行为、和显示项同类，而"按住 Alt 才显示"
   // 是产品的默认形态；还原它不会造成任何数据损失。
   // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
   // **语言也不动**：重置回中文会让看不懂中文的用户无法退出这个状态，
@@ -332,11 +316,8 @@ async function build(s) {
   $("edReset").addEventListener("click", () => {
     for (const el of card.querySelectorAll("[data-show]")) el.checked = DEFAULTS.show[el.dataset.show];
     always.checked = DEFAULTS.alwaysShow;
-    scale.value = DEFAULTS.scale;
-    opacity.value = DEFAULTS.opacity;
     if (!mmLarge.disabled) mmLarge.checked = DEFAULTS.minimapLarge;
     if (!mmRight.disabled) mmRight.checked = DEFAULTS.minimapRight;
-    sync();
     saveSettings(collect());
   });
   // 先退出编辑态再开：编辑态下覆盖层置顶且不穿透鼠标，资源管理器被压在下面点不到

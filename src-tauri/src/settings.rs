@@ -12,8 +12,6 @@ fn defaults() -> serde_json::Value {
                   "stack": true, "glyph": true, "buyback": true, "econ": true,
                   "wardmap": true },
         "alwaysShow": false,
-        "scale": 1.0,
-        "opacity": 1.0,
         // 小地图的兜底选项：只在读不到 Dota 自己的设置时才用，见 dotacfg.rs
         "minimapLarge": false,
         "minimapRight": false,
