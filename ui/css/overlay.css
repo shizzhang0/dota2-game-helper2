@@ -217,7 +217,7 @@ html, body {
   transition: opacity .12s linear;
 }
 
-/* 买活：头像正下方，回转箭头 + 剩余冷却。只在冷却中出现——
+/* 买活：头像正下方，金币堆 + 剩余冷却。只在冷却中出现——
    没在冷却的人底下什么都没有，比十个暗着的占位安静得多。
    **没有底和边框**（2026-10-08 起），和倒计时、净资产一样只靠 text-shadow 读清。
    **十个人同一个颜色**（2026-10-08 定）：敌我看它在哪一侧就知道，
@@ -234,7 +234,8 @@ html, body {
   font-size: 13px; font-weight: 600; line-height: 1;
   white-space: nowrap;
 }
-.tb-bb svg.ico { width: 12px; height: 12px; stroke-width: 2.2; filter: drop-shadow(0 0 2px #000); }
+/* 金币堆有好几层横线，比原先的回转箭头更要空间：12 → 14 */
+.tb-bb svg.ico { width: 14px; height: 14px; stroke-width: 2; filter: drop-shadow(0 0 2px #000); }
 .tb-bb[data-v="0"] { display: none; }
 /* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
 .tb-bb[data-v="slot"] { border: 1px dashed rgba(255, 211, 77, .6); opacity: .6; }
