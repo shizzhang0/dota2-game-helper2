@@ -195,7 +195,7 @@ html, body {
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 
 @media (prefers-reduced-motion: reduce) {
-  .block, .ring-fg, .tb, .tb-glyph i, .mm { transition: none; }
+  .block, .ring-fg, .tb, .mm { transition: none; }
 }
 
 /* ── 贴着顶栏的买活与塔防 ─────────────────────────────
@@ -239,28 +239,42 @@ html, body {
 /* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
 .tb-bb[data-v="slot"] { border: 1px dashed rgba(255, 211, 77, .6); opacity: .6; }
 
-/* 敌方塔防：顶栏左端那块空底板（自己打的时候敌方永远在左）。盾 + 剩余冷却，底边一条线代替原先的圆环。
-   原生底板是带纹理的灰，红字直接压上去不够清楚，所以垫一层深色。 */
+/* 敌方塔防：敌方那一端、挨着顶栏最外侧头像（天辉在左、夜魇在右）。
+   **和倒计时同一套圆**：带颜色的暗底盘 + 进度环 + 中间一座塔（游戏里塔防按钮就是塔）。
+   基准 52px 的格子按 0.72 缩，和倒计时的圆一样大（直径约 37）。
+   原先是一条 120 宽的底板放盾 + 数字 + 进度线，太长（2026-10-09 改）。 */
 .tb-glyph {
-  transform: scale(var(--hud-k, 1));
-  transform-origin: top left;
-  box-sizing: border-box;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  background: rgba(8, 10, 14, .66);
+  --accent: var(--k-threat);
+  width: 52px; height: 52px;
+  transform: translate(-50%, -50%) scale(calc(var(--hud-k, 1) * .72));
   color: var(--k-threat);
-  font-size: 17px; font-weight: 600; line-height: 1;
 }
-.tb-glyph svg.ico { width: 20px; height: 20px; opacity: .6; filter: drop-shadow(0 0 2px #000); }
-.tb-glyph span:empty { display: none; }
-/* ready：盾填实、点亮，数字位空着（数字位永远只放数字） */
-.tb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; width: 22px; height: 22px; }
-/* 剩下多少冷却线就有多长。线贴着外端（左边，远离中线那头），越来越短 */
-.tb-glyph i {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
-  background: currentColor;
-  transform-origin: left center;
-  transition: transform .9s linear;
+.tb-glyph svg.ring { width: 52px; height: 52px; display: block; overflow: visible;
+                     filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
+.tb-glyph .ring-fg { stroke-width: 5; }
+.tb-glyph-ico {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  /* 和倒计时的底盘同一个配方，收在环的内侧（见倒计时那条的注释） */
+  background: radial-gradient(circle closest-side,
+    color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
+    rgba(10, 13, 18, .85) 72%, transparent 76%);
 }
+.tb-glyph svg.ico { width: 30px; height: 30px; stroke-width: 2.1; opacity: .3;
+                    filter: drop-shadow(0 0 2px #000); }
+/* 冷却中的剩余时间，压在变暗的塔上。4:52 这种四个字符要塞进约 40px 的底盘，字号到 15 为止 */
+.tb-glyph-ico span {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; letter-spacing: -.3px; line-height: 1;
+  color: #FFE3E3;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+}
+.tb-glyph-ico span:empty { display: none; }
+/* ready：环满、塔点亮并填实、环加粗——"敌方此刻有塔防"是威胁态，要最显眼 */
+.tb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; }
+.tb-glyph[data-ready="1"] .ring-fg { stroke-width: 7; }
 
 /* ── 眼位：贴在原生小地图上 ─────────────────────────────
    位置和大小由 wardmap.js 按 Dota 的小地图算（left/top/width/height 直接写），

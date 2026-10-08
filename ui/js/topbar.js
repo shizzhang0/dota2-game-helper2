@@ -1,11 +1,12 @@
 import { icon } from "./icons.js";
 
 // 买活与敌方塔防**贴着 Dota 自己的顶栏画**：每个人的买活冷却在他头像正下方，
-// 敌方塔防在左端那块空底板里。位置跟着游戏走，不进编辑态拖动。
+// 敌方塔防在敌方那一端的顶栏外侧。位置跟着游戏走，不进编辑态拖动。
 //
-// **自己打的时候顶栏是"敌方在左、己方在右"**，不管自己是天辉还是夜魇（用户实测，
-// 2026-10-08）。只有观战和看录像才是固定的天辉左、夜魇右——而那两种场合覆盖层整个藏起来，
-// 所以这里只按"敌左我右"排，每一侧内部按槽位从左到右（2026-10-08 实战核过）。
+// **顶栏固定天辉在左、夜魇在右**，自己打和观战都一样，每一侧内部按槽位从左到右。
+// 2026-10-08 曾按用户的印象改成"敌方永远在左"——那几局用户恰好都在夜魇（敌方天辉本来就在左），
+// 一局天辉的截图（10-09）推翻了它：按住 Alt 时只有队友才有的血条、TP 冷却圈都在**左边**，
+// 而那局用户是天辉。
 //
 // 原先是一个独立可拖的块（塔防圆环 + 五个槽位色圆点），两个毛病：占地方；
 // 圆点得去顶栏对颜色才知道是谁。贴到头像底下之后，**位置本身就是身份**。
@@ -18,23 +19,23 @@ import { icon } from "./icons.js";
 const REF_H = 1080;
 const INNER = 138;      // 最靠中线那个头像的中心离中线多远
 const PITCH = 62.3;     // 相邻头像中心的间距
-// 买活这一行的中心。两头都有原生的东西，要夹在中间：
-//   · 上面：阵亡后头像下面挂复活倒计时框，底边到 64——死人的复活时间正是看买活时最想同时看到的；
-//     开了 Dota Plus 按住 Alt 时，头像下面是血条、蓝条、金条（能买活），金条底边约 57
-//   · 下面：开了 Dota Plus 按住 Alt 时，再往下一排是 TP 冷却圈，顶边约 83
-// 取 71：文字约占 66.5~75.5，离金条 9、离 TP 圈 7.5，离复活框 2.5（2026-10-09 按 Plus 截图调，原先 74）
-const BB_Y = 71;
-// 顶栏两头的空底板：离中线 414~533、高 34。塔防放在左边那块——敌方永远在左
-const STRIP_IN = 414, STRIP_OUT = 533, STRIP_H = 34;
+// 买活这一行的中心。按住 Alt 时（不开 Dota Plus 也一样）头像下面从上到下是：
+//   · 40~57  血条、蓝条、金条（能买活）——只有队友有
+//   · 73~85  「打赏」按钮——双方都有
+//   · 89~123 TP 冷却圈——只有队友有
+// 另外阵亡时头像下挂复活倒计时框，底边到 64（不按 Alt 也在）。
+// 取 68：文字约占 63.5~72.5，正好落在血条和「打赏」之间那段空当里，和复活框只擦个边。
+// （量自 2560×1600 按住 Alt 的实战截图，2026-10-09；原先 74，再之前按一张模糊的 Plus 截图调成 71）
+const BB_Y = 68;
+// 敌方塔防：一个和倒计时同款的圆（直径约 37），中心离中线 434、离屏顶 19——
+// 挨着顶栏最外侧那个头像（头像外缘在 413），高度和顶栏对齐（顶栏高约 38）。
+// 原先是一条 120 宽的深色底板，里面放盾 + 数字 + 进度线，用户嫌太长（2026-10-09）
+const GLYPH_X = 434, GLYPH_Y = 19;
+const R = 26, CIRC = 2 * Math.PI * R;
 
-/** 槽位（0-9，天辉 0-4、夜魇 5-9）的头像中心离中线多远。
-    敌方那一队排在左边、己方排在右边，每队内部槽位小的在左。
-    还不知道自己是哪一方时（没开局、编辑态摆位置）按天辉算——编辑态的占位十个都画，
-    排法不影响它们的位置。 */
-function slotX(slot, myTeam) {
-  const mine = (slot < 5 ? 2 : 3) === (myTeam === 3 ? 3 : 2);
-  const i = slot % 5;
-  return mine ? INNER + PITCH * i : -(INNER + PITCH * (4 - i));
+/** 槽位（0-9，天辉 0-4、夜魇 5-9）的头像中心离中线多远。天辉 0 号最左，夜魇 9 号最右 */
+function slotX(slot) {
+  return slot < 5 ? -(INNER + PITCH * (4 - slot)) : INNER + PITCH * (slot - 5);
 }
 
 let els = null, prev = {}, geo = "";
@@ -43,13 +44,19 @@ export function initTopbar(root) {
   root.insertAdjacentHTML("beforeend",
     Array.from({ length: 10 }, (_, s) =>
       `<div class="tb tb-bb" data-slot="${s}">${icon("buyback")}<span>--</span></div>`).join("") +
-    `<div class="tb tb-glyph">${icon("glyph")}<span></span><i></i></div>`);
+    `<div class="tb tb-glyph">
+       <svg class="ring" viewBox="0 0 60 60" aria-hidden="true">
+         <circle class="ring-bg" cx="30" cy="30" r="${R}"/>
+         <circle class="ring-fg" cx="30" cy="30" r="${R}" stroke-dasharray="${CIRC}" stroke-dashoffset="0"/>
+       </svg>
+       <div class="tb-glyph-ico">${icon("glyph")}<span></span></div>
+     </div>`);
   els = {
     bb: [...root.querySelectorAll(".tb-bb")].map(r => ({ root: r, num: r.querySelector("span") })),
     glyph: root.querySelector(".tb-glyph"),
   };
-  els.gnum = els.glyph.querySelector("span");
-  els.gbar = els.glyph.querySelector("i");
+  els.gring = els.glyph.querySelector(".ring-fg");
+  els.gnum = els.glyph.querySelector(".tb-glyph-ico span");
   prev = {}; geo = "";
 }
 
@@ -73,13 +80,14 @@ function place(root, myTeam) {
   const k = H / REF_H, cx = W / 2;
   root.style.setProperty("--hud-k", k);
   els.bb.forEach((b, s) => {
-    b.root.style.left = `${cx + slotX(s, myTeam) * k}px`;
+    b.root.style.left = `${cx + slotX(s) * k}px`;
     b.root.style.top = `${BB_Y * k}px`;
   });
-  // 底板是从左上角缩放的（transform-origin: top left），所以给它的左边缘
-  els.glyph.style.left = `${cx - STRIP_OUT * k}px`;
-  els.glyph.style.width = `${STRIP_OUT - STRIP_IN}px`;
-  els.glyph.style.height = `${STRIP_H}px`;
+  // 敌方在哪一头：我方天辉 → 敌方夜魇在右；我方夜魇 → 敌方天辉在左。
+  // 还不知道自己是哪一方时（没开局、编辑态）按天辉算，画在右边。
+  const enemyLeft = myTeam === 3;
+  els.glyph.style.left = `${cx + (enemyLeft ? -GLYPH_X : GLYPH_X) * k}px`;
+  els.glyph.style.top = `${GLYPH_Y * k}px`;
 }
 
 export function renderTopbar(root, m, show) {
@@ -104,11 +112,13 @@ export function renderTopbar(root, m, show) {
   g.hidden = show.glyph === false;
   g.classList.toggle("on", on);
   attr(g, "g.r", "ready", gm.ready ? "1" : "0");
-  // 数字位永远只放数字：ready 时留空，靠盾填实表达（和原先圆环那一版同一条规矩）
+  // 剩下多少冷却环就有多长（逆时针退回 12 点）；好了的时候环是满的，塔点亮——
+  // "敌方此刻有塔防"是威胁态，要最显眼。
+  // **冷却中在圆心写剩余时间**（和游戏里技能、塔防按钮冷却时一样，压在变暗的图标上）：
+  // 倒计时那排不写数字，但塔防要算"还剩几秒能强推"，用户要精确值（2026-10-09）
   const txt = gm.ready ? "" : fmt(gm.remaining);
   if (prev["g.t"] !== txt) { prev["g.t"] = txt; els.gnum.textContent = txt; }
-  // 底边那条线是原先圆环的对应物：剩下多少冷却就有多长
-  const frac = gm.ready ? 0 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 300)));
-  const f = frac.toFixed(3);
-  if (prev["g.f"] !== f) { prev["g.f"] = f; els.gbar.style.transform = `scaleX(${f})`; }
+  const frac = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 300)));
+  const off = (CIRC * (1 - frac)).toFixed(1);
+  if (prev["g.o"] !== off) { prev["g.o"] = off; els.gring.style.strokeDashoffset = off; }
 }
