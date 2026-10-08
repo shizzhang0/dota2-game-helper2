@@ -9,7 +9,9 @@ export const SHOW_KEYS = ["mid", "bounty", "lotus", "wisdom", "stack",
 export const DEFAULTS = {
   show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
   alwaysShow: false,
-  scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
+  scale: 1.0, opacity: 1.0, panelBg: 0.72,
+  // 小地图的兜底选项：只在读不到 Dota 自己的设置时才用，见 dotahud.js
+  minimapLarge: false, minimapRight: false,
   logLevel: "info", recordMatches: false, devTools: false, lang: "zh-CN",
 };
 

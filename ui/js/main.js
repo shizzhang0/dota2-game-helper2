@@ -9,6 +9,7 @@ import { WardTracker, deadTowers } from "./minimap.js";
 import { loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
 import { checkUpdate } from "./update.js";
+import { readDotaHud, minimapOpts } from "./dotahud.js";
 
 // 正式版没有控制台也开不出 devtools，前端异常必须转发给 Rust 写进日志
 const send = (lv, m) => {
@@ -26,15 +27,7 @@ const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker
 let tracker = null, C = null, alt = false, last = null, editMode = false;
 let wards = null;
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
-let dotaHud = null;          // Dota 自己的 HUD 设置（小地图在哪、多大、分辨率），见 dotacfg.rs
-
-// 启动时读一次，之后每局开始再读——玩家可能在两局之间改了设置。
-// 浏览器里没有这个命令，保持 null，用到的地方退回卡片里的设置。
-async function readDotaHud() {
-  if (!isTauri()) return;
-  try { dotaHud = await window.__TAURI__.core.invoke("dota_hud"); }
-  catch (e) { send("warn", `[dotacfg] ${e}`); }
-}
+// Dota 自己的 HUD 设置：启动时读一次，之后每局开始再读（见 dotahud.js）
 readDotaHud();
 
 // **断流多久算断。** Dota 崩了、被关掉、或者网络断了之后不会有任何通知，
@@ -179,6 +172,7 @@ setInterval(() => {
     econ: e,
     settings: cfg,
     wardmap: wards ? { wards: wards.list(info), dead: deadTowers(st, towers) } : null,
+    minimap: minimapOpts(cfg),
   });
   const hud = document.getElementById("hud");
   if (hud) hud.textContent =

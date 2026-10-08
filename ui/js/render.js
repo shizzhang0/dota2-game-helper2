@@ -6,20 +6,20 @@ import { initTopbar, renderTopbar } from "./topbar.js";
 const R = 26, CIRC = 2 * Math.PI * R;
 const TIMER_IDS = ["mid", "bounty", "lotus", "wisdom", "stack"];
 
-// 三个可独立摆位的块。cells 用来判断"这一块是不是该整体隐藏"。
-// 敌方塔防和买活不在这里：它们贴着 Dota 的顶栏画、位置跟着游戏走，见 topbar.js。
+// 两个可独立摆位的块。cells 用来判断"这一块是不是该整体隐藏"。
+// 敌方塔防、买活和眼位不在这里：它们贴着 Dota 自己的顶栏 / 小地图画、位置跟着游戏走，
+// 见 topbar.js 和 wardmap.js。
 export const BLOCKS = [
   { id: "timers",  cells: ["mid", "bounty", "lotus", "wisdom", "stack"] },
   { id: "econ",    cells: ["econ"] },
-  { id: "wardmap", cells: ["wardmap"] },
 ];
 
 // 块被整体隐藏时 offsetWidth 为 0，算默认摆位会把所有块全挤到左上角。
 // 这张表只用于兜底，取的是 1× 下实测的 offsetWidth/offsetHeight（含 1px 边框）。
-// econ 比另两个矮，是因为它那格没有圆环、CSS 里写死了 height: 52px。
+// econ 比 timers 矮，是因为它那格没有圆环、CSS 里写死了 height: 52px。
 const NOMINAL = {
   timers: { w: 350, h: 85 },
-  econ:   { w: 142, h: 70 }, wardmap: { w: 214, h: 213 },   // wardmap 随 wardSize 变，这是默认 180 时的值
+  econ:   { w: 142, h: 70 },
 };
 
 let root = null, els = null, prev = {}, scale = 1;
@@ -46,7 +46,6 @@ const INNER = {
       </div>
       <div class="rate"><span class="gpm">--</span><span class="xpm">--</span></div>
     </div>`,
-  wardmap: () => `<div class="cell wide wardmap" data-cell="wardmap"></div>`,
 };
 
 // container（#panel）只是个容器，自己不带样式；块是 fixed 定位，父节点有没有尺寸都不影响。
@@ -54,7 +53,10 @@ export function initPanel(container, towers) {
   root = container;
   root.removeAttribute("hidden");
   root.innerHTML = BLOCKS.map(b =>
-    `<div class="block" data-block="${b.id}">${INNER[b.id]()}</div>`).join("");
+    `<div class="block" data-block="${b.id}">${INNER[b.id]()}</div>`).join("") +
+    // 眼位那一层不是块：没有底板、不能拖，位置由 wardmap.js 按原生小地图算。
+    // 仍然带 data-cell，显示项开关照常管它
+    `<div class="mm" data-cell="wardmap"></div>`;
 
   els = { blocks: {}, cells: {},
           nw: root.querySelector(".nw"),
@@ -99,7 +101,6 @@ export function render(m) {
   // CSS 变量沿 DOM 树继承，设在容器上每一块都吃得到（贴顶栏那一层也吃）；缩放与透明度都走合成器，不触发重排
   root.style.setProperty("--panel-scale", scale);
   root.style.setProperty("--panel-opacity", cfg.opacity ?? 1);
-  root.style.setProperty("--ward-size", `${cfg.wardSize ?? 180}px`);
   root.style.setProperty("--block-bg", cfg.panelBg ?? 0.72);
   for (const [id, cell] of Object.entries(els.cells)) {
     cell.root.hidden = show[id] === false;
@@ -137,7 +138,11 @@ export function render(m) {
   set(els.gpm, "e.gpm", `${e.gpm} GPM`);
   set(els.xpm, "e.xpm", `${e.xpm} XPM`);
 
-  if (!wmOff) renderWardMap(m.wardmap || { wards: null, dead: [] });
+  const mm = els.cells.wardmap.root;
+  mm.classList.toggle("on", !!m.visible);
+  mm.classList.toggle("edit", !!m.editMode);
+  if (!wmOff) renderWardMap(m.wardmap || { wards: null, dead: [] },
+                            m.minimap || { large: false, right: false }, !!m.editMode);
 }
 
 /** 块在屏幕上的实际占位（offsetWidth 不含 transform，要自己乘缩放） */
@@ -157,22 +162,21 @@ function clamp(id, p) {
            y: Math.round(Math.min(Math.max(0, p.y), Math.max(0, innerHeight - h))) };
 }
 
-/** 默认摆位：timers 水平居中；econ 与 wardmap 靠左边缘叠放。
+/** 默认摆位：timers 水平居中；econ 靠左边缘。
     全部按视口比例算，不写死像素——换分辨率也成立。
     y0 取屏高 8% 是为了让开 Dota 顶栏**和挂在头像下面的买活那一行**
     （1080 屏上买活行底边在 83px，见 topbar.js；原先没有那一行时是 7.5%）。
 
     **左边那列从第二行起，不从 y0 起**。原先 econ 顶在 y0，实机上偏高
-    （2026-09-14 实测后按用户摆好的位置改，他把 econ 放到了 timers 下面那一行）。
+    （2026-09-14 实测后按用户摆好的位置改，用户把 econ 放到了 timers 下面那一行）。
     写成"timers 下面那一行"而不是记住那个像素值，换分辨率、换缩放都还成立。 */
 function defaultLayout() {
   const W = innerWidth, H = innerHeight, y0 = Math.round(H * 0.08), GAP = 10;
-  const t = box("timers"), c = box("econ");
+  const t = box("timers");
   const row2 = Math.round(y0 + t.h + GAP);
   return {
     timers:  { x: Math.round((W - t.w) / 2), y: y0 },
     econ:    { x: 16, y: row2 },
-    wardmap: { x: 16, y: Math.round(row2 + c.h + GAP) },
   };
 }
 

@@ -15,7 +15,9 @@ fn defaults() -> serde_json::Value {
         "scale": 1.0,
         "opacity": 1.0,
         "panelBg": 0.72,
-        "wardSize": 180,
+        // 小地图的兜底选项：只在读不到 Dota 自己的设置时才用，见 dotacfg.rs
+        "minimapLarge": false,
+        "minimapRight": false,
         "logLevel": "info",
         "recordMatches": false,
         // 开发者开关，界面上没有：手写进 settings.json 才显示录制、录制器才工作。

@@ -3,6 +3,8 @@ import { isTauri, fetchConstant } from "./source.js";
 import { checkUpdate, lastUpdate, onUpdate, openReleasePage } from "./update.js";
 import { icon, CELL_ICON } from "./icons.js";
 import { t, loadLang, LANGS } from "./i18n.js";
+import { minimapOpts, onDotaHud } from "./dotahud.js";
+import { wardIcon } from "./wardmap.js";
 
 // 编辑态的设置卡片。与 .block 平级而非其子节点——块受 --panel-scale 缩放，
 // 卡片跟着缩到 2× 或 0.8× 都没法用。
@@ -16,6 +18,11 @@ let card = null, doneCb = null, resetCb = null;
 /** 重拉录制统计。由 `initRecords` 装上，打开卡片和拨录制开关时调用——见那里的注释。 */
 let recRefresh = null;
 
+/** 刷新小地图那两个兜底选项。Dota 的设置是异步读回来的（启动、每局开始），
+    读到时卡片可能已经建好了，要能事后改它们的状态。每次 build 换成新的那一份。 */
+let mmRefresh = null;
+onDotaHud(() => mmRefresh?.());
+
 /** 显示项那九行前面的图标——卡片因此同时是设置和图例，一份数据两用。
     每行一个图标，眼位也不例外：曾经放过"眼 + 塔"两个（想表达那块地图画了哪两类
     东西），但九行里只有它是两个，反而不齐。塔图标仍留在 icons.js 里，
@@ -26,20 +33,15 @@ function showIcon(k) {
   return icon(CELL_ICON[k], 13);
 }
 
-// 图例。刻意复用地图自己的 wm-ward / wm-tower class 画色块——
-// 另写一套颜色迟早会和地图对不上。只在编辑态可见，游戏中不占任何屏幕空间。
+// 图例。刻意复用地图自己的画法（wardIcon 和 wm-kill）——
+// 另写一套形状颜色迟早会和地图对不上。只在编辑态可见，游戏中不占任何屏幕空间。
+// 眼位贴到原生小地图上之后只剩这三样：塔和我方眼原生就画着，我们不再画。
 const LEGEND = [
-  [`<circle class="wm-ward own" cx="5" cy="5" r="3.4"/>`,          "ownObs"],
-  [`<circle class="wm-ward own sentry" cx="5" cy="5" r="3.1"/>`,   "ownSentry"],
-  [`<circle class="wm-ward enemy" cx="5" cy="5" r="3.4"/>`,        "enemyObs"],
-  [`<circle class="wm-ward enemy sentry" cx="5" cy="5" r="3.1"/>`, "enemySentry"],
-  [`<circle class="wm-ward own soon" cx="5" cy="5" r="3.4"/>`,     "soon"],
+  [wardIcon("observer", 5, 5, 1.9), "enemyObs"],
+  [wardIcon("sentry", 5, 5, 1.9),   "enemySentry"],
   // 被排的是叉不是点——图例必须跟着地图的形状走，否则这张卡片就骗人了
   [`<g class="wm-kill"><line x1="2.2" y1="2.2" x2="7.8" y2="7.8"/>`
    + `<line x1="7.8" y1="2.2" x2="2.2" y2="7.8"/></g>`,           "killed"],
-  [`<rect class="wm-tower" data-team="2" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "towerRadiant"],
-  [`<rect class="wm-tower" data-team="3" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "towerDire"],
-  [`<rect class="wm-tower dead" x="1.6" y="1.6" width="6.8" height="6.8"/>`,          "towerDead"],
 ];
 const legendHTML = () => LEGEND.map(([shape, key]) =>
   `<span><svg viewBox="0 0 10 10" aria-hidden="true">${shape}</svg>${t("legend." + key)}</span>`).join("");
@@ -205,9 +207,9 @@ async function build(s) {
       <label class="ed-row">${t("card.bg")}
         <input id="edBg" type="range" min="0" max="1" step="0.02">
         <output id="edBgOut"></output></label>
-      <label class="ed-row">${t("card.wardSize")}
-        <input id="edWard" type="range" min="108" max="360" step="4">
-        <output id="edWardOut"></output></label>
+      <label class="ed-row"><input id="edMmLarge" type="checkbox">${t("card.mmLarge")}</label>
+      <label class="ed-row"><input id="edMmRight" type="checkbox">${t("card.mmRight")}</label>
+      <div class="ed-row ed-ver" id="edMmSrc"></div>
       <div class="ed-row"><button id="edReset" type="button">${t("card.reset")}</button></div>
     </div>
     <div class="ed-pane" data-pane="legend">
@@ -242,23 +244,32 @@ async function build(s) {
     </div>`;
 
   const $ = (id) => card.querySelector("#" + id);
-  const scale = $("edScale"), opacity = $("edOpacity"), ward = $("edWard"),
+  const scale = $("edScale"), opacity = $("edOpacity"),
         bg = $("edBg"), log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
-        always = $("edAlways");
+        always = $("edAlways"), mmLarge = $("edMmLarge"), mmRight = $("edMmRight");
   scale.value = s.scale ?? DEFAULTS.scale;
   opacity.value = s.opacity ?? DEFAULTS.opacity;
-  ward.value = s.wardSize ?? DEFAULTS.wardSize;
   bg.value = s.panelBg ?? DEFAULTS.panelBg;
   log.value = s.logLevel ?? DEFAULTS.logLevel;
   // 录制那几行只在 devTools 为真时才建（见 design/overlay.md「开发区」），不建就是 null
   if (record) record.checked = !!s.recordMatches;
   always.checked = !!s.alwaysShow;
   lang.value = s.lang ?? DEFAULTS.lang;
+  mmLarge.checked = !!s.minimapLarge;
+  mmRight.checked = !!s.minimapRight;
+  // 小地图的两个选项是**兜底**：读到 Dota 的设置就照它的值显示、灰掉不让改——
+  // 那时改了也不生效，能勾反而骗人。没读到才放开，让用户照着游戏里的选项勾。
+  mmRefresh = () => {
+    const o = minimapOpts({ minimapLarge: s.minimapLarge, minimapRight: s.minimapRight });
+    mmLarge.disabled = mmRight.disabled = o.fromDota;
+    if (o.fromDota) { mmLarge.checked = o.large; mmRight.checked = o.right; }
+    $("edMmSrc").textContent = t(o.fromDota ? "card.mmFromDota" : "card.mmManual");
+  };
+  mmRefresh();
 
   const sync = () => {
     $("edScaleOut").textContent = Number(scale.value).toFixed(2) + "×";
     $("edOpacityOut").textContent = Math.round(Number(opacity.value) * 100) + "%";
-    $("edWardOut").textContent = ward.value + "px";
     $("edBgOut").textContent = Math.round(Number(bg.value) * 100) + "%";
   };
   const collect = () => ({
@@ -267,7 +278,9 @@ async function build(s) {
     alwaysShow: always.checked,
     scale: Number(scale.value),
     opacity: Number(opacity.value),
-    wardSize: Number(ward.value),
+    // 灰着的时候显示的是 Dota 的值，别把它当成用户的兜底选项存下去
+    minimapLarge: mmLarge.disabled ? !!s.minimapLarge : mmLarge.checked,
+    minimapRight: mmRight.disabled ? !!s.minimapRight : mmRight.checked,
     panelBg: Number(bg.value),
     logLevel: log.value,
     recordMatches: record ? record.checked : !!s.recordMatches,
@@ -330,7 +343,8 @@ async function build(s) {
     scale.value = DEFAULTS.scale;
     opacity.value = DEFAULTS.opacity;
     bg.value = DEFAULTS.panelBg;
-    ward.value = DEFAULTS.wardSize;
+    if (!mmLarge.disabled) mmLarge.checked = DEFAULTS.minimapLarge;
+    if (!mmRight.disabled) mmRight.checked = DEFAULTS.minimapRight;
     sync();
     saveSettings(collect());
     resetCb(DEFAULTS.scale);
