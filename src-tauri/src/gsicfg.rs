@@ -52,6 +52,27 @@ fn libraries(steam: &PathBuf) -> Vec<PathBuf> {
     out
 }
 
+/// 每个 Steam 库里 Dota 的 GSI 配置目录（`.../dota/cfg/gamestate_integration`），不管存不存在
+fn gsi_dirs() -> Vec<PathBuf> {
+    let Some(steam) = steam_path() else { return vec![] };
+    libraries(&steam)
+        .into_iter()
+        .map(|lib| lib.join("steamapps").join("common").join("dota 2 beta")
+                      .join("game").join("dota").join("cfg").join("gamestate_integration"))
+        .collect()
+}
+
+/// 卸载时删掉我们写的那个配置（nsis 卸载前带 `--cleanup` 启动程序，见 windows/hooks.nsh）。
+/// 只删自己那一个文件，目录里别的程序的配置不碰
+pub fn remove_cfg() {
+    for dir in gsi_dirs() {
+        let file = dir.join(CFG_NAME);
+        if file.is_file() {
+            let _ = fs::remove_file(&file);
+        }
+    }
+}
+
 /// 首次运行把 GSI 配置写进 Dota 的 cfg 目录。找不到就只提示，不当作错误
 /// （用户可以手动放，程序其余部分照常工作）。
 pub fn ensure_cfg() {

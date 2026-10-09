@@ -32,6 +32,13 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let edit = MenuItem::with_id(app, "edit", edit_label, true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", crate::lang::t(app, "tray.quit"), true, None::<&str>)?;
+    // 查到新版本时多一项，点了打开设置卡片——更新按钮在卡片版本那一行（见 updater.rs）
+    if let Some(v) = crate::updater::available() {
+        let label = format!("{} {v}", crate::lang::t(app, "tray.update"));
+        let upd = MenuItem::with_id(app, "update", label, true, None::<&str>)?;
+        let sep2 = PredefinedMenuItem::separator(app)?;
+        return Menu::with_items(app, &[&upd, &sep2, &always, &edit, &sep, &quit]);
+    }
     Menu::with_items(app, &[&always, &edit, &sep, &quit])
 }
 
@@ -60,6 +67,7 @@ pub fn setup(app: &tauri::AppHandle) -> tauri::Result<()> {
             // 勾选状态由 `set_settings` 重建菜单时统一刷，单一数据源。
             "always" => crate::settings::toggle_always_show(app),
             "edit" => crate::toggle_edit(app),
+            "update" => crate::set_edit(app, true),
             "quit" => app.exit(0),
             _ => {}
         })

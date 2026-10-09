@@ -1,6 +1,6 @@
 import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { isTauri, fetchConstant } from "./source.js";
-import { checkUpdate, lastUpdate, onUpdate, openReleasePage } from "./update.js";
+import { checkUpdate, lastUpdate, onUpdate, openReleasePage, isInstalled, installUpdate } from "./update.js";
 import { icon, CELL_ICON } from "./icons.js";
 import { t, loadLang, LANGS } from "./i18n.js";
 import { minimapOpts, onDotaHud, MINIMAP_MODES } from "./dotahud.js";
@@ -119,8 +119,11 @@ function initRecords(stat, btn) {
     切语言还会整卡重建，所以建的时候先套用 `lastUpdate()`，再订阅之后的变化。
     订阅在模块级只留一份：重建时先退掉旧的，不然每切一次语言多挂一个监听。 */
 let offUpdate = null;
-function initUpdate(badge, msg, checkBtn, relBtn) {
+function initUpdate(badge, msg, checkBtn, relBtn, nowBtn) {
   if (!isTauri()) { checkBtn.disabled = true; return; }
+  // 有新版本时：安装版给「立即更新」（一键更新），绿色版给「打开下载页」。
+  // 一键更新失败（连不上、Release 里没有 latest.json……）就退回「打开下载页」
+  let installed = false, failed = false;
   const text = { checking: "card.updChecking", latest: "card.updLatest",
                  new: "card.updNew", fail: "card.updFail" };
   const show = (r) => {
@@ -135,7 +138,8 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
     }
     // 失败时 NEW 不动：之前查到过的新版不会因为这次没连上就不存在了。
     // 「打开下载页」只在有新版本时出现，顶替「检查更新」的位置——平时它用不上，摆着只占地方
-    relBtn.hidden = badge.hidden;
+    nowBtn.hidden = badge.hidden || !installed || failed;
+    relBtn.hidden = badge.hidden || !nowBtn.hidden;
     checkBtn.hidden = !badge.hidden;
     // 一切正常（已是最新）就不再多写一行"已是最新"，版本号旁边没有 NEW 已经说明了
     if (r.state === "latest" || r.state === "new") msg.textContent = "";
@@ -143,7 +147,22 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
   offUpdate?.();
   offUpdate = onUpdate(show);
   show(lastUpdate());
+  isInstalled().then(v => { installed = v; show(lastUpdate()); });
   checkBtn.addEventListener("click", () => checkUpdate());
+  nowBtn.addEventListener("click", async () => {
+    nowBtn.disabled = true;
+    msg.textContent = t("card.updDownloading") + "…";
+    const err = await installUpdate((got, total) => {
+      msg.textContent = got >= (total || Infinity) ? t("card.updInstalling")
+        : `${t("card.updDownloading")} ${total ? Math.floor(got / total * 100) + "%" : mb(got)}`;
+    });
+    // 走到这里就是没装成（装成的话程序已经退出了）
+    nowBtn.disabled = false;
+    failed = true;
+    show(lastUpdate());
+    msg.textContent = t("card.updInstallFail");
+    window.__TAURI__.core.invoke("log_front", { level: "warn", msg: `[update] ${err}` }).catch(() => {});
+  });
   // 先退出编辑态：编辑态下覆盖层置顶且不穿透鼠标，打开的浏览器被压在下面点不到
   relBtn.addEventListener("click", () => { doneCb?.(); openReleasePage(); });
 }
@@ -208,6 +227,7 @@ async function build(s) {
       <span class="ed-vertext">${t("card.version")} <b id="edAppVer">—</b> · Dota <b id="edDotaVer">—</b></span>
       <span class="ed-new" id="edNew" hidden></span>
       <button id="edUpd" type="button" class="ed-right">${t("card.checkUpdate")}</button>
+      <button id="edNow" type="button" class="ed-right ed-primary" hidden>${t("card.updateNow")}</button>
       <button id="edRel" type="button" class="ed-right" hidden>${t("card.openRelease")}</button>
     </div>
     <div class="ed-upd-msg" id="edUpdMsg"></div>
@@ -297,7 +317,7 @@ async function build(s) {
   });
   if (record) initRecords($("edRecStat"), $("edClear"));
   else recRefresh = null;
-  initUpdate($("edNew"), $("edUpdMsg"), $("edUpd"), $("edRel"));
+  initUpdate($("edNew"), $("edUpdMsg"), $("edUpd"), $("edRel"), $("edNow"));
   $("edDone").addEventListener("click", doneCb);
 
   const bar = card.querySelector(".ed-bar");

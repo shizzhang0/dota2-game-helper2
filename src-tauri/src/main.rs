@@ -12,6 +12,7 @@ mod prices;
 mod record;
 mod settings;
 mod tray;
+mod updater;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
@@ -71,7 +72,13 @@ fn exit_edit(app: tauri::AppHandle) {
 }
 
 fn main() {
+    // 卸载器在删文件之前带这个参数启动我们一次：只删 GSI 配置，不起窗口（见 windows/hooks.nsh）
+    if std::env::args().any(|a| a == "--cleanup") {
+        gsicfg::remove_cfg();
+        return;
+    }
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_shortcuts([EDIT_HOTKEY, ALWAYS_HOTKEY])
@@ -118,6 +125,9 @@ fn main() {
             constants::get_versions,
             dotacfg::dota_hud,
             hittest::set_card_rect,
+            updater::app_installed,
+            updater::set_update_available,
+            updater::update_install,
             prices::get_item_prices,
             settings::get_settings,
             settings::set_settings,

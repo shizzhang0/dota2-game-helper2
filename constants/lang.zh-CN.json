@@ -49,5 +49,10 @@
   "legend.enemySentry": "敌方真眼",
   "legend.killed": "刚被排掉",
   "tray.edit": "设置",
-  "tray.quit": "退出"
+  "tray.quit": "退出",
+  "tray.update": "有新版本",
+  "card.updateNow": "立即更新",
+  "card.updDownloading": "正在下载",
+  "card.updInstalling": "正在安装，装完会自动重启",
+  "card.updInstallFail": "自动更新失败，请到下载页手动下载"
 }

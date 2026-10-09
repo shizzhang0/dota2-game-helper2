@@ -190,16 +190,68 @@ import { EconTracker } from ".../ui/js/networth.js";
 
 ## 发版
 
-1. 三处版本号一起改：`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`（`cargo build` 会跟着改）、
-   `src-tauri/tauri.conf.json`
-2. **先把 `ui/dev/` 挪出 `ui/`**，再 `cargo build --release --manifest-path src-tauri/Cargo.toml`，编完挪回来。
-   `frontendDist` 是整个 `ui/`，gitignore 挡不住打包——开发页的测试截图和录像切片会被一起嵌进 exe
-   （2026-10-08 实测一次从 6.7MB 涨到 9.2MB）。编完的 exe 应约 6.7MB
-3. 打 zip：exe + 两份 README，名字 `dota2-game-helper2-vX.Y.Z-windows-x64.zip`
-4. `gh release create vX.Y.Z`，标题就是 `vX.Y.Z`。「检查更新」只读 tag，标题和正文怎么写都不影响它。
-   **正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档，
-   不写进 Release（用户 2026-10-09 定；PR 描述同理）
-5. 把 zip 下载回来核对 SHA256
+v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认它）、**绿色版 zip**（exe + 两份 README）、
+**`latest.json`**（一键更新读的清单）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
+**本地和 GitHub Actions 用的是同一个脚本**。
+
+### 平时：推 tag，Actions 自动发
+
+1. `python tools/release.py bump 1.4.0` 改三处版本号（`Cargo.toml`、`Cargo.lock`、`tauri.conf.json`），
+   照常提 PR、CI 过了合进 main
+2. 在 main 上打**带注释的 tag**，注释就是 Release 正文（只写 Changelog，见下），推上去：
+
+   ```bash
+   git tag -a v1.4.0 -F notes.md
+   ```
+
+   ```bash
+   git push origin v1.4.0
+   ```
+
+3. [`release.yml`](../../.github/workflows/release.yml) 接手：核对 tag 和代码里的版本号一致 →
+   `release.py build` → `release.py publish`（建 Release、传三样）→ `release.py verify`（下载回来核对）
+
+签名私钥在仓库 Secrets 的 `TAURI_SIGNING_PRIVATE_KEY`。没有它流水线直接失败，不会发出一个没签名的安装包。
+
+### 兜底：本地发
+
+Actions 坏了，或者要本地先试打一个包：
+
+```bash
+python tools/release.py build
+```
+
+```bash
+python tools/release.py publish notes.md
+```
+
+```bash
+python tools/release.py verify 1.4.0
+```
+
+`build` 本地会去读 `~/.tauri/dota2-game-helper2.key`。产物在 `dist/release/`。
+
+### build 做了什么
+
+- **先把 `ui/dev/` 挪出 `ui/`**，打完挪回来。`frontendDist` 是整个 `ui/`，gitignore 挡不住打包——
+  开发页的测试截图和录像切片会被一起嵌进 exe（2026-10-08 实测一次从 6.7MB 涨到 9.2MB）
+- 用 Tauri 命令行打包（`cargo build` 只出 exe，不出安装包和签名），版本跟着 `Cargo.lock` 里的 `tauri` 走
+  （现在 2.11.5）。第一次跑会自己下 NSIS 工具链
+- exe 应约 **7.5MB**（v1.3.x 是 6.7MB，多的是更新插件的 HTTP 下载依赖；更新插件的 HTTPS 换成了
+  Windows 自带的 SChannel，用默认的 rustls 会到 8.6MB）。大很多说明 `ui/` 里混进了别的东西
+- 生成 `latest.json`：安装包下载地址 + `.sig` 签名原文
+
+### 几条规矩
+
+- **Release 正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档
+  （用户 2026-10-09 定；PR 描述同理）。标题就是 `vX.Y.Z`
+- 「检查更新」只读 tag；一键更新读最新 Release 里的 `latest.json`——**漏传它，装了安装版的人就收不到这一版**，
+  所以 `publish` 三样缺一样就不发
+
+> **签名私钥** `~/.tauri/dota2-game-helper2.key`（没设密码）**不进仓库，要备份**；Secrets 里那份
+> 读不出来，不能当备份。公钥写在 `tauri.conf.json` 的 `plugins.updater.pubkey`，装好的程序靠它验安装包。
+> **私钥丢了，已经装了安装版的人就再也收不到一键更新**——换一把新钥匙签出来的包，旧程序验不过，
+> 只能让他们手动下载重装一次。
 
 ## 开发顺序（当初的路径，供参考）
 

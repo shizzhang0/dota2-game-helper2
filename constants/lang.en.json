@@ -49,5 +49,10 @@
   "legend.enemySentry": "Enemy sentry",
   "legend.killed": "Just dewarded",
   "tray.edit": "Settings",
-  "tray.quit": "Quit"
+  "tray.quit": "Quit",
+  "tray.update": "Update available:",
+  "card.updateNow": "Update now",
+  "card.updDownloading": "Downloading",
+  "card.updInstalling": "Installing, the app will restart",
+  "card.updInstallFail": "Auto-update failed, please download it manually"
 }
