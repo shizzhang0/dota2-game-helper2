@@ -8,7 +8,7 @@ export const SHOW_KEYS = ["mid", "bounty", "wisdom", "lotus", "stack",
 // 这份只在浏览器开发时用得上。
 export const DEFAULTS = {
   show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
-  alwaysShow: false,
+  alwaysShow: true,    // 默认开（2026-10-09 起）
   // 小地图在哪、多大：auto = 读 Dota 自己的设置，见 dotahud.js
   minimap: "auto",
   logLevel: "info", recordMatches: false, devTools: false, lang: "zh-CN",

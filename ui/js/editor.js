@@ -150,6 +150,7 @@ function initUpdate(badge, msg, checkBtn, relBtn) {
 
 export async function initEditor(cardEl, onDone) {
   card = cardEl; doneCb = onDone;
+  new ResizeObserver(() => { if (!card.hidden) reportRect(); }).observe(card);
   await build(await loadSettings());
   // **「始终显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
   // 不跟的话卡片攥着旧值，进编辑态随便动一下别的，collect() 就把旧值存回去，
@@ -277,8 +278,8 @@ async function build(s) {
 
   // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 小地图回到「自动」。
   // （块的位置 2026-10-08 起跟着 Dota 的界面走、不能拖，也就没有摆位要还原了。）
-  // **「始终显示」也还原成关**：它是外观行为、和显示项同类，而"按住 Alt 才显示"
-  // 是产品的默认形态；还原它不会造成任何数据损失。
+  // **「始终显示」也还原成默认**（v1.4.0 起默认开）：它是外观行为、和显示项同类，
+  // 还原它不会造成任何数据损失。
   // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
   // **语言也不动**：重置回中文会让看不懂中文的用户无法退出这个状态，
   // 用户得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
@@ -310,6 +311,7 @@ async function build(s) {
     if (!dragging) return;
     card.style.left = `${ox + ev.clientX - sx}px`;
     card.style.top  = `${oy + ev.clientY - sy}px`;
+    reportRect();
   });
   bar.addEventListener("pointerup", (ev) => {
     if (!dragging) return;
@@ -319,14 +321,26 @@ async function build(s) {
 
 /** 每次进编辑态回到屏幕中央偏下。位置不存盘——拆块之后没有"面板"这个唯一锚点，
     与其猜一个，不如每次给个确定的起点，要挪自己拖。 */
+/** 把卡片的矩形报给 Rust：编辑态下只有这块吃鼠标，其余地方穿透到游戏（见 src-tauri/src/hittest.rs）。
+    物理像素、窗口客户区坐标——Rust 那边拿 GetCursorPos 减窗口左上角来比。
+    打开、关上、拖动、尺寸变化时各报一次；尺寸变化靠 ResizeObserver（检查更新的状态行出现 /
+    消失、切语言都会让卡片变高）。 */
+function reportRect() {
+  if (!isTauri() || !card) return;
+  const r = card.hidden ? null : card.getBoundingClientRect(), k = devicePixelRatio || 1;
+  window.__TAURI__.core.invoke("set_card_rect",
+    { rect: r ? [r.left * k, r.top * k, r.width * k, r.height * k] : null }).catch(() => {});
+}
+
 function place() {
   const w = card.offsetWidth, h = card.offsetHeight;
   card.style.left = `${Math.round(Math.max(8, (innerWidth - w) / 2))}px`;
   card.style.top  = `${Math.round(Math.max(8, Math.min(innerHeight * 0.6, innerHeight - h - 8)))}px`;
+  reportRect();
 }
 
 export function setEditorOpen(on) {
   if (!card) return;
   card.hidden = !on;          // 必须先取消隐藏再量尺寸，hidden 时 offsetWidth 为 0
-  if (on) { place(); recRefresh?.(); }
+  if (on) { place(); recRefresh?.(); } else reportRect();
 }

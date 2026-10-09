@@ -5,6 +5,7 @@ mod constants;
 mod dotacfg;
 mod gsi;
 mod gsicfg;
+mod hittest;
 mod lang;
 mod log;
 mod prices;
@@ -18,8 +19,8 @@ use tauri::{Emitter, Manager};
 use crate::log::Level;
 use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
-/// 编辑态：可拖拽调位置；锁定态整窗鼠标穿透
-static EDIT: AtomicBool = AtomicBool::new(false);
+/// 编辑态：打开设置卡片。鼠标穿透由 hittest.rs 管——只有卡片上不穿透
+pub(crate) static EDIT: AtomicBool = AtomicBool::new(false);
 
 /// 设置编辑态。热键、托盘菜单、面板上的「完成」按钮共用这一份，别各存一份状态。
 ///
@@ -30,7 +31,9 @@ static EDIT: AtomicBool = AtomicBool::new(false);
 pub fn set_edit(app: &tauri::AppHandle, on: bool) {
     EDIT.store(on, Ordering::Relaxed);
     if let Some(w) = app.get_webview_window("overlay") {
-        let _ = w.set_ignore_cursor_events(!on);
+        // **进出编辑态都先设成穿透**：编辑态下只有设置卡片吃鼠标，由 hittest.rs 按鼠标位置
+        // 随时切换（v1.4.0 起；原先编辑态整窗不穿透，卡片以外点不到游戏，见那个文件的头注释）
+        let _ = w.set_ignore_cursor_events(true);
         // 编辑态给窗口焦点，前端才收得到 ESC 的 keydown
         if on {
             let _ = w.set_focus();
@@ -106,6 +109,7 @@ fn main() {
             record::init(app.handle());          // 必须在 gsi 之前：第一包来的时候它得已经在
             gsi::spawn(app.handle().clone());
             altkey::spawn(app.handle().clone());
+            hittest::spawn(app.handle().clone());
             gsicfg::ensure_cfg();
             Ok(())
         })
@@ -113,6 +117,7 @@ fn main() {
             constants::get_constants,
             constants::get_versions,
             dotacfg::dota_hud,
+            hittest::set_card_rect,
             prices::get_item_prices,
             settings::get_settings,
             settings::set_settings,

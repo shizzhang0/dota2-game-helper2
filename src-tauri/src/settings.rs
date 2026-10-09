@@ -11,7 +11,8 @@ fn defaults() -> serde_json::Value {
         "show": { "mid": true, "bounty": true, "wisdom": true, "lotus": true,
                   "stack": true, "glyph": true, "buyback": true, "econ": true,
                   "wardmap": true },
-        "alwaysShow": false,
+        // 默认开（2026-10-09 起，原先默认关、按住 Alt 才显示）。老用户的 settings.json 里存着自己的值，不受影响
+        "alwaysShow": true,
         // 小地图在哪、多大：auto = 读 Dota 自己的设置（dotacfg.rs），其余是手动指定
         "minimap": "auto",
         "logLevel": "info",
@@ -59,7 +60,7 @@ pub fn get_settings(app: tauri::AppHandle) -> serde_json::Value {
 /// 和给前端的 `settings` 事件，绕过去就会各改各的。
 pub fn toggle_always_show(app: &tauri::AppHandle) {
     let mut v = load(app);
-    let now = !v["alwaysShow"].as_bool().unwrap_or(false);
+    let now = !v["alwaysShow"].as_bool().unwrap_or(true);
     v["alwaysShow"] = serde_json::Value::Bool(now);
     set_settings(app.clone(), v);
     crate::logf!(crate::log::Level::Info, "[settings] 始终显示 = {now}");
