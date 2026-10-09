@@ -91,18 +91,24 @@ README 做厚（19 个小节、7 张截图）+ GitHub Pages 站（`site/` + `.gi
 
 截图也补齐了（`tools/make_shots.py` + `docs/images/`），包括历史上没截成功过的编辑态卡片。
 
-### 安装包（nsis）—— tag 和 Release 早就有了，缺的只是安装包
+### 安装包 + 一键更新 —— 计划随 v1.4.0 一起做（2026-10-09 定）
 
-原文写的是"没打过 tag、没出过安装包"，**前半句从 v1.0.0 起就不成立了**：
-v1.0.0 之后每个版本都有 tag 和对应的 GitHub Release（截至 2026-09-23 是 v1.3.4），
-每次都附一个 zip（exe + 两份 README），发布后会把 zip 下载回来核对 SHA256。
+现在每版发一个 zip（exe + 两份 README），更新要"查到新版 → 打开下载页 → 下载 → 退出程序 →
+解压覆盖"。改成安装包之后：
 
-**还缺的是 nsis 安装包。** `bundle.targets` 配着它，但 `tauri build` 的打包流程从没跑过。
-真要做的话至少要确认：能装、能卸、首次运行会正确写 GSI cfg。
+- **一键更新**：最大的收益。Tauri 的 updater 插件只支持安装版——查到新版后程序自己下载、
+  安装、重启，用户点一下就行，「打开下载页」退成兜底
+- **Windows「应用」里能卸载**，卸载时顺手删掉写进 Dota 目录的 GSI cfg（现在得照 README 手删）
+- 开始菜单有快捷方式；缺 WebView2 的老 Win10 能自动装上（现在单 exe 在那种机器上直接打不开）
 
-不急的理由：zip 解压即用，而这个程序本来就没有需要写进注册表或开始菜单的东西。
-安装包真正的收益是"卸载时清干净"——而它写出去的只有
-`%APPDATA%\dev.dota2helper2.app` 和一个 GSI cfg，README 里已经写明怎么手动删。
+要定 / 要注意的：
+
+- **只给当前用户装**（nsis `installMode: currentUser`），不进 Program Files、不弹 UAC
+- **没有代码签名**，SmartScreen 会拦（现在的 exe 也一样，不是新问题）；签名证书一年几百美元，先不买
+- **一键更新要一把 updater 签名密钥**（minisign，免费，和代码签名不是一回事），生成一次、私钥不进仓库；
+  发版多传一个更新清单（`latest.json`），写进 dev-tools.md「发版」
+- **zip 绿色版保留**，和安装包一起放在 Release 里
+- 验证：能装、能卸（GSI cfg 删干净）、首次运行写 GSI cfg、从旧版一键升级、设置和录制在升级后还在
 
 ---
 

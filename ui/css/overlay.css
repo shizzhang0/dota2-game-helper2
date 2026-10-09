@@ -322,13 +322,16 @@ html, body {
      → 白字白底看不见。只能限定在卡片内：给 :root 定配色方案会连带
      画上背景底色，覆盖层就不透明了。 */
   color-scheme: dark;
-  width: 300px;
+  width: 330px;               /* 显示项三列，英文的 Enemy glyph / Net worth 要放得下 */
   padding: 12px 14px;
   background: var(--bg-lit);
   border: 1px solid var(--hair);
   border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
   pointer-events: auto;
+  /* **字号只有两档**（2026-10-09）：13 给所有要读、要点的东西（标题、分组名、选项、按钮、版本号），
+     11 只给附注（图例、小地图读到的结果、底部提示、更新状态）。原先标题和分组名是 11、
+     NEW 是 10，一张卡片四种字号，层级反而乱——分组名靠暗色 + 加粗跟选项区分，不靠缩小 */
   font-size: 13px;
 }
 /* 卡片的拖拽把手。负 margin 把它顶到卡片内边距之外，视觉上占满整个顶边。
@@ -339,84 +342,58 @@ html, body {
   border-bottom: 1px solid var(--hair);
   border-radius: 10px 10px 0 0;
   background: rgba(255, 255, 255, .05);
-  font-size: 11px;
   color: var(--dim);
   cursor: grab;
   user-select: none;
 }
 .ed-bar:active { cursor: grabbing; }
 
-/* ── 页签 ────────────────────────────────────────────
-   四节内容原先竖着堆成一条，默认 475px、全展开 754px。页签把它压成
-   "最高那一页 + 外壳"，而且**只有图标没有文字**——名字显示在页签条下面那一行，
-   所以中英文卡片一样宽（英文的 Display/Panel/Legend/Developer 并排写撑得开）。
-
-   页签条**只管四页内容**：拖拽把手在它上面、「完成」在它下面，两者都不进页签。
-   编辑态下覆盖层全屏吃鼠标，桌面点不动、托盘也点不到，「完成」是三条退出路径里
-   最可靠的一条——它绝不能藏在某个没选中的页后面。 */
-.ed-tabs {
-  display: flex; gap: 4px;
-  margin: 0 -14px 0;            /* 顶到卡片内边距之外，和 .ed-bar 对齐 */
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--hair);
-}
-.ed-tab {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center;
-  padding: 5px 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--dim);
-  cursor: pointer;
-}
-.ed-tab:hover { background: rgba(255, 255, 255, .06); color: var(--fg); }
-/* 选中态同时给底色和描边：只靠颜色的话，在 11px 的图标上差别太弱 */
-.ed-tab.on {
-  background: rgba(101, 217, 247, .12);
-  border-color: rgba(101, 217, 247, .35);
-  color: var(--k-chance);
-}
-.ed-tab svg.ico { display: block; overflow: visible; }
-/* 选中页的名字。顶替了原先每节的 h3，所以没多占高度 */
-.ed-tabname {
-  font-size: 11px; color: var(--dim); font-weight: 600;
-  margin: 8px 0 7px;
-}
-.ed-pane { margin-bottom: 12px; }
-.ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
-.ed-legend-note { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
-.ed-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
-.ed-legend span { display: flex; align-items: center; gap: 7px; }
+/* ── 设置卡片：一页 ──────────────────────────────────
+   原先分四个图标页签（显示项 / 面板 / 图例 / 开发）；内容删减后一页放得下（2026-10-09）。 */
+.ed-sec { color: var(--dim); font-weight: 600; margin: 0 0 7px; }
+/* 九个显示项排三列三行（原先两列五行），卡片因此矮了两行 */
+.ed-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; }
+.ed-grid .ed-chk { white-space: nowrap; gap: 5px; }
+/* 眼位图例：挂在九个勾下面，小一号、颜色压暗 */
+.ed-legend { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 7px 0 0;
+             font-size: 11px; color: var(--dim); }
+.ed-legend span { display: flex; align-items: center; gap: 5px; }
 /* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
 .ed-legend svg { width: 11px; height: 11px; flex: none; display: block; overflow: visible; }
+.ed-sep { border-top: 1px solid var(--hair); margin: 12px -14px 10px; }
+/* 下半部分：两列的表，左标签右控件。下拉框统一宽度，控件起点对齐 */
+.ed-form { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; }
+.ed-form > span { color: var(--dim); }
+.ed-form select { width: 112px; }
+/* 控件后面的附注（小地图读到的结果、始终显示的说明） */
+.ed-note { color: var(--dim); font-size: 11px; }
+/* 版本那一行：「版本 1.3.6 · Dota 7.41f」+ 右边的检查更新 / 下载页 */
+.ed-verline { margin: 0; }
+.ed-vertext { color: var(--dim); }
+.ed-vertext b { font-weight: 400; color: var(--fg); font-variant-numeric: tabular-nums; }
 .ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
+.ed-right { margin-left: auto; }
 /* 九个显示项前面的图标，和面板上用的是同一份 icons.js，形状永远不会脱节。
    眼位那一行是两个图标，所以用 flex 而不是写死宽度。 */
 .ed-ico { display: flex; align-items: center; gap: 3px; color: var(--dim); flex: none; }
 .ed-ico svg.ico { display: block; overflow: visible; }
 .ed-row { margin-bottom: 7px; }
-.editor input[type="range"] { flex: 1; min-width: 0; }
-.editor output {
-  min-width: 44px; text-align: right; color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-/* 开发区的只读信息行（录制统计 + 两行版本号）：
-   值靠右对齐，和上面滑块的 output 同一个视觉位置。
+/* 开发区的只读信息行（录制统计 + 版本号）：值靠右对齐。
    刻意不加 user-select: none——它们存在的意义就是被选中复制走。 */
-.ed-ver { color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+.ed-ver { color: var(--dim); margin-bottom: 4px; }
 .ed-ver b {
-  margin-left: auto; font-weight: 400; color: var(--fg);
+  margin-left: 6px; margin-right: auto; font-weight: 400; color: var(--fg);
   font-variant-numeric: tabular-nums;
 }
 /* 版本号旁边的 NEW：查到新版才出现。借「完成」按钮那个青色，不另起一个颜色 */
 .ed-new {
-  margin-left: 6px; padding: 0 5px; border-radius: 4px;
-  background: var(--k-chance); color: #06202B; font-size: 10px; font-weight: 600;
+  margin-left: 2px; padding: 0 5px; border-radius: 4px;
+  background: var(--k-chance); color: #06202B; font-size: 11px; font-weight: 600;
   cursor: default;
 }
 /* 状态单独一行：和两个按钮挤一行时英文的"Can't reach the update server"放不下 */
-.ed-upd-msg { color: var(--dim); font-size: 11px; min-height: 1em; }
+.ed-upd-msg { color: var(--dim); font-size: 11px; }
+.ed-upd-msg:empty { display: none; }
 .editor button:disabled { opacity: .45; cursor: default; }
 .editor option { background: #0E1319; color: var(--fg); }
 .editor select, .editor button {
@@ -430,9 +407,9 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin-top: 4px;
 }
-.ed-hint { color: var(--dim); font-size: 11px; }
-.ed-foot button {
+.ed-hint { color: var(--dim); font-size: 11px; flex: 1; text-align: center; }
+.ed-foot #edDone {
   background: var(--k-chance); color: #06202B; border: 0;
   font-weight: 600; padding: 4px 16px;
 }
-.ed-foot button:hover { background: var(--k-chance); filter: brightness(1.12); }
+.ed-foot #edDone:hover { background: var(--k-chance); filter: brightness(1.12); }

@@ -12,9 +12,8 @@ fn defaults() -> serde_json::Value {
                   "stack": true, "glyph": true, "buyback": true, "econ": true,
                   "wardmap": true },
         "alwaysShow": false,
-        // 小地图的兜底选项：只在读不到 Dota 自己的设置时才用，见 dotacfg.rs
-        "minimapLarge": false,
-        "minimapRight": false,
+        // 小地图在哪、多大：auto = 读 Dota 自己的设置（dotacfg.rs），其余是手动指定
+        "minimap": "auto",
         "logLevel": "info",
         "recordMatches": false,
         // 开发者开关，界面上没有：手写进 settings.json 才显示录制、录制器才工作。

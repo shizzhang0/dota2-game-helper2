@@ -24,18 +24,26 @@ export async function readDotaHud() {
 export const dotaHud = () => hud;
 export function onDotaHud(cb) { subs.push(cb); }
 
-/** 小地图的摆法：读到 Dota 的设置就用它的，没读到（或缺这一项）退回卡片里的兜底选项。
+/** 设置卡片里「小地图」那个下拉框的取值。`auto` = 跟着 Dota 的设置走，其余是手动指定——
+    读错了（比如以后 Valve 改了设置项）或读不到时用。 */
+export const MINIMAP_MODES = ["auto", "left", "left-large", "right", "right-large"];
+
+/** 小地图的摆法：手动指定了就用指定的；`auto` 时读到 Dota 的设置就用它的，读不到按左下、普通大小。
     对应 Dota 设置里「小地图」那一节（用户截图确认，2026-10-08）：
       · 使用特大尺寸小地图 → dota_hud_extra_large_minimap
       · 地图位置：靠左 / 靠右 → dota_minimap_position_option，0 靠左、1 靠右
     `dota_hud_flip` 是老版本的"整个 HUD 左右翻转"，新版设置里已经没有这一项了；
     只在读不到「地图位置」时才拿它兜一下。 */
 export function minimapOpts(cfg) {
+  const mode = MINIMAP_MODES.includes(cfg.minimap) ? cfg.minimap : "auto";
+  if (mode !== "auto") {
+    return { large: mode.endsWith("-large"), right: mode.startsWith("right"), fromDota: false, auto: false };
+  }
   const h = hud?.found ? hud : null;
   const pos = h?.minimapPosition;
   return {
-    large: h?.extraLargeMinimap ?? !!cfg.minimapLarge,
-    right: typeof pos === "number" ? pos === 1 : (h?.hudFlip ?? !!cfg.minimapRight),
-    fromDota: !!h,
+    large: h?.extraLargeMinimap ?? false,
+    right: typeof pos === "number" ? pos === 1 : (h?.hudFlip ?? false),
+    fromDota: !!h, auto: true,
   };
 }
