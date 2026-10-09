@@ -37,6 +37,8 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 > 设置里的统计与一键清空、断流看门狗、文件被外部删掉的检测。
 > 完整的生命周期写在 [overlay.md 的「录制的生命周期」](overlay.md#录制的生命周期2026-09-16-重做)。
 > **仍然不自动清理**——攒下来的录像是对账语料，程序不该替你决定哪份没用了。
+>
+> 收尾的几条路：回到主菜单、换局、**比赛结束 10 秒后**（2026-10-09）、断流 40 秒、程序退出、关开关。
 
 > **必须重新序列化，不能原样写 body。** Dota 推过来的 HTTP body 是**带制表符缩进的多行 JSON**，
 > 一包摊成几十行；原样落盘就不是 JSONL 了，`replay.py` 按行读会**一条都解析不出来**。
@@ -190,9 +192,13 @@ import { EconTracker } from ".../ui/js/networth.js";
 
 1. 三处版本号一起改：`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`（`cargo build` 会跟着改）、
    `src-tauri/tauri.conf.json`
-2. `cargo build --release --manifest-path src-tauri/Cargo.toml`
+2. **先把 `ui/dev/` 挪出 `ui/`**，再 `cargo build --release --manifest-path src-tauri/Cargo.toml`，编完挪回来。
+   `frontendDist` 是整个 `ui/`，gitignore 挡不住打包——开发页的测试截图和录像切片会被一起嵌进 exe
+   （2026-10-08 实测一次从 6.7MB 涨到 9.2MB）。编完的 exe 应约 6.7MB
 3. 打 zip：exe + 两份 README，名字 `dota2-game-helper2-vX.Y.Z-windows-x64.zip`
-4. `gh release create vX.Y.Z`，标题就是 `vX.Y.Z`。「检查更新」只读 tag，标题和正文怎么写都不影响它
+4. `gh release create vX.Y.Z`，标题就是 `vX.Y.Z`。「检查更新」只读 tag，标题和正文怎么写都不影响它。
+   **正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档，
+   不写进 Release（用户 2026-10-09 定；PR 描述同理）
 5. 把 zip 下载回来核对 SHA256
 
 ## 开发顺序（当初的路径，供参考）
