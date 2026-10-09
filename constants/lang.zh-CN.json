@@ -32,7 +32,6 @@
   "card.openRelease": "打开下载页",
   "card.updChecking": "正在检查…",
   "card.updLatest": "已是最新",
-  "card.updNew": "有新版本",
   "card.updFail": "连不上更新服务器",
   "card.hint": "拖标题栏移动 · ESC 退出",
   "card.done": "完成",

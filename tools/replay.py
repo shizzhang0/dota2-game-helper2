@@ -69,8 +69,14 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/stream":
             return self.stream(parse_qs(u.query))
         rel = u.path.lstrip("/") or "index.html"
-        base = ROOT / ("constants" if rel.startswith("constants/") else "ui")
-        f = (ROOT / rel) if rel.startswith("constants/") else (base / rel)
+        # /dev/… 指向仓库根的 devdata/（开发页的游戏截图背景、截图用的录像切片），**不放在 ui/ 里**：
+        # tauri.conf.json 的 frontendDist 是整个 ui/，gitignore 挡不住打包，放进去就会被嵌进 exe
+        if rel.startswith("dev/"):
+            f = ROOT / "devdata" / rel[len("dev/"):]
+        elif rel.startswith("constants/"):
+            f = ROOT / rel
+        else:
+            f = ROOT / "ui" / rel
         f = f.resolve()
         if not (str(f).startswith(str(ROOT)) and f.is_file()):
             self.send_error(404); return

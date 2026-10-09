@@ -417,6 +417,8 @@ html, body {
   font-weight: 600; padding: 4px 16px;
 }
 .ed-foot #edDone:hover { background: var(--k-chance); filter: brightness(1.12); }
+/* 「检查更新」点了以后字会变成"正在检查…""已是最新"，钉住最小宽度，别把左边的版本号挤动 */
+#edUpd { min-width: 7.5em; text-align: center; }
 /* 「立即更新」和「完成」同一个青色：有新版本时它就是这一行要点的那个 */
 .editor .ed-primary { background: var(--k-chance); color: #06202B; border: 0; font-weight: 600; }
 .editor .ed-primary:hover { background: var(--k-chance); filter: brightness(1.12); }

@@ -123,13 +123,23 @@ function initUpdate(badge, msg, checkBtn, relBtn, nowBtn) {
   if (!isTauri()) { checkBtn.disabled = true; return; }
   // 有新版本时：安装版给「立即更新」（一键更新），绿色版给「打开下载页」。
   // 一键更新失败（连不上、Release 里没有 latest.json……）就退回「打开下载页」
-  let installed = false, failed = false;
-  const text = { checking: "card.updChecking", latest: "card.updLatest",
-                 new: "card.updNew", fail: "card.updFail" };
+  let installed = false, failed = false, clicked = false, flash = 0;
+  // **检查的过程只在按钮上体现，不加状态行**（2026-10-09 修）：原先点了之后底下多出一行
+  // "正在检查…"，不到一秒结果回来又清掉，卡片一高一矮、底部按钮跟着跳，看着像整张卡片在闪。
+  // 现在按钮字变成"正在检查…"、查完显示"已是最新"两秒再变回来；按钮钉了最小宽度，字变了不挤动别的。
+  // 状态行只留给需要一直挂着的：连不上、一键更新的下载进度和失败
+  const setCheck = (key) => { checkBtn.textContent = t(key); };
   const show = (r) => {
     if (!r) return;
-    msg.textContent = text[r.state] ? t(text[r.state]) : "";
+    clearTimeout(flash);
+    msg.textContent = r.state === "fail" ? t("card.updFail") : "";
     checkBtn.disabled = r.state === "checking";
+    if (r.state === "checking") setCheck("card.updChecking");
+    else if (r.state === "latest" && clicked) {
+      setCheck("card.updLatest");
+      flash = setTimeout(() => setCheck("card.checkUpdate"), 2000);
+    } else setCheck("card.checkUpdate");
+    if (r.state !== "checking") clicked = false;
     if (r.state === "new") {
       badge.hidden = false;
       badge.textContent = `NEW ${r.version}`;
@@ -141,14 +151,12 @@ function initUpdate(badge, msg, checkBtn, relBtn, nowBtn) {
     nowBtn.hidden = badge.hidden || !installed || failed;
     relBtn.hidden = badge.hidden || !nowBtn.hidden;
     checkBtn.hidden = !badge.hidden;
-    // 一切正常（已是最新）就不再多写一行"已是最新"，版本号旁边没有 NEW 已经说明了
-    if (r.state === "latest" || r.state === "new") msg.textContent = "";
   };
   offUpdate?.();
   offUpdate = onUpdate(show);
   show(lastUpdate());
   isInstalled().then(v => { installed = v; show(lastUpdate()); });
-  checkBtn.addEventListener("click", () => checkUpdate());
+  checkBtn.addEventListener("click", () => { clicked = true; checkUpdate(); });
   nowBtn.addEventListener("click", async () => {
     nowBtn.disabled = true;
     msg.textContent = t("card.updDownloading") + "…";
@@ -293,7 +301,9 @@ async function build(s) {
     await saveSettings(next);
     // 重建要带上卡片不收的键（devTools）：只用 collect() 的话，录制那几行切完语言就没了
     await build({ ...s, ...next });
-    if (!card.hidden) place();   // 中英文卡片不一样高
+    // **原地不动**，只在卡片出了屏幕时挪回来（中英文卡片不一样高）。原先这里调 place()，
+    // 每次切语言卡片都跳回屏幕中央，用户拖到哪都白拖（2026-10-09 修）
+    if (!card.hidden) keepInView();
   });
 
   // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 小地图回到「自动」。
@@ -350,6 +360,15 @@ function reportRect() {
   const r = card.hidden ? null : card.getBoundingClientRect(), k = devicePixelRatio || 1;
   window.__TAURI__.core.invoke("set_card_rect",
     { rect: r ? [r.left * k, r.top * k, r.width * k, r.height * k] : null }).catch(() => {});
+}
+
+/** 卡片出了屏幕就挪回来，没出就不动 */
+function keepInView() {
+  const w = card.offsetWidth, h = card.offsetHeight;
+  const x = parseFloat(card.style.left) || 0, y = parseFloat(card.style.top) || 0;
+  card.style.left = `${Math.round(Math.min(Math.max(8, x), Math.max(8, innerWidth - w - 8)))}px`;
+  card.style.top  = `${Math.round(Math.min(Math.max(8, y), Math.max(8, innerHeight - h - 8)))}px`;
+  reportRect();
 }
 
 function place() {

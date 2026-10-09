@@ -32,7 +32,6 @@
   "card.openRelease": "Download page",
   "card.updChecking": "Checking…",
   "card.updLatest": "Up to date",
-  "card.updNew": "Update available",
   "card.updFail": "Can't reach the update server",
   "card.hint": "Drag title to move · ESC to exit",
   "card.done": "Done",

@@ -233,8 +233,10 @@ python tools/release.py verify 1.4.0
 
 ### build 做了什么
 
-- **先把 `ui/dev/` 挪出 `ui/`**，打完挪回来。`frontendDist` 是整个 `ui/`，gitignore 挡不住打包——
-  开发页的测试截图和录像切片会被一起嵌进 exe（2026-10-08 实测一次从 6.7MB 涨到 9.2MB）
+- **`ui/` 里有没进仓库的文件就不打**（`git ls-files --others ui`）。`frontendDist` 是整个 `ui/`，
+  gitignore 挡不住打包——2026-10-08 开发页的测试截图和录像切片就这样被嵌进 exe（6.7MB 涨到 9.2MB）。
+  开发素材固定放仓库根的 **`devdata/`**（不进仓库），回放服务器把 `/dev/…` 指到那里；
+  原先是放在 `ui/dev/`、打包时挪出去再挪回来，一次中途被打断就丢在了临时目录里
 - 用 Tauri 命令行打包（`cargo build` 只出 exe，不出安装包和签名），版本跟着 `Cargo.lock` 里的 `tauri` 走
   （现在 2.11.5）。第一次跑会自己下 NSIS 工具链
 - exe 应约 **7.5MB**（v1.3.x 是 6.7MB，多的是更新插件的 HTTP 下载依赖；更新插件的 HTTPS 换成了

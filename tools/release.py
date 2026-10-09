@@ -66,18 +66,17 @@ def build():
         env["TAURI_SIGNING_PRIVATE_KEY"] = KEY_FILE.read_text(encoding="utf-8")
     env.setdefault("TAURI_SIGNING_PRIVATE_KEY_PASSWORD", "")
 
-    # frontendDist 是整个 ui/，gitignore 挡不住打包：开发页的测试截图和录像切片会被嵌进 exe。
-    # 打包期间挪到 ui/ 外面，打完不管成败都挪回来
-    dev = ROOT / "ui" / "dev"
-    parked = Path(tempfile.mkdtemp()) / "dev" if dev.exists() else None
-    if parked:
-        shutil.move(str(dev), str(parked))
-    try:
-        npx = "npx.cmd" if os.name == "nt" else "npx"
-        run([npx, "-y", TAURI_CLI, "build"], env=env)
-    finally:
-        if parked:
-            shutil.move(str(parked), str(dev))
+    # frontendDist 是整个 ui/，gitignore 挡不住打包：ui/ 里任何没进仓库的文件都会被嵌进 exe
+    # （2026-10-08 开发页的测试截图和录像切片就这样把 exe 从 6.7MB 撑到 9.2MB）。
+    # 开发素材现在固定放仓库根的 devdata/，这里再查一道：ui/ 里有没进仓库的文件就不打
+    stray = subprocess.run(["git", "ls-files", "--others", "ui"], cwd=ROOT,
+                           capture_output=True, text=True, check=True).stdout.split()
+    if stray:
+        sys.exit("ui/ 里有没进仓库的文件，会被打进 exe，先挪走：
+  " + "
+  ".join(stray))
+    npx = "npx.cmd" if os.name == "nt" else "npx"
+    run([npx, "-y", TAURI_CLI, "build"], env=env)
 
     rel = TAURI / "target" / "release"
     nsis = rel / "bundle" / "nsis"
