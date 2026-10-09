@@ -24,6 +24,12 @@ const GEO = {
 // 盖住了原生图标。缩到 1.6——比原生的小，叠在旁边也认得出是哪一个。
 const R_DOT = 1.6;
 
+// 我方眼的到期倒计时：只在最后 LABEL_BELOW 秒标数字，最后 URGENT 秒变琥珀（2026-10-09）。
+// 眼本身原生小地图画着，我们只在它正上方补一个秒数——原生不说还剩多久。
+// 只标最后 60 秒：实测满屏最多 14 个己方眼，全标会糊成一片，而要的信息本就是"哪个快没了该补了"。
+// 程序启动前就插下的眼不知道插放时刻（remaining 为 null），不标。
+const LABEL_BELOW = 60, URGENT = 10;
+
 // **敌方眼画成和游戏里同样的形状，只是换成品红**（2026-10-08）。
 // 原先是红色圆点：原生小地图上小兵、敌方英雄本来就是红色小圆点，一混就分不出来。
 // 形状照抄原生小地图（用户截图里放大对过）：
@@ -106,7 +112,7 @@ export function renderWardMap(m, opt, edit) {
   if (!root) return;
   place(opt);
   drawTowers(m.dead || [], edit);
-  const w = m.wards || { enemy: [], killed: [] };
+  const w = m.wards || { own: [], enemy: [], killed: [] };
   // 真假眼的形状见上面的 wardIcon。
   // 敌方眼带 conf（这条线索有多新）：刚在真视里确认过的实心，久未确认的淡。
   //
@@ -129,6 +135,11 @@ export function renderWardMap(m, opt, edit) {
   // **有视野的敌方眼不画**（2026-10-09）：那时原生小地图正画着它，再画一遍就叠在一起。
   // 一离开视野原生的图标就没了，我们的标记在同一个位置接上——视野盲区（被树挡住之类）
   // 里的眼，正是这一层该出场的时候。代价是离开视野后最多晚一包（1~2 秒）才出现。
+  const label = (o) =>
+    `<text class="wm-own-t${o.remaining <= URGENT ? " urgent" : ""}" ` +
+    `x="${sx(o.x).toFixed(1)}" y="${(sy(o.y) - 2.6).toFixed(1)}">${o.remaining}</text>`;
   wardLayer.innerHTML = w.enemy.filter(o => !o.visible).map(dot).join("") +
-                        w.killed.map(cross).join("");
+                        w.killed.map(cross).join("") +
+                        (w.own || []).filter(o => o.remaining !== null && o.remaining <= LABEL_BELOW)
+                          .map(label).join("");
 }

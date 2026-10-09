@@ -312,6 +312,10 @@ html, body {
 .wm-kill path { fill: none; stroke-linecap: round; }
 .wm-kill-under { stroke: #000; stroke-width: 1.7; }
 .wm-kill-line  { stroke: #3CFF3C; stroke-width: .95; }
+/* 我方眼快到期的秒数：白字黑边，压在原生绿眼正上方；最后 10 秒变琥珀 */
+.wm-own-t { fill: #FFFFFF; font-size: 3.6px; font-weight: 700; text-anchor: middle;
+            paint-order: stroke; stroke: #000; stroke-width: .9; stroke-linejoin: round; }
+.wm-own-t.urgent { fill: #FFC24B; }
 
 /* ── 编辑态：设置卡片 ───────────────────────────────── */
 
