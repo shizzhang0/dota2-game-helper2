@@ -10,26 +10,20 @@
 
 ## 发 v1.4.0 之前（2026-10-10 记）
 
-v1.4.0 的代码 PR #93 **先合进了 main，截图和发版晚几天**。为了 main 在这期间不出错，临时做了两处，发版前要恢复：
-
-- **README 的五张图注释掉了**（首图 `overlay.png` + 图注、`timers` / `topbar` / `econ` / `minimap`），
-  两份 README 里搜 `v1.4.0 截图到手后恢复` 和 `<!-- ![`
-- **README 的下载链接暂时指着 Releases 页**，要改回
-  `releases/latest/download/dota2-game-helper2-setup.exe` 和 `…/dota2-game-helper2-portable.zip`
-  （不带版本号的那两份要发版才有，见 [design/dev-tools.md](design/dev-tools.md)「发版」）
-
-主页不用管：Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并不会动线上主页。
+v1.4.0 的代码都在 PR #93 里，**等截图到手，放好图、做完 demo 再合并，合并后立刻打 tag 发版**（2026-10-10 用户定）。
+README 和主页的下载链接指向发版时才上传的文件，合并和发版之间不要隔太久。
+Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本身不动线上主页。
 
 ### 步骤
 
 1. **用户截图**（要求见下）
 2. 裁出 `docs/images/` 下的 `overlay.png`（首图，整屏缩小）、`timers.png`、`topbar.png`、`econ.png`、`minimap.png`
-3. 恢复 README（上面两条）
+3. README 里引用的就是上面这五个文件名，放进去就行
 4. **重做主页 demo**：背景用干净截图，数据用同一局录制在那一刻前后约 20 秒的切片（`tools/make_demo.py`）。
    `site/demo.html`、`index.html` 里 demo 的说明和 900×400 那段注释一起改，见 [design/overlay.md](design/overlay.md)「站点」
 5. **加分享卡片**：`og:title` / `og:description` / `og:image`（实拍 `overlay.png`）、`twitter:card`
-6. `python tools/release.py bump 1.4.0` → `python tools/make_shots.py`（卡片截图上有版本号）→ PR 合并 →
-   打带注释的 tag（Changelog）推上去。Release 跑完 Pages 自动发
+6. `python tools/release.py bump 1.4.0` → `python tools/make_shots.py`（卡片截图上有版本号）→ 推到 PR #93、CI 过了合并 →
+   **马上**打带注释的 tag（Changelog）推上去。Release 跑完 Pages 自动发
 7. 发版后：装一个旧版本号的安装包测一键更新；继续走 [verify-checklist.md](verify-checklist.md) 第七节
 
 ### 截图要求
