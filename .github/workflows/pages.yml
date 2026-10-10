@@ -5,19 +5,20 @@ name: Pages
 # **组装逻辑全在 tools/build_site.py 里，这里只负责调它。** 写进 YAML 就没法本地
 # 验了——`python tools/build_site.py --serve` 起出来的，和这里发出去的是同一份。
 #
-# 触发路径是"组装产物真正依赖的东西"：站点本身、被原样拷进去的 ui/ 与 constants/、
-# 首页引用的那几张截图、以及组装脚本自己。
+# **跟着发版走，不跟着 main 走**（2026-10-10 改）。主页上的下载按钮链的是最新 Release 里的文件，
+# 下面还写着版本号——main 上的代码一合并就发，会出现"按钮指向还没发的版本"的空档
+# （合并到打 tag 哪怕只隔几分钟）。所以改成 Release 流水线跑成功之后再发。
+#
+# - 只认**推 tag 触发**的那次 Release（`workflow_run.event == 'push'`）；手动空跑的 Release 不发
+# - 在 Actions 页面手动 Run workflow 也能发：只改了主页文案、不想为它发一版程序的时候用
+# - 用 workflow_run 而不是 `release: published`：Release 是流水线用 GITHUB_TOKEN 建的，
+#   GITHUB_TOKEN 造出来的事件**不会触发别的流水线**，`release` 事件永远等不到
+#
 # 和 ci.yml 一样不能用 YAML 锚点——**GitHub Actions 不支持 anchor/alias**。
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'site/**'
-      - 'ui/**'
-      - 'constants/**'
-      - 'docs/images/**'
-      - 'tools/build_site.py'
-      - '.github/workflows/pages.yml'
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +33,9 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest      # 站点只是拷文件，不需要 Windows
     environment:
       name: github-pages

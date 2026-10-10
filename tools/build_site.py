@@ -24,7 +24,7 @@
 > 反过来也成立：**demo 数据不能放进 `ui/`**——`tauri.conf.json` 的 frontendDist
 > 指着 `../ui`，整个目录会编译期嵌进 exe，每个用户都会背着这几 MB。
 """
-import argparse, http.server, shutil, socketserver, sys
+import argparse, http.server, json, shutil, socketserver, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,7 +33,23 @@ PORT = 8077
 
 # 首页引用到的截图。只拷用得上的，不把整个 docs/ 发出去——
 # docs/design/ 是中文开发笔记，不是给访客看的。
-SITE_IMAGES = ["block-timers.png", "block-enemy.png", "block-wardmap.png"]
+SITE_IMAGES = ["timers.png", "topbar.png", "econ.png", "minimap.png"]
+
+
+def fill_versions(page):
+    """下载按钮下面那行版本号：程序版本取 tauri.conf.json，Dota 版本取 patch.json（价格表对齐到的那一版）。
+
+    取的是 main 上的值，所以改版本号的 PR 合进去、到 tag 推上去发完版之间那几分钟，
+    这里写的是新版本号、按钮下到的还是上一版——可以接受。pages.yml 盯着 tauri.conf.json，
+    改了版本号就会重新发站点。"""
+    app = json.loads((ROOT / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8"))["version"]
+    dota = json.loads((ROOT / "constants" / "patch.json").read_text(encoding="utf-8"))["dota"]
+    s = page.read_text(encoding="utf-8")
+    for key, val in (("{{APP_VERSION}}", app), ("{{DOTA_VERSION}}", dota)):
+        if key not in s:
+            sys.exit(f"index.html 里没有 {key}")
+        s = s.replace(key, val)
+    page.write_text(s, encoding="utf-8", newline="\n")
 
 
 def build():
@@ -46,6 +62,7 @@ def build():
         if not src.is_file():
             sys.exit(f"缺 {src}——demo.jsonl 由 tools/make_demo.py 生成")
         shutil.copy2(src, DIST / name)
+    fill_versions(DIST / "index.html")
 
     shutil.copytree(ROOT / "ui", DIST / "ui")
     shutil.copytree(ROOT / "constants", DIST / "constants")

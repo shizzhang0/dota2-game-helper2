@@ -7,7 +7,7 @@
                { "clock": 240, "kind": "water" } ],
     "repeat": { "fromClock": 360, "every": 120, "kind": "power" }
   },
-  "bounty": { "start": 0, "every": 180 },
+  "bounty": { "start": 0, "every": 240 },
   "lotus":  { "start": 90, "every": 90 },
   "wisdom": { "start": 420, "every": 420 },
   "stack":  { "every": 60 },
@@ -21,7 +21,7 @@
   "wardObserverDuration": 360,
   "wardSentryDuration": 420,
   "wardKilledGrace": 5,
-  "wardKilledShow": 20,
+  "wardKilledShow": 45,
   "wardKillConfirm": 3,
   "wardKillSuppress": 15,
   "sentryTrueSight": 1050

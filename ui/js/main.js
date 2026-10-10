@@ -4,11 +4,12 @@ import { MatchTracker } from "./match.js";
 import { loadConstants, computeTimers } from "./timers.js";
 import { EventTracker, loadTowers } from "./events.js";
 import { loadPrices, EconTracker } from "./networth.js";
-import { initPanel, render, enableDrag, applyLayout } from "./render.js";
+import { initPanel, render } from "./render.js";
 import { WardTracker, deadTowers } from "./minimap.js";
 import { loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
 import { checkUpdate } from "./update.js";
+import { readDotaHud, minimapOpts } from "./dotahud.js";
 
 // 正式版没有控制台也开不出 devtools，前端异常必须转发给 Rust 写进日志
 const send = (lv, m) => {
@@ -26,6 +27,8 @@ const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker
 let tracker = null, C = null, alt = false, last = null, editMode = false;
 let wards = null;
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
+// Dota 自己的 HUD 设置：启动时读一次，之后每局开始再读（见 dotahud.js）
+readDotaHud();
 
 // **断流多久算断。** Dota 崩了、被关掉、或者网络断了之后不会有任何通知，
 // `last` 会一直留着最后一包——按住 Alt 仍然显示一份**冻结**的旧面板：
@@ -45,40 +48,6 @@ let cfg = await loadSettings();
 onSettingsChange(v => { cfg = v; });
 initPanel(document.getElementById("panel"), towers);
 
-// ── 面板位置：Tauri 存配置文件，浏览器开发时存 localStorage ──
-async function loadLayout() {
-  let raw = null;
-  try {
-    raw = isTauri() ? JSON.parse(await window.__TAURI__.core.invoke("load_layout"))
-                    : JSON.parse(localStorage.getItem("layout") || "{}");
-  } catch { raw = null; }
-  // 老格式是整块面板的单坐标 {x, y}。沿用为 timers 的位置，其余三块取默认值——
-  // 不迁的话用户已经摆好的位置会直接丢。
-  if (raw && typeof raw.x === "number") return { timers: { x: raw.x, y: raw.y } };
-  return raw;
-}
-function saveLayout(all) {
-  const s = JSON.stringify(all);
-  if (isTauri()) window.__TAURI__.core.invoke("save_layout", { layout: s });
-  else localStorage.setItem("layout", s);
-}
-const savedLayout = await loadLayout();
-let layout = applyLayout(savedLayout, cfg.scale ?? 1);
-// 迁移与钳位的结果要落盘，否则每次启动都要重算一遍。但只在结果确实变了时才写——
-// applyLayout 返回 null 表示视口还没量出来、这次没摆，那更不能写。
-if (layout && JSON.stringify(layout) !== JSON.stringify(savedLayout)) saveLayout(layout);
-enableDrag((id, pos) => { layout[id] = pos; saveLayout(layout); });
-
-// 视口尺寸变了要重新钳位（换分辨率、拔掉副屏）；同时兜住"启动时视口还没量出来"，
-// 那种情况下上面这次 applyLayout 什么都没做，得靠这里补上。
-addEventListener("resize", () => {
-  const next = applyLayout(layout || savedLayout, cfg.scale ?? 1);
-  if (!next) return;
-  const changed = JSON.stringify(next) !== JSON.stringify(layout);
-  layout = next;
-  if (changed) saveLayout(layout);
-});
-
 function applyEdit(on) {
   editMode = on;
   setEditorOpen(on);
@@ -91,15 +60,7 @@ function exitEdit() {
   applyEdit(false);
   if (isTauri()) window.__TAURI__.core.invoke("exit_edit");
 }
-// 四块独立可拖之后，把某块拖丢是真会发生的事（虽然有钳位兜底）。这是显式的复位入口。
-// scale 由调用方传入：卡片刚把设置存下去，cfg 要等 settings 事件回来才更新。
-function resetLayout(scale = cfg.scale ?? 1) {
-  const next = applyLayout(null, scale);
-  if (!next) return;                     // 视口没准备好，别把负坐标写进去
-  layout = next;
-  saveLayout(layout);
-}
-await initEditor(document.getElementById("editor"), exitEdit, resetLayout);
+await initEditor(document.getElementById("editor"), exitEdit);
 // 启动时静默查一次新版本，结果只显示在开发页的版本号旁边。不等它：
 // 连不上要等满超时，而覆盖层不该因此晚一步出来（只在 Tauri 里查，见 update.js）
 checkUpdate();
@@ -110,7 +71,7 @@ addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });
 connectSource(async (pkt) => {
   const st = pool.update(pkt);
   const info = match.update(st);
-  if (info.newMatch) pool.reset();
+  if (info.newMatch) { pool.reset(); readDotaHud(); }
   C = await loadConstants(info.modeOrDefault);
   if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
   tracker.C = C;                       // 模式判定完成后热切常数
@@ -119,8 +80,17 @@ connectSource(async (pkt) => {
   wards.C = C;
   wards.update(st, info);
   if (info.newMatch) econ.reset();
+  // **游戏结束后净资产定格在结束那一包**（2026-10-09）。遗迹倒下、状态变成 POST_GAME 之后，
+  // Dota 还会接着往金钱里加（时钟已经停了），GSI 照推——m9035205154 里结束后十几包
+  // 从 9017 涨到 9069，而结算画面 / OpenDota 定格在 9015。不停住的话，赛后进编辑态
+  // 对账看到的就是一路涨上去的数。只算结束的第一包，之后沿用它；
+  // 包大约 2 秒一个，和结算值会差几块（那一局差 2）。
+  const ended = info.gameState === "DOTA_GAMERULES_STATE_POST_GAME";
+  const frozen = ended && last?.info.gameState === "DOTA_GAMERULES_STATE_POST_GAME"
+                 && last.info.matchid === info.matchid;
   // 插眼数要在 wards.update 之后取：净资产靠它把眼架里的存货扣掉
-  last = { st, info, econ: econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
+  last = { st, info, econ: frozen ? last.econ
+                                  : econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
   lastAt = Date.now();
 });
 
@@ -132,8 +102,8 @@ onAltChange((d) => {
   alt = d;
 });
 
-// 没有 GSI 数据时的占位，用于编辑态摆位置——调位置这件事恰恰要在开游戏之前做，
-// 若等到有数据才渲染，没开 Dota 时面板根本不出现，也就无从拖动。
+// 没有 GSI 数据时的占位，用于编辑态——调设置、看位置对不对，恰恰要在开游戏之前做，
+// 若等到有数据才渲染，没开 Dota 时面板根本不出现。
 const IDLE = {
   st: {},
   info: { matchid: null, clock: null, gameState: null, inMatch: false, spectating: false,
@@ -157,18 +127,19 @@ setInterval(() => {
   const { st, info } = cur;
   const e = cur.econ;
   render({
-    // 「始终显示」**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
-    // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
-    // 编辑态则要绕过，摆位置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
+    // 不勾「按住 Alt 才显示」（alwaysShow，默认）也**不绕过 inMatch**：只在对局中显示，
+    // 主菜单里照样消失——它的意思是"不用按 Alt"，不是"永远杵在桌面上"。
+    // 编辑态则要绕过，调设置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
     visible: editMode || ((alt || cfg.alwaysShow) && info.inMatch && !stale),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
-    buybacks: tracker ? tracker.enemyBuybacks(info) : [],
-    enemyBase: info.myTeam === 2 ? 5 : 0,
+    buybacks: tracker ? tracker.buybacks(info) : [],
+    myTeam: info.myTeam,
     econ: e,
     settings: cfg,
     wardmap: wards ? { wards: wards.list(info), dead: deadTowers(st, towers) } : null,
+    minimap: minimapOpts(cfg),
   });
   const hud = document.getElementById("hud");
   if (hud) hud.textContent =
@@ -176,8 +147,8 @@ setInterval(() => {
     ` nw=${e.networth} gpm=${e.gpm}`;
 }, 250);
 
-// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 始终显示、Ctrl+Alt+F10 编辑态，
-// v / e 是简写。**v 改的就是卡片上那个「始终显示」**，不另起一份状态——原先是独立的
+// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 按住 Alt 才显示、Ctrl+Alt+F10 编辑态，
+// v / e 是简写。**v 改的就是卡片上那个「按住 Alt 才显示」**，不另起一份状态——原先是独立的
 // forceShow，两者互不知道。见 design/overlay.md「只有一个值，卡片要跟着它变」。
 //
 // **只在带 body.dev 的开发页生效**（index.html 没有它）：Tauri 里这两个热键由 Rust 注册成

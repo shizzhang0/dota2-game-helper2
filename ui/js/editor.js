@@ -1,20 +1,27 @@
 import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings, onSettingsChange } from "./settings.js";
 import { isTauri, fetchConstant } from "./source.js";
-import { checkUpdate, lastUpdate, onUpdate, openReleasePage } from "./update.js";
+import { checkUpdate, lastUpdate, onUpdate, openReleasePage, isInstalled, installUpdate } from "./update.js";
 import { icon, CELL_ICON } from "./icons.js";
 import { t, loadLang, LANGS } from "./i18n.js";
+import { minimapOpts, onDotaHud, MINIMAP_MODES } from "./dotahud.js";
+import { wardIcon, crossIcon } from "./wardmap.js";
 
-// 编辑态的设置卡片。与 .block 平级而非其子节点——块受 --panel-scale 缩放，
+// 编辑态的设置卡片。与 .block 平级而非其子节点——块按屏高缩放（--panel-scale），
 // 卡片跟着缩到 2× 或 0.8× 都没法用。
 //
 // 卡片自己也能拖，但**只能靠顶部标题栏**：拖拽要 setPointerCapture，
 // 而它会把 pointerup 改派到捕获元素，click 便落不到内部的按钮上。
-// 整块可拖会打死「完成」按钮、九个复选框、三个滑块和两个下拉框——
+// 整块可拖会打死「完成」按钮、复选框和下拉框——
 // 「完成」失效等于编辑态出不去。见 design/overlay.md 的第 3 号坑。
-let card = null, doneCb = null, resetCb = null;
+let card = null, doneCb = null;
 
 /** 重拉录制统计。由 `initRecords` 装上，打开卡片和拨录制开关时调用——见那里的注释。 */
 let recRefresh = null;
+
+/** 刷新小地图那一行括号里"读到了什么"。Dota 的设置是异步读回来的（启动、每局开始），
+    读到时卡片可能已经建好了，要能事后改。每次 build 换成新的那一份。 */
+let mmRefresh = null;
+onDotaHud(() => mmRefresh?.());
 
 /** 显示项那九行前面的图标——卡片因此同时是设置和图例，一份数据两用。
     每行一个图标，眼位也不例外：曾经放过"眼 + 塔"两个（想表达那块地图画了哪两类
@@ -26,20 +33,13 @@ function showIcon(k) {
   return icon(CELL_ICON[k], 13);
 }
 
-// 图例。刻意复用地图自己的 wm-ward / wm-tower class 画色块——
-// 另写一套颜色迟早会和地图对不上。只在编辑态可见，游戏中不占任何屏幕空间。
+// 眼位图例，挂在显示项「眼位」那一行下面。刻意复用地图自己的画法（wardIcon 和 crossIcon）——
+// 另写一套形状颜色迟早会和地图对不上。只剩这三样：塔和我方眼原生小地图就画着，我们不画。
 const LEGEND = [
-  [`<circle class="wm-ward own" cx="5" cy="5" r="3.4"/>`,          "ownObs"],
-  [`<circle class="wm-ward own sentry" cx="5" cy="5" r="3.1"/>`,   "ownSentry"],
-  [`<circle class="wm-ward enemy" cx="5" cy="5" r="3.4"/>`,        "enemyObs"],
-  [`<circle class="wm-ward enemy sentry" cx="5" cy="5" r="3.1"/>`, "enemySentry"],
-  [`<circle class="wm-ward own soon" cx="5" cy="5" r="3.4"/>`,     "soon"],
+  [wardIcon("observer", 5, 5, 1.9), "enemyObs"],
+  [wardIcon("sentry", 5, 5, 1.9),   "enemySentry"],
   // 被排的是叉不是点——图例必须跟着地图的形状走，否则这张卡片就骗人了
-  [`<g class="wm-kill"><line x1="2.2" y1="2.2" x2="7.8" y2="7.8"/>`
-   + `<line x1="7.8" y1="2.2" x2="2.2" y2="7.8"/></g>`,           "killed"],
-  [`<rect class="wm-tower" data-team="2" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "towerRadiant"],
-  [`<rect class="wm-tower" data-team="3" x="1.6" y="1.6" width="6.8" height="6.8"/>`, "towerDire"],
-  [`<rect class="wm-tower dead" x="1.6" y="1.6" width="6.8" height="6.8"/>`,          "towerDead"],
+  [crossIcon(5, 5, 2.8),            "killed"],
 ];
 const legendHTML = () => LEGEND.map(([shape, key]) =>
   `<span><svg viewBox="0 0 10 10" aria-hidden="true">${shape}</svg>${t("legend." + key)}</span>`).join("");
@@ -60,22 +60,6 @@ function versions() {
   }
   return verOnce;
 }
-
-/** 四个页签：`[页面 id, 词条键, 图标名]`。顺序就是屏幕上的顺序。
-
-    **页签只有图标**，名字显示在页签条下面那一行。这样中英文的卡片宽度完全一致——
-    英文的 `Display / Panel / Legend / Developer` 并排写出来撑得开 329px，
-    而图标不受语言影响。这是覆盖层图标化那次的同一个收益，只是搬到了卡片上。 */
-const TABS = [
-  ["show",   "card.show",   "grid"],
-  ["panel",  "card.panel",  "sliders"],
-  ["legend", "card.legend", "legend"],
-  ["dev",    "card.dev",    "wrench"],
-];
-/** 当前页。**模块级而不是存进 settings**：它是瞬时的界面状态，不是用户的偏好，
-    存盘会让 settings.json 里多一个和外观无关的键。切语言要整卡重建，
-    靠它把选中项接回去——否则每次换语言都被踢回第一页。 */
-let activeTab = TABS[0][0];
 
 const MB = 1024 * 1024;
 /** 体积按 MB 给一位小数；不到 0.1MB 的显示 <0.1，别写成 0.0 让人以为是空的。 */
@@ -135,40 +119,73 @@ function initRecords(stat, btn) {
     切语言还会整卡重建，所以建的时候先套用 `lastUpdate()`，再订阅之后的变化。
     订阅在模块级只留一份：重建时先退掉旧的，不然每切一次语言多挂一个监听。 */
 let offUpdate = null;
-function initUpdate(badge, msg, checkBtn, relBtn) {
-  if (!isTauri()) { checkBtn.disabled = relBtn.disabled = true; return; }
-  const text = { checking: "card.updChecking", latest: "card.updLatest",
-                 new: "card.updNew", fail: "card.updFail" };
+function initUpdate(badge, msg, checkBtn, relBtn, nowBtn) {
+  if (!isTauri()) { checkBtn.disabled = true; return; }
+  // 有新版本时：安装版给「立即更新」（一键更新），绿色版给「打开下载页」。
+  // 一键更新失败（连不上、Release 里没有 latest.json……）就退回「打开下载页」
+  let installed = false, failed = false, clicked = false, flash = 0;
+  // **检查的过程只在按钮上体现，不加状态行**（2026-10-09 修）：原先点了之后底下多出一行
+  // "正在检查…"，不到一秒结果回来又清掉，卡片一高一矮、底部按钮跟着跳，看着像整张卡片在闪。
+  // 现在按钮字变成"正在检查…"、查完显示"已是最新"两秒再变回来；按钮钉了最小宽度，字变了不挤动别的。
+  // 状态行只留给需要一直挂着的：连不上、一键更新的下载进度和失败
+  const setCheck = (key) => { checkBtn.textContent = t(key); };
   const show = (r) => {
     if (!r) return;
-    msg.textContent = text[r.state] ? t(text[r.state]) : "";
+    clearTimeout(flash);
+    msg.textContent = r.state === "fail" ? t("card.updFail") : "";
     checkBtn.disabled = r.state === "checking";
+    if (r.state === "checking") setCheck("card.updChecking");
+    else if (r.state === "latest" && clicked) {
+      setCheck("card.updLatest");
+      flash = setTimeout(() => setCheck("card.checkUpdate"), 2000);
+    } else setCheck("card.checkUpdate");
+    if (r.state !== "checking") clicked = false;
     if (r.state === "new") {
       badge.hidden = false;
       badge.textContent = `NEW ${r.version}`;
     } else if (r.state === "latest") {
       badge.hidden = true;
     }
-    // 失败时 NEW 不动：之前查到过的新版不会因为这次没连上就不存在了
+    // 失败时 NEW 不动：之前查到过的新版不会因为这次没连上就不存在了。
+    // 「打开下载页」只在有新版本时出现，顶替「检查更新」的位置——平时它用不上，摆着只占地方
+    nowBtn.hidden = badge.hidden || !installed || failed;
+    relBtn.hidden = badge.hidden || !nowBtn.hidden;
+    checkBtn.hidden = !badge.hidden;
   };
   offUpdate?.();
   offUpdate = onUpdate(show);
   show(lastUpdate());
-  checkBtn.addEventListener("click", () => checkUpdate());
+  isInstalled().then(v => { installed = v; show(lastUpdate()); });
+  checkBtn.addEventListener("click", () => { clicked = true; checkUpdate(); });
+  nowBtn.addEventListener("click", async () => {
+    nowBtn.disabled = true;
+    msg.textContent = t("card.updDownloading") + "…";
+    const err = await installUpdate((got, total) => {
+      msg.textContent = got >= (total || Infinity) ? t("card.updInstalling")
+        : `${t("card.updDownloading")} ${total ? Math.floor(got / total * 100) + "%" : mb(got)}`;
+    });
+    // 走到这里就是没装成（装成的话程序已经退出了）
+    nowBtn.disabled = false;
+    failed = true;
+    show(lastUpdate());
+    msg.textContent = t("card.updInstallFail");
+    window.__TAURI__.core.invoke("log_front", { level: "warn", msg: `[update] ${err}` }).catch(() => {});
+  });
   // 先退出编辑态：编辑态下覆盖层置顶且不穿透鼠标，打开的浏览器被压在下面点不到
   relBtn.addEventListener("click", () => { doneCb?.(); openReleasePage(); });
 }
 
-export async function initEditor(cardEl, onDone, onReset) {
-  card = cardEl; doneCb = onDone; resetCb = onReset;
+export async function initEditor(cardEl, onDone) {
+  card = cardEl; doneCb = onDone;
+  new ResizeObserver(() => { if (!card.hidden) reportRect(); }).observe(card);
   await build(await loadSettings());
-  // **「始终显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
+  // **「按住 Alt 才显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
   // 不跟的话卡片攥着旧值，进编辑态随便动一下别的，collect() 就把旧值存回去，
-  // 刚切的状态被悄悄改回。**只同步这一个**：其余控件只有卡片自己改，而拖滑块时
-  // settings 事件是异步回来的，套回去滑块会往回跳。按 id 现查，切语言会整卡重建。
+  // 刚切的状态被悄悄改回。**只同步这一个**：其余控件只有卡片自己改，而改控件时
+  // settings 事件是异步回来的，套回去控件会往回跳。按 id 现查，切语言会整卡重建。
   onSettingsChange((v) => {
-    const el = card.querySelector("#edAlways");
-    if (el && typeof v?.alwaysShow === "boolean") el.checked = v.alwaysShow;
+    const el = card.querySelector("#edAltOnly");
+    if (el && typeof v?.alwaysShow === "boolean") el.checked = !v.alwaysShow;
   });
 }
 
@@ -177,123 +194,94 @@ export async function initEditor(cardEl, onDone, onReset) {
 async function build(s) {
   await loadLang(s.lang ?? DEFAULTS.lang);
   card.className = "editor";
-  pinnedH = 0;                // 节点要整批换掉，量过的高度作废；中英文也不一样高
+  // **一页，不分页签**（2026-10-09）。原先分四页（显示项 / 面板 / 图例 / 开发）是因为
+  // 内容多，堆成一条要 475~754px；删掉四个滑块、图例只剩三条之后，常用的一页放得下。
+  // 下半部分是一张两列的表：左边标签、右边控件，控件左对齐、下拉框一样宽。
+  // 日志级别和「打开数据目录」放一行——用户报问题时就是"调高日志级别、打开目录把日志发过来"。
+  // 版本单独一行放在最后，有新版本时在那儿出 NEW 和下载按钮。
+  // 「开发」（录制）只在 settings.json 里有 `devTools: true` 时才建，没有就整节不出现；
+  // 不在卡片里放 devTools 的开关——录制刻意不让普通用户看到，见 design/overlay.md「开发区」。
   card.innerHTML = `
     <div class="ed-bar">${t("card.title")}</div>
-    <div class="ed-tabs" role="tablist">${TABS.map(([id, key, ic]) =>
-      `<button class="ed-tab" type="button" role="tab" data-tab="${id}" title="${t(key)}"
-        aria-label="${t(key)}">${icon(ic, 15)}</button>`).join("")}</div>
-    <div class="ed-tabname" id="edTabName"></div>
-    <div class="ed-pane" data-pane="show">
-      <div class="ed-grid">${SHOW_KEYS.map(k =>
-        `<label class="ed-chk"><input type="checkbox" data-show="${k}"${
-          s.show?.[k] !== false ? " checked" : ""
-        }><span class="ed-ico">${showIcon(k)}</span>${t("show." + k)}</label>`).join("")}</div>
-    </div>
-    <div class="ed-pane" data-pane="panel">
-      <label class="ed-row" title="${t("card.alwaysShowHint")}">
-        <input id="edAlways" type="checkbox"${s.alwaysShow ? " checked" : ""}>${t("card.alwaysShow")}</label>
-      <label class="ed-row">${t("card.lang")}
-        <select id="edLang">${LANGS.map(([v, name]) =>
-          `<option value="${v}">${name}</option>`).join("")}</select></label>
-      <label class="ed-row">${t("card.scale")}
-        <input id="edScale" type="range" min="0.8" max="2" step="0.05">
-        <output id="edScaleOut"></output></label>
-      <label class="ed-row">${t("card.opacity")}
-        <input id="edOpacity" type="range" min="0.3" max="1" step="0.05">
-        <output id="edOpacityOut"></output></label>
-      <label class="ed-row">${t("card.bg")}
-        <input id="edBg" type="range" min="0" max="1" step="0.02">
-        <output id="edBgOut"></output></label>
-      <label class="ed-row">${t("card.wardSize")}
-        <input id="edWard" type="range" min="108" max="360" step="4">
-        <output id="edWardOut"></output></label>
-      <div class="ed-row"><button id="edReset" type="button">${t("card.reset")}</button></div>
-    </div>
-    <div class="ed-pane" data-pane="legend">
-      <div class="ed-legend-note">${t("card.legendNote")}</div>
-      <div class="ed-legend">${legendHTML()}</div>
-    </div>
-    <div class="ed-pane" data-pane="dev">
-      <label class="ed-row">${t("card.logLevel")}
-        <select id="edLog">
+    <div class="ed-sec">${t("card.show")}</div>
+    <div class="ed-grid">${SHOW_KEYS.map(k =>
+      `<label class="ed-chk"><input type="checkbox" data-show="${k}"${
+        s.show?.[k] !== false ? " checked" : ""
+      }><span class="ed-ico">${showIcon(k)}</span>${t("show." + k)}</label>`).join("")}</div>
+    <div class="ed-legend">${legendHTML()}</div>
+    <div class="ed-sep"></div>
+    <div class="ed-sec">${t("card.general")}</div>
+    <div class="ed-form">
+      <span>${t("card.showMode")}</span>
+      <label class="ed-chk"><input id="edAltOnly" type="checkbox"${s.alwaysShow ? "" : " checked"}>${t("card.altOnly")}
+        <span class="ed-note">Ctrl+Alt+F11</span></label>
+      <span>${t("card.lang")}</span>
+      <select id="edLang">${LANGS.map(([v, name]) =>
+        `<option value="${v}">${name}</option>`).join("")}</select>
+      <span>${t("card.minimap")}</span>
+      <div class="ed-chk"><select id="edMm">${MINIMAP_MODES.map(m =>
+        `<option value="${m}">${t("card.mm." + m)}</option>`).join("")}</select>
+        <span class="ed-note" id="edMmSrc"></span></div>
+      <span>${t("card.logLevel")}</span>
+      <div class="ed-chk"><select id="edLog">
           <option value="error">error</option><option value="warn">warn</option>
           <option value="info">info</option><option value="debug">${t("card.logDebug")}</option>
-        </select></label>
-      ${s.devTools ? `
-      <label class="ed-row"><input id="edRecord" type="checkbox">${t("card.record")}</label>
-      <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b></div>` : ""}
-      <div class="ed-row">
-        ${s.devTools ? `<button id="edClear" type="button">${t("card.clearRec")}</button>` : ""}
-        <button id="edDir" type="button">${t("card.openDir")}</button>
-      </div>
-      <div class="ed-row ed-ver">${t("card.appVersion")}<b id="edAppVer">—</b><span
-        class="ed-new" id="edNew" hidden></span></div>
-      <div class="ed-row ed-ver">${t("card.dotaVersion")}<b id="edDotaVer">—</b></div>
-      <div class="ed-row">
-        <button id="edUpd" type="button">${t("card.checkUpdate")}</button>
-        <button id="edRel" type="button">${t("card.openRelease")}</button>
-      </div>
-      <div class="ed-upd-msg" id="edUpdMsg"></div>
+        </select>
+        <button id="edDir" type="button">${t("card.openDir")}</button></div>
     </div>
+    <div class="ed-sep"></div>
+    <div class="ed-row ed-verline">
+      <span class="ed-vertext">${t("card.version")} <b id="edAppVer">—</b> · Dota <b id="edDotaVer">—</b></span>
+      <span class="ed-new" id="edNew" hidden></span>
+      <button id="edUpd" type="button" class="ed-right">${t("card.checkUpdate")}</button>
+      <button id="edNow" type="button" class="ed-right ed-primary" hidden>${t("card.updateNow")}</button>
+      <button id="edRel" type="button" class="ed-right" hidden>${t("card.openRelease")}</button>
+    </div>
+    <div class="ed-upd-msg" id="edUpdMsg"></div>
+    ${s.devTools ? `
+    <div class="ed-sep"></div>
+    <div class="ed-sec">${t("card.dev")}</div>
+    <label class="ed-row"><input id="edRecord" type="checkbox">${t("card.record")}</label>
+    <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b>
+      <button id="edClear" type="button">${t("card.clearRec")}</button></div>` : ""}
     <div class="ed-foot">
+      <button id="edReset" type="button">${t("card.reset")}</button>
       <span class="ed-hint">${t("card.hint")}</span>
       <button id="edDone" type="button">${t("card.done")}</button>
     </div>`;
 
   const $ = (id) => card.querySelector("#" + id);
-  const scale = $("edScale"), opacity = $("edOpacity"), ward = $("edWard"),
-        bg = $("edBg"), log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
-        always = $("edAlways");
-  scale.value = s.scale ?? DEFAULTS.scale;
-  opacity.value = s.opacity ?? DEFAULTS.opacity;
-  ward.value = s.wardSize ?? DEFAULTS.wardSize;
-  bg.value = s.panelBg ?? DEFAULTS.panelBg;
+  const         log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
+        altOnly = $("edAltOnly"), mm = $("edMm");
   log.value = s.logLevel ?? DEFAULTS.logLevel;
   // 录制那几行只在 devTools 为真时才建（见 design/overlay.md「开发区」），不建就是 null
   if (record) record.checked = !!s.recordMatches;
-  always.checked = !!s.alwaysShow;
+  // 存盘的字段仍叫 alwaysShow（老配置文件照常读），界面上反过来：勾 = 只在按住 Alt 时显示。
+  // 默认是一直显示，开关只描述那个例外（2026-10-10 用户定）
+  altOnly.checked = s.alwaysShow === false;
   lang.value = s.lang ?? DEFAULTS.lang;
-
-  const sync = () => {
-    $("edScaleOut").textContent = Number(scale.value).toFixed(2) + "×";
-    $("edOpacityOut").textContent = Math.round(Number(opacity.value) * 100) + "%";
-    $("edWardOut").textContent = ward.value + "px";
-    $("edBgOut").textContent = Math.round(Number(bg.value) * 100) + "%";
+  mm.value = MINIMAP_MODES.includes(s.minimap) ? s.minimap : "auto";
+  // 「自动」时在后面写出读到的是什么（左下 · 普通），读不到也说一声——
+  // 用户一眼就知道是不是读对了；读错了就手动选。手动选了就不写，选的就是答案。
+  mmRefresh = () => {
+    const o = minimapOpts({ minimap: mm.value });
+    $("edMmSrc").textContent = !o.auto ? ""
+      : o.fromDota ? `${t(o.right ? "card.mmPosRight" : "card.mmPosLeft")} · ${
+          t(o.large ? "card.mmSizeLarge" : "card.mmSizeNormal")}`
+      : t("card.mmUnread");
   };
+  mmRefresh();
+
   const collect = () => ({
     show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
       .map(el => [el.dataset.show, el.checked])),
-    alwaysShow: always.checked,
-    scale: Number(scale.value),
-    opacity: Number(opacity.value),
-    wardSize: Number(ward.value),
-    panelBg: Number(bg.value),
+    alwaysShow: !altOnly.checked,
+    minimap: mm.value,
     logLevel: log.value,
     recordMatches: record ? record.checked : !!s.recordMatches,
     lang: lang.value,
   });
 
-  // 页签切换。只改 hidden 和一个 class，不动任何控件——控件在四个页里一直都在，
-  // 切页只是把它们藏起来，所以 collect() 永远收得齐。
-  const panes = [...card.querySelectorAll(".ed-pane")];
-  const tabs = [...card.querySelectorAll(".ed-tab")];
-  const name = $("edTabName");
-  const selectTab = (id) => {
-    if (!TABS.some(([t0]) => t0 === id)) id = TABS[0][0];
-    activeTab = id;
-    for (const p of panes) p.hidden = p.dataset.pane !== id;
-    for (const b of tabs) {
-      const on = b.dataset.tab === id;
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-selected", on ? "true" : "false");
-    }
-    name.textContent = t(TABS.find(([t0]) => t0 === id)[1]);
-  };
-  for (const b of tabs) b.addEventListener("click", () => selectTab(b.dataset.tab));
-  selectTab(activeTab);
-
-  sync();
   // 建完再填：切语言会重建这两个节点，所以要等到这一刻才去拿它们
   versions().then(v => {
     const put = (id, val) => { const el = card.querySelector("#" + id); if (el && val) el.textContent = val; };
@@ -301,8 +289,9 @@ async function build(s) {
     put("edDotaVer", v.dota);
   });
   for (const el of card.querySelectorAll("input, select")) {
-    el.addEventListener("input", () => { sync(); saveSettings(collect()); });
+    el.addEventListener("input", () => saveSettings(collect()));
   }
+  mm.addEventListener("input", () => mmRefresh());
   // 拨录制开关会新建或收尾一个文件，数字跟着变。**延后一点再拉**：
   // saveSettings 在 Tauri 下是异步 invoke，Rust 那边要先 refresh() 完才有结果。
   record?.addEventListener("input", () => setTimeout(() => recRefresh?.(), 300));
@@ -313,27 +302,24 @@ async function build(s) {
     await saveSettings(next);
     // 重建要带上卡片不收的键（devTools）：只用 collect() 的话，录制那几行切完语言就没了
     await build({ ...s, ...next });
-    if (!card.hidden) { pinPaneHeight(); place(); }   // 中英文卡片不一样宽也不一样高
+    // **原地不动**，只在卡片出了屏幕时挪回来（中英文卡片不一样高）。原先这里调 place()，
+    // 每次切语言卡片都跳回屏幕中央，用户拖到哪都白拖（2026-10-09 修）
+    if (!card.hidden) keepInView();
   });
 
-  // 「重置」把这张卡片管的外观一次还原：九个勾 + 始终显示 + 四条滑块 + 四块摆位。
-  // **「始终显示」也还原成关**：它是外观行为、和滑块同类，而"按住 Alt 才显示"
-  // 是产品的默认形态；还原它不会造成任何数据损失。
+  // 「重置」把这张卡片管的外观一次还原：九个勾 + 按住 Alt 才显示（回到不勾）+ 小地图回到「自动」。
+  // （块的位置 2026-10-08 起跟着 Dota 的界面走、不能拖，也就没有摆位要还原了。）
+  // **「按住 Alt 才显示」也还原成默认**（不勾，即一直显示）：它是外观行为、和显示项同类，
+  // 还原它不会造成任何数据损失。
   // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
   // **语言也不动**：重置回中文会让看不懂中文的用户无法退出这个状态，
-  // 他得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
-  // 摆位要按**新的**缩放重算，而 main.js 里的 cfg 靠 settings 事件异步刷新、
-  // 这会儿还是旧值，所以把 scale 直接传过去，别让它自己去读。
+  // 用户得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
   $("edReset").addEventListener("click", () => {
     for (const el of card.querySelectorAll("[data-show]")) el.checked = DEFAULTS.show[el.dataset.show];
-    always.checked = DEFAULTS.alwaysShow;
-    scale.value = DEFAULTS.scale;
-    opacity.value = DEFAULTS.opacity;
-    bg.value = DEFAULTS.panelBg;
-    ward.value = DEFAULTS.wardSize;
-    sync();
+    altOnly.checked = !DEFAULTS.alwaysShow;
+    mm.value = DEFAULTS.minimap;
+    mmRefresh();
     saveSettings(collect());
-    resetCb(DEFAULTS.scale);
   });
   // 先退出编辑态再开：编辑态下覆盖层置顶且不穿透鼠标，资源管理器被压在下面点不到
   $("edDir").addEventListener("click", () => {
@@ -342,7 +328,7 @@ async function build(s) {
   });
   if (record) initRecords($("edRecStat"), $("edClear"));
   else recRefresh = null;
-  initUpdate($("edNew"), $("edUpdMsg"), $("edUpd"), $("edRel"));
+  initUpdate($("edNew"), $("edUpdMsg"), $("edUpd"), $("edRel"), $("edNow"));
   $("edDone").addEventListener("click", doneCb);
 
   const bar = card.querySelector(".ed-bar");
@@ -356,6 +342,7 @@ async function build(s) {
     if (!dragging) return;
     card.style.left = `${ox + ev.clientX - sx}px`;
     card.style.top  = `${oy + ev.clientY - sy}px`;
+    reportRect();
   });
   bar.addEventListener("pointerup", (ev) => {
     if (!dragging) return;
@@ -363,42 +350,37 @@ async function build(s) {
   });
 }
 
-/** 每次进编辑态回到屏幕中央偏下。位置不存盘——四块之后没有"面板"这个唯一锚点，
+/** 每次进编辑态回到屏幕中央偏下。位置不存盘——拆块之后没有"面板"这个唯一锚点，
     与其猜一个，不如每次给个确定的起点，要挪自己拖。 */
+/** 把卡片的矩形报给 Rust：编辑态下只有这块吃鼠标，其余地方穿透到游戏（见 src-tauri/src/hittest.rs）。
+    物理像素、窗口客户区坐标——Rust 那边拿 GetCursorPos 减窗口左上角来比。
+    打开、关上、拖动、尺寸变化时各报一次；尺寸变化靠 ResizeObserver（检查更新的状态行出现 /
+    消失、切语言都会让卡片变高）。 */
+function reportRect() {
+  if (!isTauri() || !card) return;
+  const r = card.hidden ? null : card.getBoundingClientRect(), k = devicePixelRatio || 1;
+  window.__TAURI__.core.invoke("set_card_rect",
+    { rect: r ? [r.left * k, r.top * k, r.width * k, r.height * k] : null }).catch(() => {});
+}
+
+/** 卡片出了屏幕就挪回来，没出就不动 */
+function keepInView() {
+  const w = card.offsetWidth, h = card.offsetHeight;
+  const x = parseFloat(card.style.left) || 0, y = parseFloat(card.style.top) || 0;
+  card.style.left = `${Math.round(Math.min(Math.max(8, x), Math.max(8, innerWidth - w - 8)))}px`;
+  card.style.top  = `${Math.round(Math.min(Math.max(8, y), Math.max(8, innerHeight - h - 8)))}px`;
+  reportRect();
+}
+
 function place() {
   const w = card.offsetWidth, h = card.offsetHeight;
   card.style.left = `${Math.round(Math.max(8, (innerWidth - w) / 2))}px`;
   card.style.top  = `${Math.round(Math.max(8, Math.min(innerHeight * 0.6, innerHeight - h - 8)))}px`;
+  reportRect();
 }
 
 export function setEditorOpen(on) {
   if (!card) return;
   card.hidden = !on;          // 必须先取消隐藏再量尺寸，hidden 时 offsetWidth 为 0
-  if (on) { pinPaneHeight(); place(); recRefresh?.(); }
-}
-
-/** 把四页拉到同高，卡片切页时就不会忽高忽低。
-
-    **不是为了好看，是为了「完成」按钮别动。** 四页实测 270/316/282/293，
-    最大差 46px；不钉住的话每点一次页签，底部那个按钮就上下跳一次——
-    而编辑态下覆盖层全屏吃鼠标，它是三条退出路径里最可靠的一条，不该是个移动靶。
-
-    **只能在卡片显示之后量**：hidden 的时候 offsetHeight 是 0，
-    在 build() 里量到的会是一排 0（和上面 place() 那条注释同一个坑）。
-    量完缓存住，之后每次打开直接套用；切语言会重建节点并清掉缓存，重量一次。 */
-let pinnedH = 0;
-function pinPaneHeight() {
-  const panes = [...card.querySelectorAll(".ed-pane")];
-  if (!panes.length) return;
-  if (!pinnedH) {
-    const was = panes.map(p => p.hidden);
-    for (const p of panes) p.style.minHeight = "";
-    for (const p of panes) {
-      p.hidden = false;
-      pinnedH = Math.max(pinnedH, p.offsetHeight);
-      p.hidden = true;
-    }
-    panes.forEach((p, i) => { p.hidden = was[i]; });
-  }
-  for (const p of panes) p.style.minHeight = pinnedH + "px";
+  if (on) { place(); recRefresh?.(); } else reportRect();
 }

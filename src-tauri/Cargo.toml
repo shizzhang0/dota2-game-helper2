@@ -11,6 +11,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
+# 一键更新（只对安装版生效，见 updater.rs）。
+# HTTPS 用 Windows 自带的 SChannel（native-tls），不用默认的 rustls：后者带进 ring 等一串依赖，
+# exe 从 6.7MB 涨到 8.6MB。zip 特性是给旧格式（.nsis.zip）更新包用的，v2 的产物直接是 setup.exe，用不上
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order：settings.json 要写回磁盘，默认的 BTreeMap 会把键按字母重排，
 # 打散 settings::defaults() 里写好的顺序（常数表 2026-09-29 起不再落盘，这条理由只剩设置文件）
@@ -22,7 +26,7 @@ winreg = "0.52"
 [dependencies.windows]
 version = "0.58"
 features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Globalization",
-            "Win32_System_SystemInformation"]
+            "Win32_System_SystemInformation", "Win32_UI_WindowsAndMessaging"]
 
 [profile.release]
 opt-level = "s"

@@ -8,14 +8,13 @@ fn path(app: &tauri::AppHandle) -> Option<PathBuf> {
 /// 默认值。读盘时缺什么补什么，所以老配置文件遇上新增字段也能直接用。
 fn defaults() -> serde_json::Value {
     serde_json::json!({
-        "show": { "mid": true, "bounty": true, "lotus": true, "wisdom": true,
+        "show": { "mid": true, "bounty": true, "wisdom": true, "lotus": true,
                   "stack": true, "glyph": true, "buyback": true, "econ": true,
                   "wardmap": true },
-        "alwaysShow": false,
-        "scale": 1.0,
-        "opacity": 1.0,
-        "panelBg": 0.72,
-        "wardSize": 180,
+        // 默认开（2026-10-09 起，原先默认关、按住 Alt 才显示）。老用户的 settings.json 里存着自己的值，不受影响
+        "alwaysShow": true,
+        // 小地图在哪、多大：auto = 读 Dota 自己的设置（dotacfg.rs），其余是手动指定
+        "minimap": "auto",
         "logLevel": "info",
         "recordMatches": false,
         // 开发者开关，界面上没有：手写进 settings.json 才显示录制、录制器才工作。
@@ -55,16 +54,16 @@ pub fn get_settings(app: tauri::AppHandle) -> serde_json::Value {
     load(&app)
 }
 
-/// 翻转「始终显示」。给全局热键和托盘菜单共用。
+/// 翻转「按住 Alt 才显示」（存盘字段是它的反面 alwaysShow）。给全局热键用。
 ///
-/// 走 `set_settings` 而不是自己写盘：那条路上还挂着托盘菜单重建（勾选状态要跟着变）
-/// 和给前端的 `settings` 事件，绕过去就会各改各的。
+/// 走 `set_settings` 而不是自己写盘：那条路上挂着给前端的 `settings` 事件（卡片上的勾要跟着变），
+/// 绕过去就会各改各的。
 pub fn toggle_always_show(app: &tauri::AppHandle) {
     let mut v = load(app);
-    let now = !v["alwaysShow"].as_bool().unwrap_or(false);
+    let now = !v["alwaysShow"].as_bool().unwrap_or(true);
     v["alwaysShow"] = serde_json::Value::Bool(now);
     set_settings(app.clone(), v);
-    crate::logf!(crate::log::Level::Info, "[settings] 始终显示 = {now}");
+    crate::logf!(crate::log::Level::Info, "[settings] alwaysShow = {now}（按住 Alt 才显示 = {}）", !now);
 }
 
 /// 写盘时**盖在盘上那份之上**，不是盖在默认值之上。前端只收卡片上有的控件，

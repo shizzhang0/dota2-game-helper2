@@ -222,7 +222,10 @@ export class WardTracker {
         // 用"离物理上界还剩多少"当置信度，比"多久没看见"更贴近真实剩余寿命
         const left = life - (clock - (w.firstSeen ?? w.lastSeen));
         const conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
-        return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)) };
+        // visible：这一包里还看得见它。GSI 的 minimap 只推我方此刻看得见的敌方单位，
+        // 所以"本包有它" = 有视野 = 原生小地图正画着它，渲染层据此不重复画（见 wardmap.js）
+        return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)),
+                 visible: w.lastSeen === clock };
       }),
       // 叉也带 conf，和敌方眼一个路子：**刚排的扎眼、快过期的几乎看不见**。
       // 这样时长放到 20 秒也不糊——新旧一眼能分开，而不是一片同样实的叉。

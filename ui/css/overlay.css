@@ -36,7 +36,7 @@ html, body {
 }
 
 /* ── 块 ─────────────────────────────────────────────
-   四个可独立摆位的块。位置一律由 JS 写 left/top，CSS 不给默认坐标——
+   三个可独立摆位的块（买活与塔防贴着顶栏画，不在其中，见文末）。位置一律由 JS 写 left/top，CSS 不给默认坐标——
    默认摆位要按视口比例算（见 render.js 的 defaultLayout）。
    transform-origin 是左上角：缩放时块从自己的左上角长大，存的坐标才不会失真。 */
 
@@ -48,11 +48,10 @@ html, body {
   align-items: stretch;
   gap: 6px;
   padding: 8px 12px;
-  /* 底板可以一路调到全透明。描边跟着一起淡出——底板没了却留一圈白线，
-     会变成一个空的方框浮在画面上。系数 0.14 是让默认的 .72 正好落回 --hair 的 .10。
-     注意这和「整体透明度」不是一回事：那条会把文字图标一起调淡，这条只动底板。 */
-  background: rgba(8, 10, 14, var(--block-bg, .72));
-  border: 1px solid rgba(255, 255, 255, calc(var(--block-bg, .72) * .14));
+  /* **没有底板**（2026-10-08 起）。原先是一块可调深浅的深色底（「底板」滑块），
+     用户嫌多余：文字和数字都带了 text-shadow，压在游戏画面上照样读得清。
+     border 留着透明的一像素，是为了块的尺寸和以前一样，存下的摆位不会因此偏一像素。 */
+  border: 1px solid transparent;
   border-radius: 10px;
   pointer-events: none;          /* 锁定态整窗穿透 */
   opacity: 0;
@@ -60,22 +59,16 @@ html, body {
   transition: opacity .12s linear, visibility 0s linear .12s;
 }
 .block.on {
-  opacity: var(--panel-opacity, 1);
+  opacity: 1;
   visibility: visible;
   transition: opacity .12s linear;
 }
-/* 编辑态**不要**写 opacity: 1。它会盖掉上面 .block.on 的 var(--panel-opacity)，
-   而透明度滑块只能在编辑态里够到——结果就是"拖了没反应"，永远看不到效果。
-   把设置并进编辑态本来就是为了不盲调，这条却一直漏在外面。
-   透明度下限是 0.3，编辑态下仍然看得见、拖得动。 */
+/* 编辑态只描一圈虚线，让人看到块在哪；不再能拖（位置跟着 Dota 的界面走，见 render.js） */
 .block.edit {
-  pointer-events: auto;
-  cursor: grab;
   outline: 1px dashed var(--k-chance);
   outline-offset: 3px;
   visibility: visible;
 }
-.block.edit:active { cursor: grabbing; }
 
 /* .block 与 .cell 的 display:flex 会盖过浏览器默认的 [hidden]{display:none}，
    隐藏显示项时必须显式声明，否则设置里关掉的格子照样显示 */
@@ -108,8 +101,7 @@ html, body {
 }
 .cell[data-urgency="now"] .ring-fg { stroke-width: 6; }
 
-/* 数字在环下面、图标压在环里——两者的位置是对调过的。
-   min-height 不能省：塔防 ready 态数字为空，不留高度那一格会比旁边矮、整行跳。 */
+/* 数字在环下面、图标压在环里——两者的位置是对调过的。 */
 .num {
   margin-top: 2px;
   min-height: 21px;
@@ -118,6 +110,37 @@ html, body {
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
 }
 .cell[data-urgency="now"] .num { color: var(--accent); }
+/* 倒计时**只留圆环、不显示数字**（2026-10-08 起）：圆环本身就是进度条，
+   去掉数字才能缩到塞进顶栏计时牌底下那块空地 */
+[data-block="timers"] .num { display: none; }
+/* 块缩到 0.5 之后 24px 的图标只剩 12px，认不清。环内径 48，放得下 32（缩完 16）。
+   特异度 (0,5,1)，压过 `.cell:not(.wide) .lab svg.ico` 那条 24px，不靠顺序 */
+[data-block="timers"] .cell:not(.wide) .lab svg.ico { width: 32px; height: 32px; stroke-width: 2.1; }
+/* 去掉底板、缩小之后整排太淡（用户实测"不仔细看不出来"），参照 Dota Plus 的符文倒计时改：
+   · 每个圆一块**带颜色的暗底盘**：径向渐变，中心混进三成多自己的颜色，往外渐暗到边缘化开。
+     Dota Plus 显眼靠的就是这个；试过平涂黑圆片，像在画面上挖了个洞，用户嫌丑
+   · 进度环粗 5（缩完约 3.6px），颜色跟着图标走——我们的图标是线条画，
+     颜色是分辨五个符的主要线索；最后 10 秒加粗到 7 提醒。
+     试过学 Dota Plus 收细到 3，实战看不清（缩完只剩 2px 出头）
+   · 不再按远近压暗：.78 是当初有底板时为了拉开层级，没底板时它只是让一切更难看清
+   · 整个环加一圈黑色投影，和文字的 text-shadow 同一个道理
+   格子从 60 收到 52，放大到 0.72 之后整排仍夹在两侧买活之间。
+   特异度都比通用那几条高，不靠顺序 */
+[data-block="timers"] .cell { width: 52px; }
+[data-block="timers"] .cell[data-urgency] { opacity: 1; }
+[data-block="timers"] .cell > svg { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
+[data-block="timers"] .cell .ring-fg { stroke-width: 5; }
+[data-block="timers"] .cell[data-urgency="now"] .ring-fg { stroke-width: 7; }
+[data-block="timers"] .cell:not(.wide) .lab {
+  border-radius: 50%;
+  /* 底盘叠在圆环**上面**（.lab 在 svg 之后），所以半径必须收在环的内侧边缘以内，
+     否则会把环盖掉一半——之前环看着细，主要就是被它盖的。
+     环半径 26/60 × 52px = 22.5px，线宽 5 → 内侧边缘约 20.3px；
+     closest-side = 26px，76% ≈ 19.8px 处收边 */
+  background: radial-gradient(circle closest-side,
+    color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
+    rgba(10, 13, 18, .85) 72%, transparent 76%);
+}
 
 /* 有圆环的格子：图标压在环中央（环内径 48px，放得下 24px）。
    放大到 24px 顺带解决了描边过细的风险——0.8× 时描边从 0.79px 变成 1.36px。
@@ -136,35 +159,6 @@ html, body {
 .inline-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .cell.wide .lab { display: flex; align-items: center; justify-content: center; flex: none; }
 
-/* 买活不能照搬：它是**五个值**，图标摆进那一行就成了"第六个东西"，
-   混进数据里了。所以它的图标回到下方当标签——而且这样正好和塔防的倒计时
-   落在同一水平线上，两格反而对齐了。 */
-[data-cell="buyback"] .lab { margin-top: 2px; min-height: 21px; }
-/* 圆点原本什么容器都没有，旁边塔防却有个很重的圆环，两边一比就"飘"。
-   给它一个圆角框——那是圆环在这种形态下的对应物。
-
-   框**撑满格子高度**，把塔防"环 + 倒计时"的结构镜像一遍：框顶对齐圆环顶、
-   框底对齐倒计时底，圆点居中到圆环那一带、箭头落到倒计时那一行。
-   曾试过让框贴着内容再垂直居中，结果和圆环、倒计时两边都没对齐。 */
-.bb-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  /* 边框取 --k-chance（#65D9F7，"敌方缺失 = 机会"）的 32%，和框里的图标同色系。
-     不用满强度：框是容器不是数据，太亮会和旁边塔防那个红色进度环抢，
-     也会让人误以为它自己在表达某种状态。 */
-  border: 1px solid rgba(101, 217, 247, .32);
-  border-radius: 10px;
-  padding: 0 8px;
-}
-/* 框宽 = 圆点 5×16 + 间距 4×5 + 内边距 16 + 边框 2 = 118，格子必须比它宽，
-   否则框会溢出格子、顶到块的内边距上 */
-/* 圆点吃掉箭头以外的全部高度并居中——它的中心因此落在圆环中心那条线上 */
-[data-cell="buyback"] .dots { flex: 1; height: auto; }
-/* 塔防和买活是两种不同形态的格子，6px 的通用间距太挤，会读成一组 */
-[data-cell="buyback"] { margin-left: 8px; }
-
 /* 必须写成 `.cell .lab svg`：上面那条 `.cell svg { width: 52px }` 是给圆环用的，
    特异度 (0,1,1) 会把图标撑成 52px——就是眼位地图踩过的同一个坑。
    这条是 (0,2,1)，压得住。
@@ -181,30 +175,16 @@ html, body {
 
 /* 宽度写死：净资产从 4 位涨到 5 位时若让宽度自适应，居中面板会整体横移，读数时抖动 */
 .cell.wide { justify-content: space-between; opacity: 1; }
-.cell[data-cell="buyback"] { width: 122px; }   /* 容得下 .bb-box 的 118px，见下 */
 .cell.econ { width: 116px; }
-
-/* ── 敌方买活 ────────────────────────────────────────── */
-
-.dots { display: flex; gap: 5px; height: 52px; align-items: center; }
-.dot { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 16px; opacity: .5; }
-.dot[data-on="1"] { opacity: 1; }
-.dot i {
-  display: block; width: 10px; height: 10px; border-radius: 50%;
-  background: var(--slot, #888);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
-}
-.dot[data-on="1"] i { outline: 2px solid var(--k-chance); outline-offset: 1px; }
-.dot span {
-  font-size: 10px; line-height: 1; color: var(--k-chance);
-  text-shadow: 0 0 3px #000; min-height: 10px;
-}
 
 /* ── 经济 ───────────────────────────────────────────── */
 
-.econ { justify-content: center; gap: 1px; height: 52px; }
+/* 原先写死 52px 高、和倒计时那一排圆环对齐；两块分开放之后用不着了。
+   而且 `.cell.wide` 的 space-between 特异度更高，会把金额顶到上沿、GPM 压到下沿，
+   中间空出一截——所以这里用 .cell.econ 压回去，让两行贴着。 */
+.cell.econ { justify-content: flex-start; gap: 2px; height: auto; }
 .nw {
-  font-size: 22px; font-weight: 600; color: #FFD76A;
+  font-size: 22px; font-weight: 600; color: #FFD76A; line-height: 1.1;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
   /* 钉住宽度：图标在左边之后，数字从 4 位涨到 5 位会把币往左推。
      这和"格子宽度写死防抖动"是同一个理由，只是尺度小了一层。 */
@@ -212,68 +192,130 @@ html, body {
   text-align: left;
 }
 .econ .lab { color: #FFD76A; }
-[data-cell="buyback"] .lab { color: var(--k-chance); }
-/* 比净资产那个大：它下方没有别的东西，而旁边塔防同一水平线上是 18px 的倒计时，
-   16px 的描边图标在旁边显得轻飘。
-   **必须写在上面那条 `.cell .lab svg.ico` 之后**——两条特异度都是 (0,3,1)，
-   靠顺序取胜。这个文件里同类的坑已经出现三次了（圆环压图标、真眼空心、这条）。 */
-[data-cell="buyback"] .lab svg.ico { width: 20px; height: 20px; }
-
-/* 塔防 ready：盾填实。数字位这时是空的（数字位永远只放数字），
-   光靠"环画满"不够显眼，而填实是个不用文字的状态差——
-   放 READY 会在刚清空的面板上重新塞回一个要翻译的词。 */
-[data-cell="glyph"][data-urgency="now"] .lab svg.ico {
-  fill: currentColor;
-  fill-opacity: .3;
-}
-
 .rate { display: flex; gap: 8px; font-size: 10px; color: var(--dim); text-shadow: 0 0 3px #000; }
 
 @media (prefers-reduced-motion: reduce) {
-  .block, .ring-fg { transition: none; }
+  .block, .ring-fg, .tb, .mm { transition: none; }
 }
 
-/* ── 眼位小地图 ─────────────────────────────────────── */
-/* 地图整幅画在 108×108 的 viewBox 里，塔、眼点、标签全是 viewBox 单位，
-   所以改这个 CSS 尺寸就是整体等比放大，不用碰 wardmap.js 里的任何坐标。
+/* ── 贴着顶栏的买活与塔防 ─────────────────────────────
+   位置由 topbar.js 按 Dota 顶栏的几何算，这里只管长相。
+   大小吃 --hud-k（屏高 / 1080）：这一层要和头像一样大。 */
 
-   选择器必须写成 `.cell svg.wardmap`：上面的 `.cell svg { width: 52px }` 特异度是
-   (0,1,1)，压得住 `.wardmap` 的 (0,1,0)——地图因此一直被塞在 52px 里画，
-   而不是设计里写的 108px。这是拆块时才查出来的老 bug。
-   包在外面的 div 也叫 .wardmap，只给它宽度，高度让 svg + 标签自己撑，
-   否则标签会压在地图上。 */
-.cell.wardmap { width: calc(var(--ward-size, 180px) + 8px); }
-.cell svg.wardmap {
-  width: var(--ward-size, 180px);
-  height: var(--ward-size, 180px);
-  display: block;
+.tb {
+  position: fixed;
+  top: 0;
+  pointer-events: none;          /* 编辑态也不收鼠标：它不能拖，位置跟着游戏走 */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .12s linear, visibility 0s linear .12s;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
 }
-/* 地图自己的底跟着「底板」滑块一起淡——写死 .35 的话，底板拉到 0 时四个块都透了，
-   只剩这一块灰方块浮在画面中间。系数 .5 让默认的 .72 落回 .36，和原来同一档。 */
-.wm-bg { fill: rgba(0, 0, 0, calc(var(--block-bg, .72) * .5)); }
-.wm-tower { fill: #9AA6B4; opacity: .55; }
-.wm-tower[data-team="2"] { fill: #66BB6A; }
-/* 夜魇塔去饱和压暗。它原本是 #E57373 / .55 的阵营红，而敌方眼改红之后两者撞了——
-   尤其敌方眼还会按置信度淡到 .3，淡下去正好落进塔那一档亮度。
-   让位的是塔不是眼：塔是底图（位置固定、只有生死两态），眼才是这块的正文。
-   阵营身份靠"暖 vs 绿"保留下来，够用。 */
-.wm-tower[data-team="3"] { fill: #8C6A6A; opacity: .45; }
-.wm-tower.dead { fill: #5A6470; opacity: .3; }
-.wm-ward { fill: var(--w); stroke: rgba(0, 0, 0, .85); stroke-width: .6; }
-.wm-ward.own { --w: #65D9F7; }
-.wm-ward.own.soon { --w: #FFC24B; }
-/* 颜色只说归属：青 = 我方，红 = 敌方。红=威胁是不用学的，而之前那个紫是个任意约定。
-   "刚被排掉"原本占着这支红，现在挪到形状上去了（.wm-kill 那个叉），
-   颜色于是不再兼职。理由见 design/overlay.md 的「设置」第 7 条。 */
-.wm-ward.enemy { --w: #FF4D4D; }
-/* 我方眼刚被排掉：青色的叉，闪 3 秒。青说明"是我的"，叉说明"没了"。 */
-.wm-kill { stroke: #65D9F7; stroke-width: 1.3; stroke-linecap: round; fill: none; }
-/* 真眼空心、假眼实心。颜色已经背了"归属"和"快到期"两层含义，
-   再拿颜色区分类型必然糊；塔是方块，所以形状这条通道是空的，正好拿来用。
-   要写在上面几条之后——同特异度靠顺序取胜。 */
-.wm-ward.sentry { fill: none; stroke: var(--w); stroke-width: 1.3; }
-.wm-t { fill: #EDF1F6; font-size: 5px; text-anchor: middle;
-        paint-order: stroke; stroke: #000; stroke-width: 1.4; }
+.tb.on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .12s linear;
+}
+
+/* 买活：头像正下方，金币堆 + 剩余冷却。只在冷却中出现——
+   没在冷却的人底下什么都没有，比十个暗着的占位安静得多。
+   **没有底和边框**（2026-10-08 起），和倒计时、净资产一样只靠 text-shadow 读清。
+   **十个人同一个颜色**（2026-10-08 定）：敌我看它在哪一侧就知道，
+   按槽位上色既多余（头像顶上已有槽位色条），有几种颜色在暗图上也读不出。
+   **金黄色**：原先是青色，去掉底框之后压在游戏画面上不够显眼（用户实测）。
+   买活本来就是花钱的事，和净资产金额同一色系；比金额那个 #FFD76A 略饱和一点，更跳 */
+.tb-bb {
+  transform: translate(-50%, -50%) scale(var(--hud-k, 1));
+  display: flex; align-items: center; gap: 3px;
+  padding: 2px 5px;
+  border: 1px solid transparent;   /* 编辑态的占位要画虚线框，平时留一个透明的，尺寸不跳 */
+  border-radius: 5px;
+  color: #FFD34D;
+  font-size: 13px; font-weight: 600; line-height: 1;
+  white-space: nowrap;
+}
+/* 金币堆有好几层横线，比原先的回转箭头更要空间：12 → 14 */
+.tb-bb svg.ico { width: 14px; height: 14px; stroke-width: 2; filter: drop-shadow(0 0 2px #000); }
+.tb-bb[data-v="0"] { display: none; }
+/* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
+.tb-bb[data-v="slot"] { border: 1px dashed rgba(255, 211, 77, .6); opacity: .6; }
+
+/* 敌方塔防：敌方那一端、挨着顶栏最外侧头像（天辉在左、夜魇在右）。
+   **和倒计时同一套圆**：带颜色的暗底盘 + 进度环 + 中间一座塔（游戏里塔防按钮就是塔）。
+   基准 52px 的格子按 0.72 缩，和倒计时的圆一样大（直径约 37）。
+   原先是一条 120 宽的底板放盾 + 数字 + 进度线，太长（2026-10-09 改）。 */
+.tb-glyph {
+  --accent: var(--k-threat);
+  width: 52px; height: 52px;
+  transform: translate(-50%, -50%) scale(calc(var(--hud-k, 1) * .72));
+  color: var(--k-threat);
+}
+.tb-glyph svg.ring { width: 52px; height: 52px; display: block; overflow: visible;
+                     filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
+.tb-glyph .ring-fg { stroke-width: 5; }
+.tb-glyph-ico {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  /* 和倒计时的底盘同一个配方，收在环的内侧（见倒计时那条的注释） */
+  background: radial-gradient(circle closest-side,
+    color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
+    rgba(10, 13, 18, .85) 72%, transparent 76%);
+}
+.tb-glyph svg.ico { width: 30px; height: 30px; stroke-width: 2.1; opacity: .3;
+                    filter: drop-shadow(0 0 2px #000); }
+/* 冷却中的剩余时间，压在变暗的塔上。4:52 这种四个字符要塞进约 40px 的底盘，字号到 15 为止 */
+.tb-glyph-ico span {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; letter-spacing: -.3px; line-height: 1;
+  color: #FFE3E3;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+}
+.tb-glyph-ico span:empty { display: none; }
+/* ready：环满、塔点亮并填实、环加粗——"敌方此刻有塔防"是威胁态，要最显眼 */
+.tb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; }
+.tb-glyph[data-ready="1"] .ring-fg { stroke-width: 7; }
+
+/* ── 眼位：贴在原生小地图上 ─────────────────────────────
+   位置和大小由 wardmap.js 按 Dota 的小地图算（left/top/width/height 直接写），
+   这里只管长相。地图整幅画在 108×108 的 viewBox 里，眼点、叉全是 viewBox 单位，
+   所以这一层多大，里面的东西就跟着等比放大——和原生小地图的图标一起变大变小。
+   没有底板：底下就是原生小地图，我们只往上叠它不画的那两样。 */
+.mm {
+  position: fixed;
+  pointer-events: none;          /* 编辑态也不收鼠标：它不能拖，位置跟着游戏走 */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .12s linear, visibility 0s linear .12s;
+}
+.mm.on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .12s linear;
+}
+.mm svg.wardmap { width: 100%; height: 100%; display: block; overflow: visible; }
+/* 编辑态画出边框和塔，当对齐的参照：塔压在原生的塔上，这一层就摆准了 */
+.wm-frame { fill: none; }
+.mm.edit .wm-frame { stroke: var(--k-chance); stroke-width: .5; stroke-dasharray: 2 1.5; }
+.wm-tower { fill: none; stroke: #EDF1F6; stroke-width: .5; }
+/* 敌方眼：和游戏里同样的形状，换成品红——原生小地图上没有任何东西用这个颜色，
+   而红色会和红兵、红塔混在一起。形状见 wardmap.js 的 wardIcon。
+   线宽是 viewBox 单位，跟着这一层一起缩放。 */
+.wm-eye { --w: #FF5CF0; }
+.wm-eye-under { fill: none; stroke: #000; stroke-width: 1.4; stroke-linejoin: round; }
+.wm-eye-line  { fill: none; stroke: var(--w); stroke-width: .8; stroke-linejoin: round; }
+.wm-eye-ball  { fill: #000; stroke: #000; stroke-width: .5; stroke-linejoin: round; }
+.wm-eye-pupil { fill: var(--w); }
+.wm-eye-lid   { fill: none; stroke: var(--w); stroke-width: .7; stroke-linecap: round; }
+/* 我方眼刚被排掉：绿色的叉 + 黑描边，和原生小地图上我方眼同色同描边（见 wardmap.js 的 crossIcon） */
+.wm-kill path { fill: none; stroke-linecap: round; }
+.wm-kill-under { stroke: #000; stroke-width: 1.7; }
+.wm-kill-line  { stroke: #3CFF3C; stroke-width: .95; }
+/* 我方眼快到期的秒数：白字黑边，压在原生绿眼正上方；最后 10 秒变琥珀 */
+.wm-own-t { fill: #FFFFFF; font-size: 3.6px; font-weight: 700; text-anchor: middle;
+            paint-order: stroke; stroke: #000; stroke-width: .9; stroke-linejoin: round; }
+.wm-own-t.urgent { fill: #FFC24B; }
 
 /* ── 编辑态：设置卡片 ───────────────────────────────── */
 
@@ -284,13 +326,16 @@ html, body {
      → 白字白底看不见。只能限定在卡片内：给 :root 定配色方案会连带
      画上背景底色，覆盖层就不透明了。 */
   color-scheme: dark;
-  width: 300px;
+  width: 330px;               /* 显示项三列，英文的 Enemy glyph / Net worth 要放得下 */
   padding: 12px 14px;
   background: var(--bg-lit);
   border: 1px solid var(--hair);
   border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
   pointer-events: auto;
+  /* **字号只有两档**（2026-10-09）：13 给所有要读、要点的东西（标题、分组名、选项、按钮、版本号），
+     11 只给附注（图例、小地图读到的结果、底部提示、更新状态）。原先标题和分组名是 11、
+     NEW 是 10，一张卡片四种字号，层级反而乱——分组名靠暗色 + 加粗跟选项区分，不靠缩小 */
   font-size: 13px;
 }
 /* 卡片的拖拽把手。负 margin 把它顶到卡片内边距之外，视觉上占满整个顶边。
@@ -301,89 +346,58 @@ html, body {
   border-bottom: 1px solid var(--hair);
   border-radius: 10px 10px 0 0;
   background: rgba(255, 255, 255, .05);
-  font-size: 11px;
   color: var(--dim);
   cursor: grab;
   user-select: none;
 }
 .ed-bar:active { cursor: grabbing; }
 
-/* ── 页签 ────────────────────────────────────────────
-   四节内容原先竖着堆成一条，默认 475px、全展开 754px。页签把它压成
-   "最高那一页 + 外壳"，而且**只有图标没有文字**——名字显示在页签条下面那一行，
-   所以中英文卡片一样宽（英文的 Display/Panel/Legend/Developer 并排写撑得开）。
-
-   页签条**只管四页内容**：拖拽把手在它上面、「完成」在它下面，两者都不进页签。
-   编辑态下覆盖层全屏吃鼠标，桌面点不动、托盘也点不到，「完成」是三条退出路径里
-   最可靠的一条——它绝不能藏在某个没选中的页后面。 */
-.ed-tabs {
-  display: flex; gap: 4px;
-  margin: 0 -14px 0;            /* 顶到卡片内边距之外，和 .ed-bar 对齐 */
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--hair);
-}
-.ed-tab {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center;
-  padding: 5px 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--dim);
-  cursor: pointer;
-}
-.ed-tab:hover { background: rgba(255, 255, 255, .06); color: var(--fg); }
-/* 选中态同时给底色和描边：只靠颜色的话，在 11px 的图标上差别太弱 */
-.ed-tab.on {
-  background: rgba(101, 217, 247, .12);
-  border-color: rgba(101, 217, 247, .35);
-  color: var(--k-chance);
-}
-.ed-tab svg.ico { display: block; overflow: visible; }
-/* 选中页的名字。顶替了原先每节的 h3，所以没多占高度 */
-.ed-tabname {
-  font-size: 11px; color: var(--dim); font-weight: 600;
-  margin: 8px 0 7px;
-}
-.ed-pane { margin-bottom: 12px; }
-.ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
-.ed-legend-note { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
-.ed-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
-.ed-legend span { display: flex; align-items: center; gap: 7px; }
+/* ── 设置卡片：一页 ──────────────────────────────────
+   原先分四个图标页签（显示项 / 面板 / 图例 / 开发）；内容删减后一页放得下（2026-10-09）。 */
+.ed-sec { color: var(--dim); font-weight: 600; margin: 0 0 7px; }
+/* 九个显示项排三列三行（原先两列五行），卡片因此矮了两行 */
+.ed-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; }
+.ed-grid .ed-chk { white-space: nowrap; gap: 5px; }
+/* 眼位图例：挂在九个勾下面，小一号、颜色压暗 */
+.ed-legend { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 7px 0 0;
+             font-size: 11px; color: var(--dim); }
+.ed-legend span { display: flex; align-items: center; gap: 5px; }
 /* 这里的 svg 不在 .cell 里，吃不到 .cell svg 那条 52px，要自己定尺寸 */
 .ed-legend svg { width: 11px; height: 11px; flex: none; display: block; overflow: visible; }
-/* 图例里的塔按不透明画。地图上塔是**底图**，靠压低透明度往后退；图例里它背后什么都没有，
-   那点透明度不传达任何信息，只是把 11px 的色块变糊。夜魇塔去饱和之后这条成了必需——
-   #8C6A6A/.45 和「已推掉」的 #5A6470/.3 并排摆着几乎分不出来，而图例的职责正是教人分辨。
-   **只动透明度不动颜色**：色值仍然复用地图那份，不会出现两套颜色各自漂移。 */
-.ed-legend .wm-tower { opacity: 1; }
+.ed-sep { border-top: 1px solid var(--hair); margin: 12px -14px 10px; }
+/* 下半部分：两列的表，左标签右控件。下拉框统一宽度，控件起点对齐 */
+.ed-form { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; }
+.ed-form > span { color: var(--dim); }
+.ed-form select { width: 112px; }
+/* 控件后面的附注（小地图读到的结果） */
+.ed-note { color: var(--dim); font-size: 11px; }
+/* 版本那一行：「版本 1.3.6 · Dota 7.41f」+ 右边的检查更新 / 下载页 */
+.ed-verline { margin: 0; }
+.ed-vertext { color: var(--dim); }
+.ed-vertext b { font-weight: 400; color: var(--fg); font-variant-numeric: tabular-nums; }
 .ed-chk, .ed-row { display: flex; align-items: center; gap: 7px; }
+.ed-right { margin-left: auto; }
 /* 九个显示项前面的图标，和面板上用的是同一份 icons.js，形状永远不会脱节。
    眼位那一行是两个图标，所以用 flex 而不是写死宽度。 */
 .ed-ico { display: flex; align-items: center; gap: 3px; color: var(--dim); flex: none; }
 .ed-ico svg.ico { display: block; overflow: visible; }
 .ed-row { margin-bottom: 7px; }
-.editor input[type="range"] { flex: 1; min-width: 0; }
-.editor output {
-  min-width: 44px; text-align: right; color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-/* 开发区的只读信息行（录制统计 + 两行版本号）：
-   值靠右对齐，和上面滑块的 output 同一个视觉位置。
+/* 开发区的只读信息行（录制统计 + 版本号）：值靠右对齐。
    刻意不加 user-select: none——它们存在的意义就是被选中复制走。 */
-.ed-ver { color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+.ed-ver { color: var(--dim); margin-bottom: 4px; }
 .ed-ver b {
-  margin-left: auto; font-weight: 400; color: var(--fg);
+  margin-left: 6px; margin-right: auto; font-weight: 400; color: var(--fg);
   font-variant-numeric: tabular-nums;
 }
 /* 版本号旁边的 NEW：查到新版才出现。借「完成」按钮那个青色，不另起一个颜色 */
 .ed-new {
-  margin-left: 6px; padding: 0 5px; border-radius: 4px;
-  background: var(--k-chance); color: #06202B; font-size: 10px; font-weight: 600;
+  margin-left: 2px; padding: 0 5px; border-radius: 4px;
+  background: var(--k-chance); color: #06202B; font-size: 11px; font-weight: 600;
   cursor: default;
 }
 /* 状态单独一行：和两个按钮挤一行时英文的"Can't reach the update server"放不下 */
-.ed-upd-msg { color: var(--dim); font-size: 11px; min-height: 1em; }
+.ed-upd-msg { color: var(--dim); font-size: 11px; }
+.ed-upd-msg:empty { display: none; }
 .editor button:disabled { opacity: .45; cursor: default; }
 .editor option { background: #0E1319; color: var(--fg); }
 .editor select, .editor button {
@@ -397,9 +411,14 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin-top: 4px;
 }
-.ed-hint { color: var(--dim); font-size: 11px; }
-.ed-foot button {
+.ed-hint { color: var(--dim); font-size: 11px; flex: 1; text-align: center; }
+.ed-foot #edDone {
   background: var(--k-chance); color: #06202B; border: 0;
   font-weight: 600; padding: 4px 16px;
 }
-.ed-foot button:hover { background: var(--k-chance); filter: brightness(1.12); }
+.ed-foot #edDone:hover { background: var(--k-chance); filter: brightness(1.12); }
+/* 「检查更新」点了以后字会变成"正在检查…""已是最新"，钉住最小宽度，别把左边的版本号挤动 */
+#edUpd { min-width: 7.5em; text-align: center; }
+/* 「立即更新」和「完成」同一个青色：有新版本时它就是这一行要点的那个 */
+.editor .ed-primary { background: var(--k-chance); color: #06202B; border: 0; font-weight: 600; }
+.editor .ed-primary:hover { background: var(--k-chance); filter: brightness(1.12); }

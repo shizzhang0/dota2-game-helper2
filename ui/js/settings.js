@@ -1,15 +1,16 @@
 import { isTauri } from "./source.js";
 
 // 只有键，显示名在语言包的 show.* 里。顺序就是卡片上九个勾的顺序。
-export const SHOW_KEYS = ["mid", "bounty", "lotus", "wisdom", "stack",
+export const SHOW_KEYS = ["mid", "bounty", "wisdom", "lotus", "stack",
                           "glyph", "buyback", "econ", "wardmap"];
 
 // lang 缺省给中文：Rust 侧的 defaults() 会按系统语言填好这个字段，
 // 这份只在浏览器开发时用得上。
 export const DEFAULTS = {
   show: Object.fromEntries(SHOW_KEYS.map(k => [k, true])),
-  alwaysShow: false,
-  scale: 1.0, opacity: 1.0, panelBg: 0.72, wardSize: 180,
+  alwaysShow: true,    // 默认开（2026-10-09 起）
+  // 小地图在哪、多大：auto = 读 Dota 自己的设置，见 dotahud.js
+  minimap: "auto",
   logLevel: "info", recordMatches: false, devTools: false, lang: "zh-CN",
 };
 

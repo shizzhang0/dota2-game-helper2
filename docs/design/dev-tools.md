@@ -37,6 +37,8 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 > 设置里的统计与一键清空、断流看门狗、文件被外部删掉的检测。
 > 完整的生命周期写在 [overlay.md 的「录制的生命周期」](overlay.md#录制的生命周期2026-09-16-重做)。
 > **仍然不自动清理**——攒下来的录像是对账语料，程序不该替你决定哪份没用了。
+>
+> 收尾的几条路：回到主菜单、换局、**比赛结束 10 秒后**（2026-10-09）、断流 40 秒、程序退出、关开关。
 
 > **必须重新序列化，不能原样写 body。** Dota 推过来的 HTTP body 是**带制表符缩进的多行 JSON**，
 > 一包摊成几十行；原样落盘就不是 JSONL 了，`replay.py` 按行读会**一条都解析不出来**。
@@ -92,7 +94,7 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 
 静态服务 `ui/` 与 `constants/`，并通过 SSE 重放 dump。
 打开 <http://127.0.0.1:8000/dev.html> 就能用真实对局数据驱动前端，不必反复进游戏。
-`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 切换始终显示（和卡片上的勾是同一个值）、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
+`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 切换「按住 Alt 才显示」（和卡片上的勾是同一个值）、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
 
 两处实现上必须注意：
 
@@ -188,12 +190,73 @@ import { EconTracker } from ".../ui/js/networth.js";
 
 ## 发版
 
-1. 三处版本号一起改：`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`（`cargo build` 会跟着改）、
-   `src-tauri/tauri.conf.json`
-2. `cargo build --release --manifest-path src-tauri/Cargo.toml`
-3. 打 zip：exe + 两份 README，名字 `dota2-game-helper2-vX.Y.Z-windows-x64.zip`
-4. `gh release create vX.Y.Z`，标题就是 `vX.Y.Z`。「检查更新」只读 tag，标题和正文怎么写都不影响它
-5. 把 zip 下载回来核对 SHA256
+v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认它）、**绿色版 zip**（exe + 两份 README）、
+**`latest.json`**（一键更新读的清单）。安装包和 zip 各**另传一份不带版本号的**
+（`dota2-game-helper2-setup.exe`、`dota2-game-helper2-portable.zip`）：项目主页和 README 的下载链接写的是
+`releases/latest/download/<这个名字>`，永远指向最新版，发版不用改链接（2026-10-10）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
+**本地和 GitHub Actions 用的是同一个脚本**。
+
+### 平时：推 tag，Actions 自动发
+
+1. `python tools/release.py bump 1.4.0` 改三处版本号（`Cargo.toml`、`Cargo.lock`、`tauri.conf.json`），
+   再跑一次 `python tools/make_shots.py`（README 里卡片截图上有版本号），照常提 PR、CI 过了合进 main
+2. 在 main 上打**带注释的 tag**，注释就是 Release 正文（只写 Changelog，见下），推上去：
+
+   ```bash
+   git tag -a v1.4.0 -F notes.md
+   ```
+
+   ```bash
+   git push origin v1.4.0
+   ```
+
+3. [`release.yml`](../../.github/workflows/release.yml) 接手：核对 tag 和代码里的版本号一致 →
+   `release.py build` → `release.py publish`（建 Release、传五个文件）→ `release.py verify`（下载回来核对）。
+   跑成功之后 [`pages.yml`](../../.github/workflows/pages.yml) 自动重新发项目主页（下载按钮下的版本号跟着变）
+
+签名私钥在仓库 Secrets 的 `TAURI_SIGNING_PRIVATE_KEY`。没有它流水线直接失败，不会发出一个没签名的安装包。
+
+### 兜底：本地发
+
+Actions 坏了，或者要本地先试打一个包：
+
+```bash
+python tools/release.py build
+```
+
+```bash
+python tools/release.py publish notes.md
+```
+
+```bash
+python tools/release.py verify 1.4.0
+```
+
+`build` 本地会去读 `~/.tauri/dota2-game-helper2.key`。产物在 `dist/release/`。
+
+### build 做了什么
+
+- **`ui/` 里有没进仓库的文件就不打**（`git ls-files --others ui`）。`frontendDist` 是整个 `ui/`，
+  gitignore 挡不住打包——2026-10-08 开发页的测试截图和录像切片就这样被嵌进 exe（6.7MB 涨到 9.2MB）。
+  开发素材固定放仓库根的 **`devdata/`**（不进仓库），回放服务器把 `/dev/…` 指到那里；
+  原先是放在 `ui/dev/`、打包时挪出去再挪回来，一次中途被打断就丢在了临时目录里
+- 用 Tauri 命令行打包（`cargo build` 只出 exe，不出安装包和签名），版本跟着 `Cargo.lock` 里的 `tauri` 走
+  （现在 2.11.5）。第一次跑会自己下 NSIS 工具链
+- exe 应约 **7.5MB**（v1.3.x 是 6.7MB，多的是更新插件的 HTTP 下载依赖；更新插件的 HTTPS 换成了
+  Windows 自带的 SChannel，用默认的 rustls 会到 8.6MB）。大很多说明 `ui/` 里混进了别的东西
+- 生成 `latest.json`：安装包下载地址 + `.sig` 签名原文
+
+### 几条规矩
+
+- **Release 正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档
+  （用户 2026-10-09 定；PR 描述同理）。标题就是 `vX.Y.Z`
+- 「检查更新」只读 tag；一键更新读最新 Release 里的 `latest.json`——**漏传它，装了安装版的人就收不到这一版**，
+  所以 `publish` 五个文件缺一样就不发（不带版本号的两份漏了，主页的下载按钮就 404）
+
+> **签名私钥** `~/.tauri/dota2-game-helper2.key`（没设密码）**不进仓库，要备份**；Secrets 里那份
+> 读不出来，不能当备份。公钥写在 `tauri.conf.json` 的 `plugins.updater.pubkey`，装好的程序靠它验安装包。
+> **私钥丢了，已经装了安装版的人就再也收不到一键更新**——换一把新钥匙签出来的包，旧程序验不过，
+> 只能让他们手动下载重装一次。
 
 ## 开发顺序（当初的路径，供参考）
 
