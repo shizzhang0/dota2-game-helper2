@@ -94,7 +94,7 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 
 静态服务 `ui/` 与 `constants/`，并通过 SSE 重放 dump。
 打开 <http://127.0.0.1:8000/dev.html> 就能用真实对局数据驱动前端，不必反复进游戏。
-`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 切换始终显示（和卡片上的勾是同一个值）、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
+`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 切换「按住 Alt 才显示」（和卡片上的勾是同一个值）、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
 
 两处实现上必须注意：
 
@@ -191,13 +191,15 @@ import { EconTracker } from ".../ui/js/networth.js";
 ## 发版
 
 v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认它）、**绿色版 zip**（exe + 两份 README）、
-**`latest.json`**（一键更新读的清单）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
+**`latest.json`**（一键更新读的清单）。安装包和 zip 各**另传一份不带版本号的**
+（`dota2-game-helper2-setup.exe`、`dota2-game-helper2-portable.zip`）：项目主页和 README 的下载链接写的是
+`releases/latest/download/<这个名字>`，永远指向最新版，发版不用改链接（2026-10-10）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
 **本地和 GitHub Actions 用的是同一个脚本**。
 
 ### 平时：推 tag，Actions 自动发
 
 1. `python tools/release.py bump 1.4.0` 改三处版本号（`Cargo.toml`、`Cargo.lock`、`tauri.conf.json`），
-   照常提 PR、CI 过了合进 main
+   再跑一次 `python tools/make_shots.py`（README 里卡片截图上有版本号），照常提 PR、CI 过了合进 main
 2. 在 main 上打**带注释的 tag**，注释就是 Release 正文（只写 Changelog，见下），推上去：
 
    ```bash
@@ -209,7 +211,7 @@ v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认�
    ```
 
 3. [`release.yml`](../../.github/workflows/release.yml) 接手：核对 tag 和代码里的版本号一致 →
-   `release.py build` → `release.py publish`（建 Release、传三样）→ `release.py verify`（下载回来核对）
+   `release.py build` → `release.py publish`（建 Release、传五个文件）→ `release.py verify`（下载回来核对）
 
 签名私钥在仓库 Secrets 的 `TAURI_SIGNING_PRIVATE_KEY`。没有它流水线直接失败，不会发出一个没签名的安装包。
 
@@ -248,7 +250,7 @@ python tools/release.py verify 1.4.0
 - **Release 正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档
   （用户 2026-10-09 定；PR 描述同理）。标题就是 `vX.Y.Z`
 - 「检查更新」只读 tag；一键更新读最新 Release 里的 `latest.json`——**漏传它，装了安装版的人就收不到这一版**，
-  所以 `publish` 三样缺一样就不发
+  所以 `publish` 五个文件缺一样就不发（不带版本号的两份漏了，主页的下载按钮就 404）
 
 > **签名私钥** `~/.tauri/dota2-game-helper2.key`（没设密码）**不进仓库，要备份**；Secrets 里那份
 > 读不出来，不能当备份。公钥写在 `tauri.conf.json` 的 `plugins.updater.pubkey`，装好的程序靠它验安装包。

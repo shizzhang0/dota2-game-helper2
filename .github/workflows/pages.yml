@@ -17,6 +17,7 @@ on:
       - 'constants/**'
       - 'docs/images/**'
       - 'tools/build_site.py'
+      - 'src-tauri/tauri.conf.json'   # 下载按钮下面的版本号取自这里
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 

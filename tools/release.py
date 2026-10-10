@@ -3,7 +3,7 @@
 步骤只写一份。流程见 docs/design/dev-tools.md「发版」。
 
     python tools/release.py bump 1.4.0      # 改三处版本号（之后照常提 PR 合进 main）
-    python tools/release.py build           # 打包：exe、安装包 + 签名、zip、latest.json → dist/release/
+    python tools/release.py build           # 打包：安装包 + 签名、zip、各一份不带版本号的、latest.json → dist/release/
     python tools/release.py publish NOTES   # 用 build 的产物建 GitHub Release，NOTES 是正文文件
     python tools/release.py verify 1.4.0    # 把 Release 上的文件下载回来核对 SHA256
 
@@ -20,10 +20,17 @@ REPO = "shizzhang0/dota2-game-helper2"
 # Tauri 命令行版本跟着 Cargo.lock 里的 tauri 走
 TAURI_CLI = "@tauri-apps/cli@2.11.5"
 KEY_FILE = Path.home() / ".tauri" / "dota2-game-helper2.key"
+# 每版另传一份**不带版本号**的安装包和 zip，项目主页和 README 的下载按钮链到
+# `releases/latest/download/<这个名字>`，永远是最新版，不用每次发版去改链接。
+# 带版本号的那两份照传：在 Releases 页上看得出是哪一版，一键更新的 latest.json 也指着它
+STABLE_SETUP = "dota2-game-helper2-setup.exe"
+STABLE_ZIP = "dota2-game-helper2-portable.zip"
 
 # Windows 上（包括 GitHub 的 windows runner）stdout 默认是 cp1252/GBK，打印中文会直接抛错
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+#（sys.exit 的报错走 stderr，两个都要改）
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
 
 
 def version():
@@ -72,9 +79,7 @@ def build():
     stray = subprocess.run(["git", "ls-files", "--others", "ui"], cwd=ROOT,
                            capture_output=True, text=True, check=True).stdout.split()
     if stray:
-        sys.exit("ui/ 里有没进仓库的文件，会被打进 exe，先挪走：
-  " + "
-  ".join(stray))
+        sys.exit("ui/ 里有没进仓库的文件，会被打进 exe，先挪走：\n  " + "\n  ".join(stray))
     npx = "npx.cmd" if os.name == "nt" else "npx"
     run([npx, "-y", TAURI_CLI, "build"], env=env)
 
@@ -113,6 +118,9 @@ def build():
     }
     (OUT / "latest.json").write_text(json.dumps(latest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+    shutil.copy2(OUT / setup.name, OUT / STABLE_SETUP)
+    shutil.copy2(zp, OUT / STABLE_ZIP)
+
     size_mb = exe.stat().st_size / 1048576
     print(f"\nexe {size_mb:.1f} MB（应约 7.5MB，大很多说明 ui/ 里混进了别的东西）")
     for p in sorted(OUT.iterdir()):
@@ -123,11 +131,13 @@ def publish(notes):
     v = version()
     files = [OUT / f"dota2-game-helper2-v{v}-windows-x64.zip",
              OUT / f"dota2-game-helper2_{v}_x64-setup.exe",
+             OUT / STABLE_ZIP, OUT / STABLE_SETUP,
              OUT / "latest.json"]
     for p in files:
         if not p.is_file():
             sys.exit(f"先 build：缺 {p.name}")
-    # 漏传 latest.json，装了安装版的人就收不到这一版——所以三样一起传，缺一样就不发
+    # 漏传 latest.json，装了安装版的人就收不到这一版；漏传不带版本号的那两份，主页的下载按钮就 404——
+    # 所以五个文件一起传，缺一样就不发
     run(["gh", "release", "create", f"v{v}", "--title", f"v{v}", "--notes-file", notes,
          *map(str, files)])
 

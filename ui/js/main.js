@@ -127,8 +127,8 @@ setInterval(() => {
   const { st, info } = cur;
   const e = cur.econ;
   render({
-    // 「始终显示」**不绕过 inMatch**：勾了它也只在对局中显示，主菜单里照样消失——
-    // 它的意思是"把按住 Alt 这个条件去掉"，不是"永远杵在桌面上"。
+    // 不勾「按住 Alt 才显示」（alwaysShow，默认）也**不绕过 inMatch**：只在对局中显示，
+    // 主菜单里照样消失——它的意思是"不用按 Alt"，不是"永远杵在桌面上"。
     // 编辑态则要绕过，调设置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
     visible: editMode || ((alt || cfg.alwaysShow) && info.inMatch && !stale),
     editMode,
@@ -147,8 +147,8 @@ setInterval(() => {
     ` nw=${e.networth} gpm=${e.gpm}`;
 }, 250);
 
-// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 始终显示、Ctrl+Alt+F10 编辑态，
-// v / e 是简写。**v 改的就是卡片上那个「始终显示」**，不另起一份状态——原先是独立的
+// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 按住 Alt 才显示、Ctrl+Alt+F10 编辑态，
+// v / e 是简写。**v 改的就是卡片上那个「按住 Alt 才显示」**，不另起一份状态——原先是独立的
 // forceShow，两者互不知道。见 design/overlay.md「只有一个值，卡片要跟着它变」。
 //
 // **只在带 body.dev 的开发页生效**（index.html 没有它）：Tauri 里这两个热键由 Rust 注册成

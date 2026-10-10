@@ -49,17 +49,16 @@ pub fn set_edit(app: &tauri::AppHandle, on: bool) {
 pub const EDIT_HOTKEY: &str = "ctrl+alt+F10";
 pub const EDIT_HOTKEY_LABEL: &str = "Ctrl+Alt+F10";
 
-/// 「始终显示」开关的热键，规则同上。
+/// 「按住 Alt 才显示」开关的热键。给人看的写法在设置卡片那个勾后面（`ui/js/editor.js`），
+/// 改这里记得改那边。
 ///
-/// **为什么值得再占一个全局热键**：想在对局中途开关它，原本唯一的入口是编辑态，
-/// 而编辑态会抢焦点、取消鼠标穿透——那一刻根本没法继续玩。于是这个开关事实上
-/// 退化成了"开局前设好就别动"，而它最有价值的用法恰恰是中途切换
-/// （对线打钱时开着，团战时关掉免得挡视野）。
+/// **为什么值得占一个全局热键**：默认对局中一直显示（v1.4.0 起），某个时刻嫌它挡东西，
+/// 想不切出游戏就把它收起来，只有这一条路——进设置卡片会抢焦点，那一刻没法继续玩。
+/// 托盘里原先也有这个开关，2026-10-10 去掉了：打游戏时任务栏被盖住，点托盘得先切出去。
 ///
 /// **不能用裸字母**：Dota 几乎把字母键占满了。带两个修饰键的 F 区组合不会撞游戏，
 /// 和编辑态的 `Ctrl+Alt+F10` 挨着，同一族好记。
 pub const ALWAYS_HOTKEY: &str = "ctrl+alt+F11";
-pub const ALWAYS_HOTKEY_LABEL: &str = "Ctrl+Alt+F11";
 
 pub fn toggle_edit(app: &tauri::AppHandle) {
     set_edit(app, !EDIT.load(Ordering::Relaxed));
