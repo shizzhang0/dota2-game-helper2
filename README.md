@@ -25,19 +25,21 @@ minimap. No extra window.
 Built on Dota 2's official GSI interface: no memory reading, no game file changes, no
 simulated input ([why this is safe](#why-this-is-safe)).
 
+<!-- v1.4.0 截图到手后恢复（见 docs/backlog.md「发 v1.4.0 之前」）
 ![The game with the overlay](docs/images/overlay.png)
 
 <sub>A real in-game screenshot: buyback under each portrait, enemy glyph at the enemy end
 of the top bar, the five timers below the game clock, net worth next to the kill counter,
 enemy wards on the minimap. Game imagery © Valve.</sub>
+-->
 
 ## Up and running in three minutes
 
 Windows 10 / 11.
 
-1. Download the **[installer](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-setup.exe)** and run it
+1. Download the **[installer](https://github.com/shizzhang0/dota2-game-helper2/releases/latest)** and run it
    (current user only, no admin rights needed). There's also a
-   [portable zip](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-portable.zip) with a single exe, but
+   [portable zip](https://github.com/shizzhang0/dota2-game-helper2/releases/latest) with a single exe, but
    it doesn't get one-click updates. Older versions are on [Releases](https://github.com/shizzhang0/dota2-game-helper2/releases)
 2. Add `-gamestateintegration` to Dota 2's launch options
 3. Run the game in **borderless window** mode
@@ -55,7 +57,7 @@ To turn items on or off: **left-click the tray icon**, or right-click → Settin
 
 ### Timers
 
-![Timers](docs/images/timers.png)
+<!-- ![Timers](docs/images/timers.png) -->
 
 | | Normal | Turbo |
 |---|---|---|
@@ -71,7 +73,7 @@ last 10 seconds.
 
 ### Buyback and enemy glyph
 
-![Buyback and glyph](docs/images/topbar.png)
+<!-- ![Buyback and glyph](docs/images/topbar.png) -->
 
 **Buyback**: all ten players' buyback cooldowns, each under that player's portrait — a
 small pile of coins plus the seconds left, shown only while on cooldown. The game
@@ -85,7 +87,7 @@ glyph right now**, not just when they last used one.
 
 ### Net worth
 
-![Net worth](docs/images/econ.png)
+<!-- ![Net worth](docs/images/econ.png) -->
 
 Net worth, GPM and XPM, next to the kill counter at the top left. Net worth = items +
 stash + ward dispenser + items in transit on the courier + gold.
@@ -95,7 +97,7 @@ stash + ward dispenser + items in transit on the courier + gold.
 
 ### Wards
 
-![Wards](docs/images/minimap.png)
+<!-- ![Wards](docs/images/minimap.png) -->
 
 Three things the native minimap doesn't show, drawn straight onto it:
 

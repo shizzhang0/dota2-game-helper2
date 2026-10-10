@@ -211,7 +211,8 @@ v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认�
    ```
 
 3. [`release.yml`](../../.github/workflows/release.yml) 接手：核对 tag 和代码里的版本号一致 →
-   `release.py build` → `release.py publish`（建 Release、传五个文件）→ `release.py verify`（下载回来核对）
+   `release.py build` → `release.py publish`（建 Release、传五个文件）→ `release.py verify`（下载回来核对）。
+   跑成功之后 [`pages.yml`](../../.github/workflows/pages.yml) 自动重新发项目主页（下载按钮下的版本号跟着变）
 
 签名私钥在仓库 Secrets 的 `TAURI_SIGNING_PRIVATE_KEY`。没有它流水线直接失败，不会发出一个没签名的安装包。
 

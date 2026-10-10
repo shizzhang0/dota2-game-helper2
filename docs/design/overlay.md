@@ -376,6 +376,11 @@ SSE            EventSource("stream?speed=…")      开发用的回放服务器
 `tools/build_site.py` 把它们和 `ui/` `constants/` 组装成 `dist/`，
 `.github/workflows/pages.yml` 调同一个脚本发出去。
 
+> **主页跟着发版走**（2026-10-10 改）：原先 main 上 `site/`、`ui/` 等一变就重新发，现在改成
+> **Release 流水线（推 tag 那种）跑成功之后才发**，另可在 Actions 页面手动发。主页上的下载按钮和版本号
+> 都对应最新 Release，跟着 main 发会出现"按钮指向还没发的版本"的空档——v1.4.0 的 PR 先合、晚几天才发版就是这样。
+> 用 `workflow_run` 不用 `release: published`：Release 是用 GITHUB_TOKEN 建的，它造的事件不触发别的流水线。
+
 **组装逻辑放脚本不放 YAML**：写进 workflow 就没法本地验了。
 `python tools/build_site.py --serve` 起出来的，和线上发的是同一份。
 

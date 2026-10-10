@@ -23,17 +23,19 @@
 基于 Dota 2 官方的 GSI 接口：不读内存、不改游戏文件、不模拟输入
 （[为什么这是安全的](#为什么这是安全的)）。
 
+<!-- v1.4.0 截图到手后恢复（见 docs/backlog.md「发 v1.4.0 之前」）
 ![实际游戏画面](docs/images/overlay.png)
 
 <sub>实际游戏画面：买活在每个人的头像底下，敌方塔防在对面那一端，五个倒计时在计时牌正下方，
 净资产在左上角击杀数旁边，敌方眼画在小地图上。游戏画面 © Valve。</sub>
+-->
 
 ## 三分钟上手
 
 需要 Windows 10 / 11。
 
-1. 下载 **[安装版](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-setup.exe)** 并安装
-   （只装给当前用户，不要管理员权限）。也可以下 [便携版 zip](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-portable.zip)，
+1. 下载 **[安装版](https://github.com/shizzhang0/dota2-game-helper2/releases/latest)** 并安装
+   （只装给当前用户，不要管理员权限）。也可以下 [便携版 zip](https://github.com/shizzhang0/dota2-game-helper2/releases/latest)，
    解压出来就一个 exe，但没有一键更新。历史版本在 [Releases](https://github.com/shizzhang0/dota2-game-helper2/releases)
 2. 给 Dota 2 的启动项加上 `-gamestateintegration`
 3. 游戏用**无边框窗口**模式
@@ -50,7 +52,7 @@
 
 ### 倒计时
 
-![倒计时](docs/images/timers.png)
+<!-- ![倒计时](docs/images/timers.png) -->
 
 | | 常规模式 | 快速模式 |
 |---|---|---|
@@ -65,7 +67,7 @@
 
 ### 买活与敌方塔防
 
-![买活与塔防](docs/images/topbar.png)
+<!-- ![买活与塔防](docs/images/topbar.png) -->
 
 **买活**：十个人的买活冷却挂在各自头像底下，一小堆金币加剩余秒数，冷却中才出现。
 敌人买活游戏只播报一下就没了；**队友的买活冷却原生界面根本不显示**
@@ -77,7 +79,7 @@
 
 ### 净资产
 
-![净资产](docs/images/econ.png)
+<!-- ![净资产](docs/images/econ.png) -->
 
 净资产、GPM、XPM，就在左上角击杀数旁边。净资产 = 装备 + 储藏处 + 眼架 + 信使在途 + 金钱。
 
@@ -85,7 +87,7 @@
 
 ### 眼位
 
-![眼位](docs/images/minimap.png)
+<!-- ![眼位](docs/images/minimap.png) -->
 
 下面三样原生小地图不显示，直接补在它上面：
 
