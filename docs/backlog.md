@@ -18,8 +18,11 @@ Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本�
 
 1. **用户截图**（要求见下）
 2. 裁出 `docs/images/` 下的 `overlay.jpg`（首图，整屏缩小）、`timers.jpg`、`topbar.jpg`、`econ.jpg`、`minimap.jpg`。
-   **2026-10-11 已裁四张**（m9039232580 的截图，见 [design/overlay.md](design/overlay.md)「截图」），**只差 `topbar.jpg`**：
-   那局没人买活、对面也没开过塔防，要再打一局补截（顺便截干净的那张）
+   **2026-10-11 已裁四张**（m9039232580 的截图，中文客户端，见 [design/overlay.md](design/overlay.md)「截图」）。
+   首图和净资产带中文，已改名 `overlay-zh.jpg` / `econ-zh.jpg` 给中文 README。还差：
+   - **下一局把 Dota 切成英文客户端**（Steam → Dota 2 属性 → 语言 → English），截英文首图（净资产从里面裁）→ `overlay.jpg` / `econ.jpg`
+   - `topbar.jpg`：那局没人买活、对面也没开过塔防，这局补截
+   - 干净的那张（主页 demo 背景，用英文客户端的）
 3. README 里引用的就是上面这五个文件名，放进去就行
 4. **重做主页 demo**：背景用干净截图，数据用同一局录制在那一刻前后约 20 秒的切片（`tools/make_demo.py`）。
    `site/demo.html`、`index.html` 里 demo 的说明和 900×400 那段注释一起改，见 [design/overlay.md](design/overlay.md)「站点」
