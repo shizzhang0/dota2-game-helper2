@@ -17,11 +17,13 @@ Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本�
 ### 步骤
 
 1. **用户截图**（要求见下）
-2. 裁出 `docs/images/` 下的 `overlay.png`（首图，整屏缩小）、`timers.png`、`topbar.png`、`econ.png`、`minimap.png`
+2. 裁出 `docs/images/` 下的 `overlay.jpg`（首图，整屏缩小）、`timers.jpg`、`topbar.jpg`、`econ.jpg`、`minimap.jpg`。
+   **2026-10-11 已裁四张**（m9039232580 的截图，见 [design/overlay.md](design/overlay.md)「截图」），**只差 `topbar.jpg`**：
+   那局没人买活、对面也没开过塔防，要再打一局补截（顺便截干净的那张）
 3. README 里引用的就是上面这五个文件名，放进去就行
 4. **重做主页 demo**：背景用干净截图，数据用同一局录制在那一刻前后约 20 秒的切片（`tools/make_demo.py`）。
    `site/demo.html`、`index.html` 里 demo 的说明和 900×400 那段注释一起改，见 [design/overlay.md](design/overlay.md)「站点」
-5. **加分享卡片**：`og:title` / `og:description` / `og:image`（实拍 `overlay.png`）、`twitter:card`
+5. **加分享卡片**：`og:title` / `og:description` / `og:image`（实拍 `overlay.jpg`）、`twitter:card`
 6. `python tools/release.py bump 1.4.0` → `python tools/make_shots.py`（卡片截图上有版本号）→ 推到 PR #93、CI 过了合并 →
    **马上**打带注释的 tag（Changelog）推上去。Release 跑完 Pages 自动发
 7. 发版后：装一个旧版本号的安装包测一键更新；继续走 [verify-checklist.md](verify-checklist.md) 第七节

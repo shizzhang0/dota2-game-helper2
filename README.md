@@ -25,7 +25,7 @@ minimap. No extra window.
 Built on Dota 2's official GSI interface: no memory reading, no game file changes, no
 simulated input ([why this is safe](#why-this-is-safe)).
 
-![The game with the overlay](docs/images/overlay.png)
+![The game with the overlay](docs/images/overlay.jpg)
 
 <sub>A real in-game screenshot: buyback under each portrait, enemy glyph at the enemy end
 of the top bar, the five timers below the game clock, net worth next to the kill counter,
@@ -55,7 +55,7 @@ To turn items on or off: **left-click the tray icon**, or right-click → Settin
 
 ### Timers
 
-![Timers](docs/images/timers.png)
+![Timers](docs/images/timers.jpg)
 
 | | Normal | Turbo |
 |---|---|---|
@@ -71,7 +71,7 @@ last 10 seconds.
 
 ### Buyback and enemy glyph
 
-![Buyback and glyph](docs/images/topbar.png)
+![Buyback and glyph](docs/images/topbar.jpg)
 
 **Buyback**: all ten players' buyback cooldowns, each under that player's portrait — a
 small pile of coins plus the seconds left, shown only while on cooldown. The game
@@ -85,7 +85,7 @@ glyph right now**, not just when they last used one.
 
 ### Net worth
 
-![Net worth](docs/images/econ.png)
+![Net worth](docs/images/econ.jpg)
 
 Net worth, GPM and XPM, next to the kill counter at the top left. Net worth = items +
 stash + ward dispenser + items in transit on the courier + gold.
@@ -95,7 +95,7 @@ stash + ward dispenser + items in transit on the courier + gold.
 
 ### Wards
 
-![Wards](docs/images/minimap.png)
+![Wards](docs/images/minimap.jpg)
 
 Three things the native minimap doesn't show, drawn straight onto it:
 
@@ -108,7 +108,7 @@ Three things the native minimap doesn't show, drawn straight onto it:
 Whether your minimap is on the left or right and whether it's extra large is **read from
 Dota's own settings** — nothing to line up by hand.
 
-## Want a clean screen? Make it hold-Alt only
+## Only while holding Alt
 
 By default it stays up throughout a match and disappears back in the main menu.
 
@@ -120,7 +120,7 @@ Alt is only read passively; no input is intercepted, so Alt works in-game exactl
 
 ## What's supported
 
-| | |
+| Item | Status |
 |---|---|
 | Game modes | Ranked / unranked / Turbo |
 | Spectating · replays | Hidden (GSI sends everyone's data then, which would make net worth and buyback wrong) |
@@ -134,7 +134,7 @@ game that everything lines up.
 
 <img src="docs/images/card.png" width="362" alt="The settings card">
 
-| | |
+| Setting | What it does |
 |---|---|
 | **Display** | A toggle for each of the nine items; the icons double as the legend |
 | **Show** | "Only while holding Alt" — see above |

@@ -140,6 +140,8 @@ export function renderWardMap(m, opt, edit) {
     `x="${sx(o.x).toFixed(1)}" y="${(sy(o.y) - 2.6).toFixed(1)}">${o.remaining}</text>`;
   wardLayer.innerHTML = w.enemy.filter(o => !o.visible).map(dot).join("") +
                         w.killed.map(cross).join("") +
-                        (w.own || []).filter(o => o.remaining !== null && o.remaining <= LABEL_BELOW)
+                        // 到 0 就不写：眼在游戏里已经没了，GSI 还会多报 7 秒左右（见 wards.md），
+                        // 不挡的话一个"0"会飘在空地上（2026-10-11 截图里看到的）
+                        (w.own || []).filter(o => o.remaining !== null && o.remaining > 0 && o.remaining <= LABEL_BELOW)
                           .map(label).join("");
 }

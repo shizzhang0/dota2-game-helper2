@@ -33,7 +33,7 @@ PORT = 8077
 
 # 首页引用到的截图。只拷用得上的，不把整个 docs/ 发出去——
 # docs/design/ 是中文开发笔记，不是给访客看的。
-SITE_IMAGES = ["timers.png", "topbar.png", "econ.png", "minimap.png"]
+SITE_IMAGES = ["timers.jpg", "topbar.jpg", "econ.jpg", "minimap.jpg"]
 
 
 def fill_versions(page):
