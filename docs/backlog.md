@@ -20,7 +20,10 @@ Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本�
 2. 裁出 `docs/images/` 下的 `overlay.jpg`（首图，整屏缩小）、`timers.jpg`、`topbar.jpg`、`econ.jpg`、`minimap.jpg`。
    **2026-10-11 已裁四张**（m9039232580 的截图，中文客户端，见 [design/overlay.md](design/overlay.md)「截图」）。
    首图和净资产带中文，已改名 `overlay-zh.jpg` / `econ-zh.jpg` 给中文 README。还差：
-   - **下一局把 Dota 切成英文客户端**（Steam → Dota 2 属性 → 语言 → English），截英文首图（净资产从里面裁）→ `overlay.jpg` / `econ.jpg`
+   - **下一局把 Dota 切成英文客户端**（Steam → Dota 2 属性 → 语言 → English），截英文首图 → `overlay.jpg`。
+     `econ.jpg` 已有（2026-10-13，m9043182031 22:54 那张）。那局三张都按着 Alt、都带别人的中文昵称，不当首图——
+     **截首图别按 Alt**（覆盖层默认一直显示），挑屏幕上没有击杀播报 / 聊天 / 打赏面板的时刻
+   - 倒计时 2026-10-12 挪了位置（顶边 44 → 88），`timers.jpg` 是旧位置，要从新截图重裁
    - `topbar.jpg`：那局没人买活、对面也没开过塔防，这局补截
    - 干净的那张（主页 demo 背景，用英文客户端的）
 3. README 里引用的就是上面这五个文件名，放进去就行
