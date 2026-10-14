@@ -90,12 +90,8 @@ async function replayFile(url, onPacket, speed, loop) {
   tick();
 }
 
-export function onAltChange(cb) {
-  if (isTauri()) {
-    window.__TAURI__.event.listen("alt", (e) => cb(e.payload === true));
-    return;
-  }
-  addEventListener("keydown", (e) => { if (e.key === "Alt") { e.preventDefault(); cb(true); } });
-  addEventListener("keyup",   (e) => { if (e.key === "Alt") { e.preventDefault(); cb(false); } });
-  addEventListener("blur", () => cb(false));
+/** Ctrl+Alt+F11（全局热键，Rust 注册）按一下就回调一次：切换临时隐藏。
+    浏览器里没有全局热键，开发页的同一组键在 main.js 里直接处理。 */
+export function onToggleHide(cb) {
+  if (isTauri()) window.__TAURI__.event.listen("toggle-hide", () => cb());
 }

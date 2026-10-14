@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod altkey;
 mod constants;
 mod dotacfg;
 mod gsi;
@@ -49,16 +48,16 @@ pub fn set_edit(app: &tauri::AppHandle, on: bool) {
 pub const EDIT_HOTKEY: &str = "ctrl+alt+F10";
 pub const EDIT_HOTKEY_LABEL: &str = "Ctrl+Alt+F10";
 
-/// 「按住 Alt 才显示」开关的热键。给人看的写法在设置卡片那个勾后面（`ui/js/editor.js`），
-/// 改这里记得改那边。
+/// 临时隐藏覆盖层的热键：按一下收起、再按一下恢复。**不存盘**，前端记着，换下一局或重启程序自动恢复显示。
+/// 给人看的写法在设置卡片底部的提示里（`card.hint`），改这里记得改那边。
 ///
-/// **为什么值得占一个全局热键**：默认对局中一直显示（v1.4.0 起），某个时刻嫌它挡东西，
-/// 想不切出游戏就把它收起来，只有这一条路——进设置卡片会抢焦点，那一刻没法继续玩。
-/// 托盘里原先也有这个开关，2026-10-10 去掉了：打游戏时任务栏被盖住，点托盘得先切出去。
+/// 原先是「按住 Alt 才显示」那个开关的热键；2026-10-14 那个开关连同 Alt 检测一起去掉了
+/// （对局中一直显示），这个键留下来当临时隐藏——截干净的游戏截图、某一刻嫌它挡东西时用，
+/// 不切出游戏就能收起来（进设置卡片会抢焦点，那一刻没法继续玩）。
 ///
 /// **不能用裸字母**：Dota 几乎把字母键占满了。带两个修饰键的 F 区组合不会撞游戏，
 /// 和编辑态的 `Ctrl+Alt+F10` 挨着，同一族好记。
-pub const ALWAYS_HOTKEY: &str = "ctrl+alt+F11";
+pub const HIDE_HOTKEY: &str = "ctrl+alt+F11";
 
 pub fn toggle_edit(app: &tauri::AppHandle) {
     set_edit(app, !EDIT.load(Ordering::Relaxed));
@@ -80,7 +79,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts([EDIT_HOTKEY, ALWAYS_HOTKEY])
+                .with_shortcuts([EDIT_HOTKEY, HIDE_HOTKEY])
                 .expect("注册全局热键失败")
                 .with_handler(|app, shortcut, event| {
                     if event.state() != ShortcutState::Pressed {
@@ -93,8 +92,9 @@ fn main() {
                     };
                     if is(EDIT_HOTKEY) {
                         toggle_edit(app);
-                    } else if is(ALWAYS_HOTKEY) {
-                        settings::toggle_always_show(app);
+                    } else if is(HIDE_HOTKEY) {
+                        let _ = app.emit("toggle-hide", ());
+                        logf!(Level::Info, "[hide] 切换临时隐藏");
                     }
                 })
                 .build(),
@@ -114,7 +114,6 @@ fn main() {
             constants::log_version();
             record::init(app.handle());          // 必须在 gsi 之前：第一包来的时候它得已经在
             gsi::spawn(app.handle().clone());
-            altkey::spawn(app.handle().clone());
             hittest::spawn(app.handle().clone());
             gsicfg::ensure_cfg();
             Ok(())

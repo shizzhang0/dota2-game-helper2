@@ -1,4 +1,4 @@
-import { connectSource, onAltChange, isTauri } from "./source.js";
+import { connectSource, onToggleHide, isTauri } from "./source.js";
 import { CachePool } from "./cachepool.js";
 import { MatchTracker } from "./match.js";
 import { loadConstants, computeTimers } from "./timers.js";
@@ -6,7 +6,7 @@ import { EventTracker, loadTowers } from "./events.js";
 import { loadPrices, EconTracker } from "./networth.js";
 import { initPanel, render } from "./render.js";
 import { WardTracker, deadTowers } from "./minimap.js";
-import { loadSettings, saveSettings, onSettingsChange } from "./settings.js";
+import { loadSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
 import { checkUpdate } from "./update.js";
 import { readDotaHud, minimapOpts } from "./dotahud.js";
@@ -24,14 +24,16 @@ if (isTauri()) {
 }
 
 const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker();
-let tracker = null, C = null, alt = false, last = null, editMode = false;
+let tracker = null, C = null, last = null, editMode = false;
+// 临时隐藏（Ctrl+Alt+F11）：只在内存里，换下一局、重启程序都自动恢复显示
+let hidden = false;
 let wards = null;
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
 // Dota 自己的 HUD 设置：启动时读一次，之后每局开始再读（见 dotahud.js）
 readDotaHud();
 
 // **断流多久算断。** Dota 崩了、被关掉、或者网络断了之后不会有任何通知，
-// `last` 会一直留着最后一包——按住 Alt 仍然显示一份**冻结**的旧面板：
+// `last` 会一直留着最后一包——覆盖层仍然显示一份**冻结**的旧面板：
 // 倒计时不动、净资产不动，而它看起来和正常面板一模一样，比不显示更坏。
 //
 // 阈值要分两档，因为 GSI 配置里 `heartbeat` 是 **30 秒**（见 `gsicfg.rs`）：
@@ -71,7 +73,7 @@ addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });
 connectSource(async (pkt) => {
   const st = pool.update(pkt);
   const info = match.update(st);
-  if (info.newMatch) { pool.reset(); readDotaHud(); }
+  if (info.newMatch) { pool.reset(); readDotaHud(); hidden = false; }
   C = await loadConstants(info.modeOrDefault);
   if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
   tracker.C = C;                       // 模式判定完成后热切常数
@@ -94,13 +96,7 @@ connectSource(async (pkt) => {
   lastAt = Date.now();
 });
 
-// **只在真的变化时才记日志。** Rust 那边每秒会无条件重发一次当前状态
-// （见 `altkey.rs` 的失步自愈），不过滤的话日志一秒一条。
-// debug 级，默认的 info 下不落盘；真遇上"Alt 变成切换键"再把级别调到 debug 看这条。
-onAltChange((d) => {
-  if (d !== alt) send("debug", `[alt] ${alt} -> ${d}`);
-  alt = d;
-});
+onToggleHide(() => { hidden = !hidden; send("info", `[hide] 临时隐藏 = ${hidden}`); });
 
 // 没有 GSI 数据时的占位，用于编辑态——调设置、看位置对不对，恰恰要在开游戏之前做，
 // 若等到有数据才渲染，没开 Dota 时面板根本不出现。
@@ -127,10 +123,10 @@ setInterval(() => {
   const { st, info } = cur;
   const e = cur.econ;
   render({
-    // 不勾「按住 Alt 才显示」（alwaysShow，默认）也**不绕过 inMatch**：只在对局中显示，
-    // 主菜单里照样消失——它的意思是"不用按 Alt"，不是"永远杵在桌面上"。
+    // **对局中一直显示**（2026-10-14 起；原先有「按住 Alt 才显示」可选，连同 Alt 检测一起去掉了）。
+    // 不绕过 inMatch：主菜单里照样消失，不会杵在桌面上。Ctrl+Alt+F11 可以临时收起。
     // 编辑态则要绕过，调设置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
-    visible: editMode || ((alt || cfg.alwaysShow) && info.inMatch && !stale),
+    visible: editMode || (info.inMatch && !stale && !hidden),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
@@ -147,19 +143,17 @@ setInterval(() => {
     ` nw=${e.networth} gpm=${e.gpm}`;
 }, 250);
 
-// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 按住 Alt 才显示、Ctrl+Alt+F10 编辑态，
-// v / e 是简写。**v 改的就是卡片上那个「按住 Alt 才显示」**，不另起一份状态——原先是独立的
-// forceShow，两者互不知道。见 design/overlay.md「只有一个值，卡片要跟着它变」。
+// 开发快捷键：和正式版同一套热键——Ctrl+Alt+F11 临时隐藏、Ctrl+Alt+F10 编辑态，v / e 是简写。
 //
 // **只在带 body.dev 的开发页生效**（index.html 没有它）：Tauri 里这两个热键由 Rust 注册成
 // 全局热键，编辑态下 webview 有焦点也会收到同一个按键，这里再切一次就等于没切。
-// 项目主页的 demo 也不带，那里只该有 Alt。
+// 项目主页的 demo 也不带。
 addEventListener("keydown", (ev) => {
   if (!document.body.classList.contains("dev")) return;
   const hot = ev.ctrlKey && ev.altKey;
   const toggleShow = hot ? ev.key === "F11" : ev.key === "v" && !ev.ctrlKey && !ev.altKey;
   const toggleEdit = hot ? ev.key === "F10" : ev.key === "e" && !ev.ctrlKey && !ev.altKey;
   if (toggleShow || toggleEdit) ev.preventDefault();   // F11 在浏览器里是全屏
-  if (toggleShow) saveSettings({ ...cfg, alwaysShow: !cfg.alwaysShow });
+  if (toggleShow) hidden = !hidden;
   if (toggleEdit) applyEdit(!editMode);
 });

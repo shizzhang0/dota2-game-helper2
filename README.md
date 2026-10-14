@@ -108,15 +108,13 @@ Three things the native minimap doesn't show, drawn straight onto it:
 Whether your minimap is on the left or right and whether it's extra large is **read from
 Dota's own settings** — nothing to line up by hand.
 
-## Only while holding Alt
+## Hide it for a moment
 
-By default it stays up throughout a match and disappears back in the main menu.
+It stays up throughout a match and disappears back in the main menu.
 
-Rather not have it there all the time? Tick **Only while holding Alt** in the settings, and
-it only appears while you hold Alt. To tuck it away mid-match, press **`Ctrl+Alt+F11`** —
-it flips the same setting.
-
-Alt is only read passively; no input is intercepted, so Alt works in-game exactly as before.
+If it's in the way for a moment, or you want a clean screenshot of the game, press
+**`Ctrl+Alt+F11`** to hide it and again to bring it back. It comes back by itself at the
+next match.
 
 ## What's supported
 
@@ -137,7 +135,6 @@ game that everything lines up.
 | Setting | What it does |
 |---|---|
 | **Display** | A toggle for each of the nine items; the icons double as the legend |
-| **Show** | "Only while holding Alt" — see above |
 | **Minimap** | "Auto" by default, followed by what it read from Dota's settings; pick it by hand if that's wrong |
 | **Log level · Open data folder** | For bug reports |
 | **Version** | **NEW** appears next to it when there's an update |
@@ -174,7 +171,7 @@ then delete the old exe.
 | ❌ Read game memory | ✅ Receive the data the game itself sends to `127.0.0.1:53000` |
 | ❌ Modify game files | ✅ Write one GSI config file (the mechanism Valve built for this) |
 | ❌ Inject into the process / hook graphics APIs | ✅ Be an ordinary transparent always-on-top window |
-| ❌ Simulate any input | ✅ Passively read the Alt key state |
+| ❌ Simulate input or read your keystrokes | ✅ Register two global hotkeys: `Ctrl+Alt+F10` opens the settings, `Ctrl+Alt+F11` hides it for a moment |
 | ❌ Phone home | ✅ Ask GitHub for a newer version on startup and when you press Check for updates, sending no personal data; download only when you press Update now |
 
 It also **reads** Dota's own settings file under Steam's `userdata` to find the minimap's

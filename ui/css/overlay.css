@@ -355,6 +355,9 @@ html, body {
 /* ── 设置卡片：一页 ──────────────────────────────────
    原先分四个图标页签（显示项 / 面板 / 图例 / 开发）；内容删减后一页放得下（2026-10-09）。 */
 .ed-sec { color: var(--dim); font-weight: 600; margin: 0 0 7px; }
+/* 「显示」这一节标题右边写临时隐藏的热键（原先写在「按住 Alt 才显示」那个勾后面，2026-10-14 那个勾去掉了） */
+.ed-sec-row { display: flex; justify-content: space-between; align-items: baseline; }
+.ed-sec-row .ed-note { font-weight: 400; }
 /* 九个显示项排三列三行（原先两列五行），卡片因此矮了两行 */
 .ed-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; }
 .ed-grid .ed-chk { white-space: nowrap; gap: 5px; }

@@ -201,8 +201,8 @@ export class WardTracker {
       }
       this.own.delete(key);
     }
-    // 被排的叉保留多久。**原先写死 3 秒，太短了**——面板默认按住 Alt 才出现，
-    // 3 秒意味着那一眼没正好按下去就彻底错过。走常数表，用户嫌长嫌短都能自己改。
+    // 被排的叉保留多久。**原先写死 3 秒，太短了**——那时面板要按住 Alt 才出现，
+    // 3 秒意味着那一眼没正好按下去就彻底错过。走常数表（现在 45 秒）。
     this.killed = this.killed.filter(k => clock - k.at < killedShow(this.C));
 
     // 我方真眼此刻的位置。用本包看到的而不是 this.own：真眼要是同一刻也没了，

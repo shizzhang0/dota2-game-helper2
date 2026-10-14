@@ -287,8 +287,8 @@
   }
 
   // ── demo ────────────────────────────────────────
-  // **不再演示按 Alt**（v1.4.0）：默认对局中一直显示，
-  // 「按住 Alt 才显示」降成了可选项。demo 就照默认的样子常显。
+  // **不再演示按 Alt**（v1.4.0）：对局中一直显示（2026-10-14 起没有「按住 Alt 才显示」了），
+  // demo 就照这个样子常显。
   const frame = document.getElementById("demo");
   function fit() { frame.style.transform = `scale(${frame.parentElement.clientWidth / 900})`; }
   addEventListener("resize", fit);

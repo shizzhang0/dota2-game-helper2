@@ -1,4 +1,4 @@
-import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings, onSettingsChange } from "./settings.js";
+import { SHOW_KEYS, DEFAULTS, loadSettings, saveSettings } from "./settings.js";
 import { isTauri, fetchConstant } from "./source.js";
 import { checkUpdate, lastUpdate, onUpdate, openReleasePage, isInstalled, installUpdate } from "./update.js";
 import { icon, CELL_ICON } from "./icons.js";
@@ -179,14 +179,6 @@ export async function initEditor(cardEl, onDone) {
   card = cardEl; doneCb = onDone;
   new ResizeObserver(() => { if (!card.hidden) reportRect(); }).observe(card);
   await build(await loadSettings());
-  // **「按住 Alt 才显示」还能从卡片外面改**（Ctrl+Alt+F11、托盘、网页里的 v 键），勾要跟着变。
-  // 不跟的话卡片攥着旧值，进编辑态随便动一下别的，collect() 就把旧值存回去，
-  // 刚切的状态被悄悄改回。**只同步这一个**：其余控件只有卡片自己改，而改控件时
-  // settings 事件是异步回来的，套回去控件会往回跳。按 id 现查，切语言会整卡重建。
-  onSettingsChange((v) => {
-    const el = card.querySelector("#edAltOnly");
-    if (el && typeof v?.alwaysShow === "boolean") el.checked = !v.alwaysShow;
-  });
 }
 
 /** 建卡片和绑事件必须是同一个函数：切语言要整个 innerHTML 重建，
@@ -203,7 +195,7 @@ async function build(s) {
   // 不在卡片里放 devTools 的开关——录制刻意不让普通用户看到，见 design/overlay.md「开发区」。
   card.innerHTML = `
     <div class="ed-bar">${t("card.title")}</div>
-    <div class="ed-sec">${t("card.show")}</div>
+    <div class="ed-sec ed-sec-row">${t("card.show")}<span class="ed-note">Ctrl+Alt+F11 ${t("card.tempHide")}</span></div>
     <div class="ed-grid">${SHOW_KEYS.map(k =>
       `<label class="ed-chk"><input type="checkbox" data-show="${k}"${
         s.show?.[k] !== false ? " checked" : ""
@@ -212,9 +204,6 @@ async function build(s) {
     <div class="ed-sep"></div>
     <div class="ed-sec">${t("card.general")}</div>
     <div class="ed-form">
-      <span>${t("card.showMode")}</span>
-      <label class="ed-chk"><input id="edAltOnly" type="checkbox"${s.alwaysShow ? "" : " checked"}>${t("card.altOnly")}
-        <span class="ed-note">Ctrl+Alt+F11</span></label>
       <span>${t("card.lang")}</span>
       <select id="edLang">${LANGS.map(([v, name]) =>
         `<option value="${v}">${name}</option>`).join("")}</select>
@@ -251,14 +240,10 @@ async function build(s) {
     </div>`;
 
   const $ = (id) => card.querySelector("#" + id);
-  const         log = $("edLog"), record = $("edRecord"), lang = $("edLang"),
-        altOnly = $("edAltOnly"), mm = $("edMm");
+  const log = $("edLog"), record = $("edRecord"), lang = $("edLang"), mm = $("edMm");
   log.value = s.logLevel ?? DEFAULTS.logLevel;
   // 录制那几行只在 devTools 为真时才建（见 design/overlay.md「开发区」），不建就是 null
   if (record) record.checked = !!s.recordMatches;
-  // 存盘的字段仍叫 alwaysShow（老配置文件照常读），界面上反过来：勾 = 只在按住 Alt 时显示。
-  // 默认是一直显示，开关只描述那个例外（2026-10-10 用户定）
-  altOnly.checked = s.alwaysShow === false;
   lang.value = s.lang ?? DEFAULTS.lang;
   mm.value = MINIMAP_MODES.includes(s.minimap) ? s.minimap : "auto";
   // 「自动」时在后面写出读到的是什么（左下 · 普通），读不到也说一声——
@@ -275,7 +260,6 @@ async function build(s) {
   const collect = () => ({
     show: Object.fromEntries([...card.querySelectorAll("[data-show]")]
       .map(el => [el.dataset.show, el.checked])),
-    alwaysShow: !altOnly.checked,
     minimap: mm.value,
     logLevel: log.value,
     recordMatches: record ? record.checked : !!s.recordMatches,
@@ -307,16 +291,13 @@ async function build(s) {
     if (!card.hidden) keepInView();
   });
 
-  // 「重置」把这张卡片管的外观一次还原：九个勾 + 按住 Alt 才显示（回到不勾）+ 小地图回到「自动」。
+  // 「重置」把这张卡片管的外观一次还原：九个勾 + 小地图回到「自动」。
   // （块的位置 2026-10-08 起跟着 Dota 的界面走、不能拖，也就没有摆位要还原了。）
-  // **「按住 Alt 才显示」也还原成默认**（不勾，即一直显示）：它是外观行为、和显示项同类，
-  // 还原它不会造成任何数据损失。
   // 开发区那两项不动——悄悄关掉正在录的对局，用户不会知道自己丢了数据。
   // **语言也不动**：重置回中文会让看不懂中文的用户无法退出这个状态，
   // 用户得先猜出哪一行是语言、再猜哪个选项是英文。可恢复性是重置的前提。
   $("edReset").addEventListener("click", () => {
     for (const el of card.querySelectorAll("[data-show]")) el.checked = DEFAULTS.show[el.dataset.show];
-    altOnly.checked = !DEFAULTS.alwaysShow;
     mm.value = DEFAULTS.minimap;
     mmRefresh();
     saveSettings(collect());

@@ -15,8 +15,8 @@ static SWALLOW_UP: AtomicBool = AtomicBool::new(false);
 /// 设置本身就是编辑态里那张卡片，不再有独立设置窗口。
 ///
 /// 原先还有一项带勾的「始终显示」，给对局中途切换用。2026-10-10 去掉了：
-/// 打游戏时无边框窗口盖住任务栏，点托盘得先切出游戏；中途切换靠的是 `Ctrl+Alt+F11`，
-/// 设置卡片里也有同一个开关（v1.4.0 起改叫「按住 Alt 才显示」）。
+/// 打游戏时无边框窗口盖住任务栏，点托盘得先切出游戏。2026-10-14 这个开关整个去掉了（对局中一直显示），
+/// `Ctrl+Alt+F11` 改成临时隐藏，见 main.rs 的 `HIDE_HOTKEY`。
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     // 热键拼在 Rust 里，不进语言包：`Ctrl+Alt+F10` 两种语言一个样。
     //
