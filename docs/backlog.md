@@ -21,7 +21,7 @@ Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本�
    **2026-10-11 已裁四张**（m9039232580 的截图，中文客户端，见 [design/overlay.md](design/overlay.md)「截图」）。
    首图和净资产带中文，已改名 `overlay-zh.jpg` / `econ-zh.jpg` 给中文 README。还差：
    - **首图只截中文的**，英文版用 `tools/relabel_shot.ps1` 生成（2026-10-14，见 [design/dev-tools.md](design/dev-tools.md)「README 截图改英文」）。
-     截图要求：**别按 Alt**、屏幕上没有击杀播报 / 聊天 / 打赏面板 / 物品打造通知。
+     截图要求：**别按 Alt**。击杀播报 / 聊天 / 打赏面板 / 物品打造通知可以用 `tools/mosaic.ps1` 打码，不必重截。
      中文原样 → `overlay-zh.jpg`，改字版 → `overlay.jpg`。`econ.jpg` 已有英文客户端实拍的（m9043182031 22:54）
    - 倒计时 2026-10-12 挪了位置（顶边 44 → 88），`timers.jpg` 是旧位置，要从新截图重裁
    - `topbar.jpg`：那局没人买活、对面也没开过塔防，这局补截

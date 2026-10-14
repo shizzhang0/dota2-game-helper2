@@ -10,8 +10,8 @@
   4. 右下角  快速购买提示      → Drag or shift-click items to add to Quickbuy.（快速购买栏空着时才有）
 第五处（右下角金钱上方的买活框）截图时避开：**别按 Alt**，它只在按住 Alt 时出现。
 
-做法：先把中文字抹掉、用周围背景补上，再把英文原版文字相对背景的"笔画增量"叠上去——
-背景还是这张图自己的，不会出现一块颜色不同的补丁。1、2、4 的英文原版取自 tools/relabel_ref/ 里
+做法：先把中文字抹掉、用周围背景补上，再按英文原版的字形把英文画上去，颜色用中文原字的——
+字形是原版的，颜色和背景都是这张图自己的，不会出现一块颜色不同的补丁。1、2、4 的英文原版取自 tools/relabel_ref/ 里
 从英文客户端实战截图裁下的三小块；英雄名英文截图里不一定有同一个英雄，只能用字体写，
 字体对着原版 "MONKEY KING" 校准过（Segoe UI 加粗 19px、字距 3.2）。
 
@@ -92,6 +92,28 @@ public static class Relabel {
       for(int i=0;i<w*h;i++)if(set[i]){a[(i/w+y0)*W+i%w+x0]=buf[i]; m[i]=false; changed=true;}
       if(!left||!changed)break;}
   }
+  /// 区域里最亮那 3% 像素的平均色：取中文原字的颜色，换上去的英文用同一个颜色
+  public static int TextColor(int[] a,int W,int x0,int y0,int x1,int y1){
+    int n=(x1-x0)*(y1-y0); var l=new int[n]; int k=0;
+    for(int y=y0;y<y1;y++)for(int x=x0;x<x1;x++)l[k++]=Lum(a[y*W+x]);
+    Array.Sort(l); int thr=l[(int)(n*0.97)]; long r=0,g=0,b=0,c=0;
+    for(int y=y0;y<y1;y++)for(int x=x0;x<x1;x++){int p=a[y*W+x]; if(Lum(p)>=thr){r+=R(p);g+=G(p);b+=B(p);c++;}}
+    return Pack((int)(r/c),(int)(g/c),(int)(b/c)); }
+
+  /// 只从英文参照图取**字形**：每个像素比参照背景亮多少（= 字的覆盖度）、暗多少（= 阴影），
+  /// 上色用 color（中文原字的颜色）。原先直接叠"参照原图 − 参照背景"的差值，参照截图背景偏红时
+  /// 减出来的字就偏青，比画面里其他原生文字又亮又粗（LOSS IN/OUT 那次）
+  public static void PaintText(int[] dst,int DW,int dx0,int dy0,int w,int h,int[] src,int[] srcBg,int SW,int sx0,int sy0,int color){
+    int n=w*h; var l=new int[n]; int k=0;
+    for(int y=0;y<h;y++)for(int x=0;x<w;x++)l[k++]=Lum(src[(sy0+y)*SW+sx0+x]);
+    Array.Sort(l); int peak=l[(int)(n*0.97)];
+    for(int y=0;y<h;y++)for(int x=0;x<w;x++){
+      int i=(dy0+y)*DW+dx0+x, j=(sy0+y)*SW+sx0+x; int c=dst[i]; int ls=Lum(src[j]), lb=Lum(srcBg[j]);
+      if(ls>lb){ double al=Math.Min(1.0,(double)(ls-lb)/Math.Max(1,peak-lb));
+        dst[i]=Pack((int)(R(c)+al*(R(color)-R(c))),(int)(G(c)+al*(G(color)-G(c))),(int)(B(c)+al*(B(color)-B(c)))); }
+      else if(ls<lb){ double be=Math.Min(1.0,(double)(lb-ls)/Math.Max(1,lb));
+        dst[i]=Pack((int)(R(c)*(1-be)),(int)(G(c)*(1-be)),(int)(B(c)*(1-be))); } }
+  }
   public static void CopyRect(int[] dst,int[] src,int W,int x0,int y0,int x1,int y1){
     for(int y=y0;y<y1;y++)Array.Copy(src,y*W+x0,dst,y*W+x0,x1-x0); }
 
@@ -120,29 +142,31 @@ $src = [Relabel]::Read($bmp)
 $bg = $src.Clone()
 [Relabel]::EraseText($bg, $W, 6, 94, 240, 154, $false)       # 只到 x=240：再往右是净资产的金币图标
 [Relabel]::EraseText($bg, $W, 2296, 29, 2466, 57, $false)
-[Relabel]::EraseText($bg, $W, 2134, 1456, 2434, 1499, $false)  # 快速购买提示；右边 2438 起是锁形图标，不碰。抹到 2434 才盖住「入」字最后一笔的淡尾巴
+[Relabel]::EraseText($bg, $W, 2134, 1456, 2434, 1508, $false)  # 快速购买提示；右边 2438 起是锁形图标，不碰。抹到 2434 才盖住「入」字最后一笔的淡尾巴
 $res = $src.Clone()
 [Relabel]::CopyRect($res, $bg, $W, 6, 94, 240, 154)
 [Relabel]::CopyRect($res, $bg, $W, 2296, 29, 2466, 57)
-[Relabel]::CopyRect($res, $bg, $W, 2134, 1456, 2434, 1499)
+[Relabel]::CopyRect($res, $bg, $W, 2134, 1456, 2434, 1508)
+
+# 英文参照图都裁自同一张英文客户端截图（2026-10-14，试玩地图，不按 Alt），位置和中文截图一样。
+# 换上去的字用中文原字的颜色（TextColor，在抹字之前从 $src 取）
 
 # 1) 左上角。英文参照图左上角对应截图的 (0,90)。英文标签止于 x≈97、数字从 120 起；中文标签止于 118、数字从 143 起
 $kda = Load-Pixels (Join-Path $refDir "en_kda.png")
 $kdaBg = $kda.px.Clone(); [Relabel]::EraseText($kdaBg, $kda.w, 6, 4, 240, 64, $false)
-[Relabel]::AddText($res, $W, 6, 94, 106, 60, $kda.px, $kdaBg, $kda.w, 6, 4)
+[Relabel]::PaintText($res, $W, 6, 94, 106, 60, $kda.px, $kdaBg, $kda.w, 6, 4, [Relabel]::TextColor($src, $W, 6, 94, 120, 154))
 [Relabel]::AddText($res, $W, 116, 94, 101, 60, $src, $bg, $W, 139, 94)     # 这张图自己的数字，左移 23
 
 # 2) 右上角第二行标签（两列数字不动）。英文参照图左上角对应截图的 (2290,25)
 $net = Load-Pixels (Join-Path $refDir "en_netgraph.png")
 $netBg = $net.px.Clone(); [Relabel]::EraseText($netBg, $net.w, 6, 4, 176, 32, $false)
-[Relabel]::AddText($res, $W, 2296, 29, 170, 28, $net.px, $netBg, $net.w, 6, 4)
+[Relabel]::PaintText($res, $W, 2296, 29, 170, 28, $net.px, $netBg, $net.w, 6, 4, [Relabel]::TextColor($src, $W, 2296, 29, 2466, 57))
 
-# 4) 右下角快速购买提示。英文参照图左上角对应截图的 (2130,1452)。参照截图是按着 Alt 截的，
-#    提示框下面贴着 BUYBACK 框，只取到 y=1495（参照图里的 43），免得把它的边带进来；"Quickbuy." 的下沿会少一截。
-#    以后有不按 Alt 的英文截图，重裁 en_quickbuy.png（截图的 (2130,1452) 起 300×48）就能补上
+# 4) 右下角快速购买提示。英文参照图左上角对应截图的 (2130,1452)，300×58，两行字到 y≈1503 为止。
+#    参照截图不能按着 Alt：按住时提示框下面贴着 BUYBACK 框，"Quickbuy." 的下沿会被切掉（第一版就是这样）
 $qb = Load-Pixels (Join-Path $refDir "en_quickbuy.png")
-$qbBg = $qb.px.Clone(); [Relabel]::EraseText($qbBg, $qb.w, 4, 4, 298, 43, $false)
-[Relabel]::AddText($res, $W, 2136, 1458, 280, 37, $qb.px, $qbBg, $qb.w, 6, 6)   # 英文止于 x≈2412；再宽会把右边的东西也叠过来
+$qbBg = $qb.px.Clone(); [Relabel]::EraseText($qbBg, $qb.w, 4, 4, 298, 56, $false)
+[Relabel]::PaintText($res, $W, 2136, 1458, 280, 50, $qb.px, $qbBg, $qb.w, 6, 6, [Relabel]::TextColor($src, $W, 2134, 1456, 2434, 1508))   # 英文止于 x≈2412
 
 # 3) 英雄名：自动找徽章和中文名的位置。不同英雄底部面板宽度不同（技能个数不一样），名字位置跟着变
 $runs = [Relabel]::GoldRuns($res, $W, 560, 1150, 1355, 1383)
