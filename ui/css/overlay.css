@@ -117,8 +117,9 @@ html, body {
    特异度 (0,5,1)，压过 `.cell:not(.wide) .lab svg.ico` 那条 24px，不靠顺序 */
 [data-block="timers"] .cell:not(.wide) .lab svg.ico { width: 32px; height: 32px; stroke-width: 2.1; }
 /* 去掉底板、缩小之后整排太淡（用户实测"不仔细看不出来"），参照 Dota Plus 的符文倒计时改：
-   · 每个圆一块**带颜色的暗底盘**：径向渐变，中心混进三成多自己的颜色，往外渐暗到边缘化开。
-     Dota Plus 显眼靠的就是这个；试过平涂黑圆片，像在画面上挖了个洞，用户嫌丑
+   · 每个圆一块**带颜色的底盘**：径向渐变，中心混进 55% 自己的颜色，往外渐变到 45% 不透明的暗色、边缘化开。
+     Dota Plus 显眼靠的就是这个；试过平涂黑圆片，像在画面上挖了个洞，用户嫌丑。
+     原先是 34% / 85%，2026-10-14 用户嫌深，对比了三档选了最浅的这档（背景能透过来，颜色感最强）
    · 进度环粗 5（缩完约 3.6px），颜色跟着图标走——我们的图标是线条画，
      颜色是分辨五个符的主要线索；最后 10 秒加粗到 7 提醒。
      试过学 Dota Plus 收细到 3，实战看不清（缩完只剩 2px 出头）
@@ -138,8 +139,8 @@ html, body {
      环半径 26/60 × 52px = 22.5px，线宽 5 → 内侧边缘约 20.3px；
      closest-side = 26px，76% ≈ 19.8px 处收边 */
   background: radial-gradient(circle closest-side,
-    color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
-    rgba(10, 13, 18, .85) 72%, transparent 76%);
+    color-mix(in srgb, var(--accent) 55%, rgb(10, 13, 18)) 0,
+    rgba(10, 13, 18, .45) 72%, transparent 76%);
 }
 
 /* 有圆环的格子：图标压在环中央（环内径 48px，放得下 24px）。
@@ -259,8 +260,8 @@ html, body {
   border-radius: 50%;
   /* 和倒计时的底盘同一个配方，收在环的内侧（见倒计时那条的注释） */
   background: radial-gradient(circle closest-side,
-    color-mix(in srgb, var(--accent) 34%, rgb(10, 13, 18)) 0,
-    rgba(10, 13, 18, .85) 72%, transparent 76%);
+    color-mix(in srgb, var(--accent) 55%, rgb(10, 13, 18)) 0,
+    rgba(10, 13, 18, .45) 72%, transparent 76%);
 }
 .tb-glyph svg.ico { width: 30px; height: 30px; stroke-width: 2.1; opacity: .3;
                     filter: drop-shadow(0 0 2px #000); }
