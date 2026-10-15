@@ -31,5 +31,26 @@ fn main() {
     // tauri-winres 编出来的 resource.lib，build.rs 不跑就永远是旧的）。
     // 同一次构建里两个图标来源不同步，看起来像"缓存没刷新"，其实是没重新生成。
     watch(Path::new("icons"));
+    check_constants();
     tauri_build::build()
+}
+
+/// **编译期内嵌的常数表必须是合法 JSON，坏了就编译失败**（2026-10-15）。
+/// 这几份是 `include_str!` 进去的，运行时解析失败只能退回空表——价格全按 0 算、
+/// 计时全没了，而用户那边看到的只是"数字不对"。手改 JSON 漏个逗号是很容易的事，
+/// 在这里拦住比让它进安装包便宜得多。
+///
+/// 要逐个声明 rerun-if-changed：上面那条注释说了，发过声明之后 cargo 只认声明过的文件，
+/// 不声明的话改了常数表 build.rs 不会重跑，这道检查就形同虚设。
+fn check_constants() {
+    let dir = Path::new("../constants");
+    for name in ["item_prices", "normal", "turbo", "towers", "lang.zh-CN", "lang.en", "patch"] {
+        let p = dir.join(format!("{name}.json"));
+        println!("cargo:rerun-if-changed={}", p.display());
+        let text = std::fs::read_to_string(&p)
+            .unwrap_or_else(|e| panic!("读不到 {}：{e}", p.display()));
+        if let Err(e) = serde_json::from_str::<serde_json::Value>(&text) {
+            panic!("{} 不是合法的 JSON：{e}", p.display());
+        }
+    }
 }

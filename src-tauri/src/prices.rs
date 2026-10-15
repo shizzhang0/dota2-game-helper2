@@ -1,3 +1,6 @@
+use crate::log::Level;
+use crate::logf;
+
 /// 价格表，**程序里唯一的一份**。见下面 `get_item_prices` 说明为什么不放配置目录。
 const EMBEDDED: &str = include_str!("../../constants/item_prices.json");
 
@@ -29,7 +32,13 @@ const EMBEDDED: &str = include_str!("../../constants/item_prices.json");
 /// 现在去掉了：**那几份本来就是惰性的**——价格只从这里读，谁都不会去看盘上那份，
 /// 留着不会算错，删除动作纯粹图整洁。而唯一装过旧版本的机器早就清干净了，
 /// 这段代码只会一辈子空跑。真碰上有人从 1.1.0 直升上来，手动删掉那几个文件即可。
+///
+/// 解析失败时退回空表并记一条 Error。正常情况下走不到：build.rs 已经在编译期校验过这份 JSON，
+/// 坏文件直接编译失败；这条日志是给"校验被绕过了"的情形留的，免得净资产静默全按 0 算。
 #[tauri::command]
 pub fn get_item_prices() -> serde_json::Value {
-    serde_json::from_str(EMBEDDED).unwrap_or_else(|_| serde_json::json!({}))
+    serde_json::from_str(EMBEDDED).unwrap_or_else(|e| {
+        logf!(Level::Error, "[prices] 内嵌价格表解析失败：{e}");
+        serde_json::json!({})
+    })
 }

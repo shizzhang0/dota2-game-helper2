@@ -50,7 +50,8 @@ SHOT_HTML = """<!doctype html>
 <script>
   const qs = new URLSearchParams(location.search);
   // 只指定语言，其余全按默认值——截出来就是新装好打开时的样子
-  localStorage.setItem("settings", JSON.stringify({ lang: qs.get("lang") || "en" }));
+  // 键名同 ui/js/settings.js 的 STORE_KEY
+  localStorage.setItem("helper2:settings", JSON.stringify({ lang: qs.get("lang") || "en" }));
   window.HELPER2_DEMO = "demo.jsonl";
   window.HELPER2_FREEZE = true;
 </script>

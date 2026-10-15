@@ -119,7 +119,7 @@ Dota 更新后跑一次。四件事：找到 Dota 安装目录 → 从 VPK 里�
 
 `pak01_dir.vpk` 只有目录树，真正的数据在 `pak01_NNN.vpk` 里。
 
-头部：magic `0x55aa1234` + version + treeSize，v2 后面还有 20 字节（用不到，跳过）。
+头部：magic `0x55aa1234` + version + treeSize（共 12 字节），v2 后面还有 16 字节（用不到，跳过）。
 树是三层 NUL 结尾字符串的嵌套，每层以空字符串收尾：
 
 ```
@@ -127,7 +127,8 @@ Dota 更新后跑一次。四件事：找到 Dota 安装目录 → 从 VPK 里�
 ```
 
 元数据 = `crc(4) preloadBytes(2) archiveIndex(2) offset(4) length(4) 0xffff(2)`。
-取文件：打开 `pak01_{archiveIndex:03d}.vpk`，seek 到 `offset` 读 `length`。
+取文件：打开 `pak01_{archiveIndex:03d}.vpk`，seek 到 `offset` 读 `length`，**前面拼上 preload 那几个字节**
+（preload 就是文件开头）。`archiveIndex` 为 `0x7FFF` 时数据在 dir 文件自己里面，`offset` 从目录树结束处算起。
 
 > **`preloadBytes` 不为 0 时，紧跟着就有那么多字节的内嵌数据，必须读掉再往下解析。**
 > 漏掉它不会报错，只会从那一条起整棵树错位成乱码——扫描全表时这是唯一一个

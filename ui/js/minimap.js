@@ -223,7 +223,11 @@ export class WardTracker {
       // 消失的那一刻仍被我方真视覆盖 = 它是真没了（被排或到期），立刻移除。
       // GSI 没有击杀眼的事件，这是唯一能判定的途径：敌方眼平时每局几十次进出
       // 视野，"从数据里消失"本身完全不能说明问题，但"在我方真视底下消失"可以。
-      if (covered(w.x, w.y)) { this.enemy.delete(key); continue; }
+      //
+      // 删的同时也压制一段，和 noteWardKills 同一个口径（2026-10-15）：GSI 偶尔会再报一次
+      // 已经没了的眼，不压的话它以 firstSeen = 现在 重新挂满一个寿命。代价是同一个点
+      // wardKillSuppress 秒内被重新插眼时晚一点才显示——两处原本就是这个取舍
+      if (covered(w.x, w.y)) { this.enemy.delete(key); this.dewarded.set(key, clock); continue; }
       // 否则只能当作真视断了，按该类型的寿命兜底保留。必须按类型分——
       // 原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
       const memory = w.kind === "sentry" ? this.C.wardSentryDuration

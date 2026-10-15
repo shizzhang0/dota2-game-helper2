@@ -109,6 +109,9 @@ export class EventTracker {
   // 哪儿都看不到——记分板没有、顶栏也没有（用户实测）；自己的只在死了以后的按钮上有。
   // 事件本来就双方都推，原先只是把己方那一半筛掉了。
   buybacks(info) {
+    // 没有 clock 时什么都不给，同 enemyGlyph。不挡的话 null 在减法里被当成 0，
+    // 算出来是"买活时刻 + 480"那么大的剩余秒数，格子挂着一个离谱的数
+    if (info.clock === null) return [];
     const out = [];
     for (const [slot, at] of Object.entries(this.buyback)) {
       const s = Number(slot);

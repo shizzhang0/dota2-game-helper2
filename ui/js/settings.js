@@ -13,10 +13,15 @@ export const DEFAULTS = {
   logLevel: "info", recordMatches: false, devTools: false, lang: "zh-CN",
 };
 
+/** 浏览器分支（开发页、主页 demo）存设置用的 localStorage 键。**带 `helper2:` 前缀**（2026-10-15）：
+    主页和 demo 同源（github.io 下整个用户名共用一个源），裸的 `settings` 谁都可能用。
+    Tauri 里不走这里，设置在 Rust 那边的 settings.json */
+export const STORE_KEY = "helper2:settings";
+
 export async function loadSettings() {
   try {
     if (isTauri()) return await window.__TAURI__.core.invoke("get_settings");
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("settings") || "{}") };
+    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORE_KEY) || "{}") };
   } catch { return { ...DEFAULTS }; }
 }
 
@@ -24,8 +29,8 @@ export function saveSettings(v) {
   if (isTauri()) return window.__TAURI__.core.invoke("set_settings", { value: v });
   // 盖在已存的那份之上，和 Rust 的 set_settings 一样：卡片不收的键（devTools）要留住
   let old = {};
-  try { old = JSON.parse(localStorage.getItem("settings") || "{}"); } catch { /* 坏了就当没有 */ }
-  localStorage.setItem("settings", JSON.stringify({ ...old, ...v }));
+  try { old = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch { /* 坏了就当没有 */ }
+  localStorage.setItem(STORE_KEY, JSON.stringify({ ...old, ...v }));
   dispatchEvent(new CustomEvent("settings", { detail: v }));   // 浏览器开发时自发自收
 }
 

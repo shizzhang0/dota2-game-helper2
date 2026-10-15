@@ -272,7 +272,10 @@ async function build(s) {
     put("edAppVer", v.app);
     put("edDotaVer", v.dota);
   });
+  // 语言那个 select 不在这里挂：下面的 change 自己会存一次，select 上 input 和 change 都会触发，
+  // 两边都挂就是同一次切换存两遍
   for (const el of card.querySelectorAll("input, select")) {
+    if (el === lang) continue;
     el.addEventListener("input", () => saveSettings(collect()));
   }
   mm.addEventListener("input", () => mmRefresh());
@@ -325,10 +328,16 @@ async function build(s) {
     card.style.top  = `${oy + ev.clientY - sy}px`;
     reportRect();
   });
-  bar.addEventListener("pointerup", (ev) => {
+  // 收尾不能只听 pointerup：被系统打断（pointercancel）或捕获被抢走（lostpointercapture，
+  // 比如拖到一半窗口失焦）时没有 pointerup，dragging 一直是真，之后鼠标一动卡片就跟着跑
+  const endDrag = (ev) => {
     if (!dragging) return;
-    dragging = false; bar.releasePointerCapture(ev.pointerId);
-  });
+    dragging = false;
+    if (bar.hasPointerCapture(ev.pointerId)) bar.releasePointerCapture(ev.pointerId);
+  };
+  bar.addEventListener("pointerup", endDrag);
+  bar.addEventListener("pointercancel", endDrag);
+  bar.addEventListener("lostpointercapture", endDrag);
 }
 
 /** 每次进编辑态回到屏幕中央偏下。位置不存盘——拆块之后没有"面板"这个唯一锚点，
