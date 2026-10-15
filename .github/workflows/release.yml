@@ -4,7 +4,8 @@ name: Release
 # 建 GitHub Release、把文件下载回来核对。步骤全在 tools/release.py 里，本地发版用的是同一个脚本。
 #
 # Release 正文取自 **tag 的注释**——打 tag 时写好 Changelog：
-#   git tag -a v1.4.0 -F notes.md && git push origin v1.4.0
+#   git tag -a v1.4.0 --cleanup=verbatim -F notes.md && git push origin v1.4.0
+# （--cleanup=verbatim 不能省：默认会把 `#` 开头的行当注释删掉，Changelog 的小标题就没了）
 # 流程见 docs/design/dev-tools.md「发版」。
 #
 # 签名私钥放在仓库 Secrets 的 TAURI_SIGNING_PRIVATE_KEY（私钥没设密码）。
