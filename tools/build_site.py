@@ -57,7 +57,7 @@ def build():
         shutil.rmtree(DIST)
     DIST.mkdir(parents=True)
 
-    for name in ("index.html", "demo.html", "demo.jsonl", "demo-bg.jpg", "demo-bg-zh.jpg"):
+    for name in ("index.html", "demo.html", "demo.jsonl", "demo-bg.jpg", "demo-bg-zh.jpg", "og.jpg"):
         src = ROOT / "site" / name
         if not src.is_file():
             sys.exit(f"缺 {src}——demo.jsonl 由 tools/make_demo.py 生成")

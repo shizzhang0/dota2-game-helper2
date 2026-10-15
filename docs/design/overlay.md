@@ -378,8 +378,9 @@ SSE            EventSource("stream?speed=…")      开发用的回放服务器
 
 #### 站点：一个页面 + 一个 iframe + 一条部署流水线
 
-> **还没做：分享卡片**（`og:title` / `og:description` / `og:image` 和 `twitter:card`），
-> 图用实拍的 `overlay.jpg`。现在贴到聊天软件里只有一行字（2026-10-10 用户同意加）。
+> **分享卡片**（2026-10-15 加）：`index.html` 的 `og:*` 和 `twitter:card`，链接贴到聊天软件里显示标题、简介和图。
+> 图是 `site/og.jpg`：英文首图整张缩进 1200×628、左右补深色边——截掉上下会丢掉顶栏或小地图。
+> `og:image` 必须写绝对地址；文案只能写一种语言，用英文。
 
 `site/index.html` 是落地页，`site/demo.html` 是**框里跑的那份真覆盖层**，
 `tools/build_site.py` 把它们和 `ui/` `constants/` 组装成 `dist/`，

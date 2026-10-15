@@ -20,7 +20,7 @@ Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本�
 2. ~~裁图、放进 README、重做主页 demo~~（2026-10-15 做完）：首图 / 净资产中英各一张取自 m9044675249 截图 (8)，
    英文版用 `relabel_shot.ps1` 改字，打造通知用 `mosaic.ps1` 打码；`topbar.jpg` 取自截图 (10)（买活 7:55、塔防 4:36）；
    `timers.jpg` 取自截图 (8)；`minimap.jpg` 沿用 m9039232580 那张。主页 demo 见 [design/overlay.md](design/overlay.md)「站点」
-3. **加分享卡片**：`og:title` / `og:description` / `og:image`（实拍 `overlay.jpg`）、`twitter:card`
+3. ~~**加分享卡片**~~（2026-10-15 做完，图是 `site/og.jpg`）
 4. `python tools/release.py bump 1.4.0` → `python tools/make_shots.py`（卡片截图上有版本号）→ 推到 PR #93、CI 过了合并 →
    **马上**打带注释的 tag（Changelog）推上去。Release 跑完 Pages 自动发
 5. 发版后：装一个旧版本号的安装包测一键更新；继续走 [verify-checklist.md](verify-checklist.md) 第七节
