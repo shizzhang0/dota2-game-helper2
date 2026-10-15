@@ -6,6 +6,9 @@ use crate::log::Level;
 use crate::logf;
 
 const CFG_NAME: &str = "gamestate_integration_helper2.cfg";
+/// Dota 每包都会把这里的 auth 段原样带回来（body 里的 `auth.token`），gsi.rs 拿它认包。
+/// **改这个值记得 CFG 里一起改**——CFG 内容一变，ensure_cfg 下次启动就重写配置文件，这是预期的。
+pub(crate) const AUTH_TOKEN: &str = "dota2-game-helper2";
 const CFG: &str = r#""dota2-game-helper2"
 {
   "uri" "http://127.0.0.1:53000/"
@@ -13,6 +16,10 @@ const CFG: &str = r#""dota2-game-helper2"
   "buffer" "0.1"
   "throttle" "0.1"
   "heartbeat" "30.0"
+  "auth"
+  {
+    "token" "dota2-game-helper2"
+  }
   "data"
   {
     "provider" "1"

@@ -73,7 +73,14 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
                 downloaded += chunk as u64;
                 let _ = app2.emit("update-progress", Progress { downloaded, total });
             },
-            || logf!(Level::Info, "[update] 下载完成，开始安装"),
+            // **下载完、起安装器之前给录制收尾**：Windows 上插件起了安装器就直接 process::exit，
+            // RunEvent::Exit 不触发，main.rs 里的 record::shutdown 跑不到，正在录的那局就没有
+            // gzip 结尾。放在这里而不是函数开头：下载失败的话程序还接着跑，录制不该被打断
+            //（真打断了也只是收尾一个文件，下一包会懒建新的）
+            || {
+                logf!(Level::Info, "[update] 下载完成，开始安装");
+                crate::record::shutdown();
+            },
         )
         .await
         .map_err(|e| {

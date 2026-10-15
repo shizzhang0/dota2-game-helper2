@@ -29,6 +29,9 @@ on:
       - 'LICENSE'
       - 'site/**'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     # 只在 Windows 上构建：GetAsyncKeyState、windows_subsystem、用 explorer 打开
@@ -58,6 +61,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      # 组一遍项目主页：tools/build_site.py 只在 Pages 流水线里跑，而 Pages 跟着发版走——
+      # 不在这里跑一次，它坏了要到打 tag 之后才发现
+      # PYTHONUTF8：windows runner 的 stdout 默认 cp1252，脚本打印中文会直接抛错
+      - name: 组站点
+        shell: bash
+        env:
+          PYTHONUTF8: '1'
+        run: python tools/build_site.py
 
       # release 而不是 debug：windows_subsystem = "windows" 只在 release 生效，
       # 而 release 才是实际要跑的那个产物。

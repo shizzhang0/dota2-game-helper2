@@ -59,6 +59,11 @@ function trueSightNear(w, seen, state, myTeam) {
   if (myTeam === null) return true;          // 不知道哪边是自己，宁可不判
   if (seen.some(s => s.team === myTeam && s.kind === "sentry" &&
                      Math.hypot(s.x - w.x, s.y - w.y) <= SIGHT_FROM_SENTRY)) return true;
+  // 自己的英雄单独算一次（2026-10-15）：minimap 里的英雄条目有不少是 (0,0) 的幽灵，
+  // 不能指望自己一定在里面；hero 段的坐标是确凿的。多认一个来源只会少判"尸体"，偏向不漏显示
+  const h = state.hero;
+  if (h && typeof h.xpos === "number" && typeof h.ypos === "number" &&
+      Math.hypot(h.xpos - w.x, h.ypos - w.y) <= SIGHT_FROM_HERO) return true;
   return objects(state).some(o => o.team === myTeam && /hero/.test(o.unitname || "") &&
                                   Math.hypot(o.xpos - w.x, o.ypos - w.y) <= SIGHT_FROM_HERO);
 }

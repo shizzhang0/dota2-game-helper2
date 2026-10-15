@@ -4,8 +4,8 @@
 
     python tools/release.py bump 1.4.0      # 改三处版本号（之后照常提 PR 合进 main）
     python tools/release.py build           # 打包：安装包 + 签名、zip、各一份不带版本号的、latest.json → dist/release/
-    python tools/release.py publish NOTES   # 用 build 的产物建 GitHub Release，NOTES 是正文文件
-    python tools/release.py verify 1.4.0    # 把 Release 上的文件下载回来核对 SHA256
+    python tools/release.py publish NOTES   # 用 build 的产物建**草稿** Release、传文件，NOTES 是正文文件
+    python tools/release.py verify 1.4.0    # 把 Release 上的文件下载回来核对 SHA256，全对才把草稿转正
 
 build 要签名私钥：环境变量 TAURI_SIGNING_PRIVATE_KEY（私钥内容）。没设的话本地会去读
 ~/.tauri/dota2-game-helper2.key。私钥没设密码。
@@ -127,28 +127,73 @@ def build():
         print(f"  {p.name:52} {sha256(p) if p.suffix in ('.exe', '.zip') else ''}")
 
 
+def release_files(v):
+    """Release 上应有的五个文件。漏传 latest.json，装了安装版的人就收不到这一版；
+    漏传不带版本号的那两份，主页的下载按钮就 404——所以 publish 缺一样就不发，verify 少一样就不转正"""
+    return [OUT / f"dota2-game-helper2-v{v}-windows-x64.zip",
+            OUT / f"dota2-game-helper2_{v}_x64-setup.exe",
+            OUT / STABLE_ZIP, OUT / STABLE_SETUP,
+            OUT / "latest.json"]
+
+
+def release_state(tag):
+    """None = 还没有这个 Release；否则返回它是不是草稿"""
+    r = subprocess.run(["gh", "release", "view", tag, "--json", "isDraft", "-q", ".isDraft"],
+                       cwd=ROOT, capture_output=True, text=True)
+    return None if r.returncode != 0 else r.stdout.strip() == "true"
+
+
 def publish(notes):
     v = version()
-    files = [OUT / f"dota2-game-helper2-v{v}-windows-x64.zip",
-             OUT / f"dota2-game-helper2_{v}_x64-setup.exe",
-             OUT / STABLE_ZIP, OUT / STABLE_SETUP,
-             OUT / "latest.json"]
+    tag = f"v{v}"
+    files = release_files(v)
     for p in files:
         if not p.is_file():
             sys.exit(f"先 build：缺 {p.name}")
-    # 漏传 latest.json，装了安装版的人就收不到这一版；漏传不带版本号的那两份，主页的下载按钮就 404——
-    # 所以五个文件一起传，缺一样就不发
-    run(["gh", "release", "create", f"v{v}", "--title", f"v{v}", "--notes-file", notes,
-         *map(str, files)])
+    # **先建草稿，传完、verify 核对通过才转正**（2026-10-15 改）。原先是直接建公开 Release 再逐个传文件：
+    # 传的那几十秒里它已经是 latest，装了安装版的人点更新会拿到 404；中途失败还留下半份 Release，
+    # 重跑又因为"已存在"再失败。草稿对外不可见、也不算 latest，失败了重跑就接着用这份草稿
+    state = release_state(tag)
+    if state is None:
+        # --verify-tag：远端没有这个 tag 就不建（否则 gh 会替你在默认分支上新打一个）
+        run(["gh", "release", "create", tag, "--draft", "--verify-tag",
+             "--title", tag, "--notes-file", notes])
+    elif state:
+        print(f"{tag} 的草稿已存在（上次中途失败？），接着用它")
+        run(["gh", "release", "edit", tag, "--notes-file", notes])
+    else:
+        sys.exit(f"{tag} 已经正式发布了，不再改它的文件")
+    run(["gh", "release", "upload", tag, "--clobber", *map(str, files)])
 
 
 def verify(v):
+    tag = f"v{v}"
     tmp = Path(tempfile.mkdtemp())
-    run(["gh", "release", "download", f"v{v}", "-D", str(tmp)])
-    for p in sorted(tmp.iterdir()):
-        local = OUT / p.name
-        ok = "" if not local.is_file() else ("一致" if sha256(local) == sha256(p) else "**不一致**")
-        print(f"  {p.name:52} {sha256(p)} {ok}")
+    run(["gh", "release", "download", tag, "-D", str(tmp)])
+    want = {p.name: p for p in release_files(v)}
+    got = {p.name: p for p in tmp.iterdir()}
+    bad = []
+    for name in sorted(want.keys() | got.keys()):
+        local, remote = want.get(name), got.get(name)
+        if remote is None:
+            mark = "**Release 上没有**"
+        elif local is None:
+            mark = "**Release 上多出来的**"
+        elif not local.is_file():
+            mark = "**本地没有，没法核对**"
+        elif sha256(local) != sha256(remote):
+            mark = "**不一致**"
+        else:
+            mark = "一致"
+        print(f"  {name:52} {sha256(remote) if remote else '':64} {mark}")
+        if mark != "一致":
+            bad.append(name)
+    if bad:
+        sys.exit(f"核对没通过：{', '.join(bad)}" +
+                 ("（Release 还是草稿，没有对外公开）" if release_state(tag) else ""))
+    if release_state(tag):
+        run(["gh", "release", "edit", tag, "--draft=false"])
+        print(f"{tag} 已转正")
 
 
 if __name__ == "__main__":
