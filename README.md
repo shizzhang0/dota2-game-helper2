@@ -110,7 +110,8 @@ Dota's own settings** — nothing to line up by hand.
 
 ## Hide it for a moment
 
-It stays up throughout a match and disappears by itself back in the main menu.
+It stays up throughout a match and disappears by itself back in the main menu, or when you
+switch to another program — Alt+Tab back into Dota and it's there again.
 
 If it's in your way, press **`Ctrl+Alt+F11`** to hide it and again to bring it back — no need
 to leave the game. It shows up again by itself at the start of the next match.
@@ -174,7 +175,8 @@ then delete the old exe.
 | ❌ Phone home | ✅ Ask GitHub for a newer version on startup and when you press Check for updates, sending no personal data; download only when you press Update now |
 
 It also **reads** Dota's own settings file under Steam's `userdata` to find the minimap's
-side and size.
+side and size, and checks whether the window in front belongs to `dota2.exe` (the process
+name only, nothing inside it) so it can step aside when you switch away.
 
 GSI is an official Valve interface; Logitech and Razer drivers use it too. **During a match
 it only sends what you can already see** — anything this overlay works out, you could see
