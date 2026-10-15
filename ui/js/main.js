@@ -70,10 +70,31 @@ checkUpdate();
 // 只有编辑态才会走到这里；靠本地状态位反而可能因事件漏收而彻底失灵。
 addEventListener("keydown", (ev) => { if (ev.key === "Escape") exitEdit(); });
 
+/** 主菜单的包：没有 map、player 是空对象（和 record.rs 的 is_menu 同一判法）。 */
+function isMenu(pkt) {
+  const p = pkt.player;
+  return pkt.map === undefined && p !== null && typeof p === "object" && !Array.isArray(p)
+         && Object.keys(p).length === 0;
+}
+
 connectSource(async (pkt) => {
-  const st = pool.update(pkt);
+  // **回到主菜单就退回待机**（2026-10-15）。原先这种包照常进池子：池子守着空对象不覆盖，
+  // 留着上一局的 map，inMatch 按旧的 game_state 算成"还在打"，而主菜单每 30 秒一次的心跳
+  // 又不停刷新 lastAt——面板挂着旧数据迟迟不消失；最后一包若是暂停态（STALE_PAUSED_MS 40 秒
+  // 长于心跳），就一直挂到下一局。
+  // 只把 inMatch 改成 false，不清数据：编辑态里照样看得到最后一刻（同断流，见下面 setInterval）；
+  // 池子和 tracker 也不清——重连回同一局接着算，换局了 newMatch 自然会重置
+  if (isMenu(pkt)) {
+    if (last) last = { ...last, info: { ...last.info, inMatch: false } };
+    lastAt = Date.now();
+    return;
+  }
+  let st = pool.update(pkt);
   const info = match.update(st);
-  if (info.newMatch) { pool.reset(); readDotaHud(); hidden = false; }
+  // 换局要**重新取一次 st**：update 返回的是池子里那个对象的引用，reset 只是把池子换成新对象，
+  // 手里的 st 还指着上一局的合并状态；新局第一包的空 items/hero 又被池子的空对象守卫挡住，
+  // 不重取的话刚重置的净资产和新建的眼位会拿上一局的装备、眼位初始化
+  if (info.newMatch) { pool.reset(); st = pool.update(pkt); readDotaHud(); hidden = false; }
   C = await loadConstants(info.modeOrDefault);
   if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
   tracker.C = C;                       // 模式判定完成后热切常数

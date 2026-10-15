@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use tauri::{Emitter, Manager};
+use crate::logf;
 
 fn path(app: &tauri::AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("settings.json"))
@@ -35,12 +36,22 @@ pub(crate) fn merge(base: &mut serde_json::Value, over: &serde_json::Value) {
     }
 }
 
+/// **解析不了的设置文件改名留着，不静默丢掉**（2026-10-15）。原先解析失败就悄悄回默认值，
+/// 下一次在卡片上动任何控件，set_settings 就把默认值整份写回去——手写的 devTools、语言、
+/// 各个开关全没了，日志里一个字都没有。改名成 `.bad` 之后：坏文件还在、能看出坏在哪，
+/// 这之后读到的是"没有设置文件"，按默认值走，和第一次启动一样。
 pub fn load(app: &tauri::AppHandle) -> serde_json::Value {
     let mut v = defaults();
     if let Some(p) = path(app) {
         if let Ok(s) = std::fs::read_to_string(&p) {
-            if let Ok(disk) = serde_json::from_str::<serde_json::Value>(&s) {
-                merge(&mut v, &disk);
+            match serde_json::from_str::<serde_json::Value>(&s) {
+                Ok(disk) => merge(&mut v, &disk),
+                Err(e) => {
+                    let bad = p.with_extension("json.bad");
+                    let moved = std::fs::rename(&p, &bad).is_ok();
+                    logf!(crate::log::Level::Warn, "[settings] settings.json 解析失败（{e}），按默认值走；{}",
+                          if moved { "坏文件已改名为 settings.json.bad" } else { "坏文件改名失败" });
+                }
             }
         }
     }
@@ -62,7 +73,14 @@ pub fn set_settings(app: tauri::AppHandle, value: serde_json::Value) {
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(&p, serde_json::to_string_pretty(&merged).unwrap_or_default());
+        // **先写临时文件再改名盖过去**：直接 fs::write 是先截断再写，写到一半断电 / 被杀，
+        // 留下的是半截 JSON，下次启动就读不出来（见 load）。同一目录里的 rename 是整个换掉，
+        // Windows 上 std::fs::rename 会覆盖已有的目标文件
+        let tmp = p.with_extension("json.tmp");
+        let body = serde_json::to_string_pretty(&merged).unwrap_or_default();
+        if let Err(e) = std::fs::write(&tmp, body).and_then(|_| std::fs::rename(&tmp, &p)) {
+            logf!(crate::log::Level::Error, "[settings] 写 settings.json 失败：{e}");
+        }
     }
     // 托盘菜单在 Rust 侧，前端那份 emit 管不到它——切语言要两边都动
     crate::tray::apply_lang(&app);

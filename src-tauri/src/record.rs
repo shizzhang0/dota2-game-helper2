@@ -104,6 +104,10 @@ fn match_id(v: &serde_json::Value) -> Option<String> {
 /// 不去动正在写的那个文件的名字，Windows 上那取决于句柄的共享位，不值得赌。
 fn tag_with_match(path: std::path::PathBuf, id: Option<&str>) -> std::path::PathBuf {
     let Some(id) = id else { return path };
+    // matchid 是 GSI 包里的字符串，拼进文件名之前只认纯数字：带 `..\` 之类的能把文件挪出录制目录
+    if id.is_empty() || !id.bytes().all(|c| c.is_ascii_digit()) {
+        return path;
+    }
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else { return path };
     let Some(stem) = name.strip_suffix(".jsonl.gz") else { return path };
     if stem.contains("_m") {

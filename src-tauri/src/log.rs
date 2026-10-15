@@ -32,7 +32,6 @@ impl Level {
 static STATE: Mutex<Option<(std::path::PathBuf, Level)>> = Mutex::new(None);
 
 pub fn init(app: &tauri::AppHandle) {
-    let level = Level::parse(crate::settings::load(app)["logLevel"].as_str().unwrap_or("debug"));
     let Ok(dir) = app.path().app_config_dir().map(|d| d.join("logs")) else { return };
     let _ = std::fs::create_dir_all(&dir);
     let file = dir.join("helper2.log");
@@ -46,7 +45,13 @@ pub fn init(app: &tauri::AppHandle) {
             let _ = f.write_all(&[0xEF, 0xBB, 0xBF]);
         }
     }
-    *STATE.lock().unwrap() = Some((file, level));
+    // **先能写、再读设置**：读设置本身可能要记一条 Warn（settings.json 坏了，见 settings::load），
+    // 先按 Warn 打开，读到用户设的级别再换上
+    *STATE.lock().unwrap() = Some((file, Level::Warn));
+    let level = Level::parse(crate::settings::load(app)["logLevel"].as_str().unwrap_or("debug"));
+    if let Some(s) = STATE.lock().unwrap().as_mut() {
+        s.1 = level;
+    }
 }
 
 /// 时间戳：本地时间，`2026-09-19 22:33:26`。

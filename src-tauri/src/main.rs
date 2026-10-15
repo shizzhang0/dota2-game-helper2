@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::log::Level;
-use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// 编辑态：打开设置卡片。鼠标穿透由 hittest.rs 管——只有卡片上不穿透
 pub(crate) static EDIT: AtomicBool = AtomicBool::new(false);
@@ -78,9 +78,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
+            // 只装回调，热键在 setup 里注册（见那里的注释）
             tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts([EDIT_HOTKEY, HIDE_HOTKEY])
-                .expect("注册全局热键失败")
                 .with_handler(|app, shortcut, event| {
                     if event.state() != ShortcutState::Pressed {
                         return;
@@ -101,6 +100,18 @@ fn main() {
         )
         .setup(|app| {
             log::init(app.handle());   // 必须最先，否则其他模块的启动日志会丢
+
+            // **热键注册失败不退出，记一条 Error 接着跑**（2026-10-15）。原先用插件 Builder 的
+            // with_shortcuts 注册：它跑在 setup 之前、log::init 之前，RegisterHotKey 一失败
+            // （热键被别的程序占了，或者程序已经开着又双击了一次）就在 .expect("tauri build")
+            // 处 panic，窗口不出、日志没有，看起来就是"双击没反应"。挪到这里之后能记下来，
+            // 托盘菜单照样能进设置。逐个注册：一个被占不连累另一个。
+            // 这里不是热键回调里，可以注册（回调里绝不能，见 set_edit 的注释）
+            for hk in [EDIT_HOTKEY, HIDE_HOTKEY] {
+                if let Err(e) = app.global_shortcut().register(hk) {
+                    logf!(Level::Error, "[hotkey] 注册 {hk} 失败：{e}");
+                }
+            }
             let w = app.get_webview_window("overlay").unwrap();
             if let Some(mon) = w.primary_monitor()? {
                 let pos = mon.position();
