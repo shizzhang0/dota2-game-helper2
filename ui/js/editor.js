@@ -214,7 +214,7 @@ async function build(s) {
       <span>${t("card.logLevel")}</span>
       <div class="ed-chk"><select id="edLog">
           <option value="error">error</option><option value="warn">warn</option>
-          <option value="info">info</option><option value="debug">${t("card.logDebug")}</option>
+          <option value="info">info</option><option value="debug">debug</option>
         </select>
         <button id="edDir" type="button">${t("card.openDir")}</button></div>
     </div>

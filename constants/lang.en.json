@@ -19,7 +19,6 @@
   "card.mmSizeLarge": "extra large",
   "card.reset": "Reset",
   "card.logLevel": "Log level",
-  "card.logDebug": "debug (verbose)",
   "card.record": "Record match data (gzip, ~4 MB per match)",
   "card.openDir": "Open data folder",
   "card.recFiles": "Recordings",

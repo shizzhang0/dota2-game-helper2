@@ -19,7 +19,6 @@
   "card.mmSizeLarge": "特大",
   "card.reset": "重置",
   "card.logLevel": "日志级别",
-  "card.logDebug": "debug（全量）",
   "card.record": "记录对局数据（gzip，一局约 4MB）",
   "card.openDir": "打开数据目录",
   "card.recFiles": "录制文件",
