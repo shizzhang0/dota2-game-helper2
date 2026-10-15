@@ -16,23 +16,14 @@ Pages 改成了 **Release 跑成功之后才发**（`pages.yml`），合并本�
 
 ### 步骤
 
-1. **用户截图**（要求见下）
-2. 裁出 `docs/images/` 下的 `overlay.jpg`（首图，整屏缩小）、`timers.jpg`、`topbar.jpg`、`econ.jpg`、`minimap.jpg`。
-   **2026-10-11 已裁四张**（m9039232580 的截图，中文客户端，见 [design/overlay.md](design/overlay.md)「截图」）。
-   首图和净资产带中文，已改名 `overlay-zh.jpg` / `econ-zh.jpg` 给中文 README。还差：
-   - **首图只截中文的**，英文版用 `tools/relabel_shot.ps1` 生成（2026-10-14，见 [design/dev-tools.md](design/dev-tools.md)「README 截图改英文」）。
-     截图要求：**别按 Alt**。击杀播报 / 聊天 / 打赏面板 / 物品打造通知可以用 `tools/mosaic.ps1` 打码，不必重截。
-     中文原样 → `overlay-zh.jpg`，改字版 → `overlay.jpg`。`econ.jpg` 已有英文客户端实拍的（m9043182031 22:54）
-   - 倒计时 2026-10-12 挪了位置（顶边 44 → 88），`timers.jpg` 是旧位置，要从新截图重裁
-   - `topbar.jpg`：那局没人买活、对面也没开过塔防，这局补截
-   - 干净的那张（主页 demo 背景，用英文客户端的）
-3. README 里引用的就是上面这五个文件名，放进去就行
-4. **重做主页 demo**：背景用干净截图，数据用同一局录制在那一刻前后约 20 秒的切片（`tools/make_demo.py`）。
-   `site/demo.html`、`index.html` 里 demo 的说明和 900×400 那段注释一起改，见 [design/overlay.md](design/overlay.md)「站点」
-5. **加分享卡片**：`og:title` / `og:description` / `og:image`（实拍 `overlay.jpg`）、`twitter:card`
-6. `python tools/release.py bump 1.4.0` → `python tools/make_shots.py`（卡片截图上有版本号）→ 推到 PR #93、CI 过了合并 →
+1. ~~**用户截图**~~（2026-10-14 做完，m9044675249）
+2. ~~裁图、放进 README、重做主页 demo~~（2026-10-15 做完）：首图 / 净资产中英各一张取自 m9044675249 截图 (8)，
+   英文版用 `relabel_shot.ps1` 改字，打造通知用 `mosaic.ps1` 打码；`topbar.jpg` 取自截图 (10)（买活 7:55、塔防 4:36）；
+   `timers.jpg` 取自截图 (8)；`minimap.jpg` 沿用 m9039232580 那张。主页 demo 见 [design/overlay.md](design/overlay.md)「站点」
+3. **加分享卡片**：`og:title` / `og:description` / `og:image`（实拍 `overlay.jpg`）、`twitter:card`
+4. `python tools/release.py bump 1.4.0` → `python tools/make_shots.py`（卡片截图上有版本号）→ 推到 PR #93、CI 过了合并 →
    **马上**打带注释的 tag（Changelog）推上去。Release 跑完 Pages 自动发
-7. 发版后：装一个旧版本号的安装包测一键更新；继续走 [verify-checklist.md](verify-checklist.md) 第七节
+5. 发版后：装一个旧版本号的安装包测一键更新；继续走 [verify-checklist.md](verify-checklist.md) 第七节
 
 ### 截图要求
 

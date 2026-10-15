@@ -5,26 +5,25 @@
 <style>
   /* 站点首页那个 demo 框里跑的就是这一页，用 iframe 嵌。
 
-     **必须是 iframe。** 覆盖层的四个块是 position: fixed——相对视口定位，
-     不相对容器。直接嵌进首页的话它们会飞到整个页面上去，而不是待在框里。
-     iframe 给了它们一个自己的视口。
+     **必须是 iframe。** 覆盖层贴着 Dota 的界面画，位置全按视口宽高算（顶栏居中、按屏高缩放、
+     小地图在左下角），直接嵌进首页的话它会按整个页面算。iframe 给了它一个自己的视口。
 
-     背景用和 README 截图同一种占位色，不用游戏画面：仓库是 MIT 且公开，
-     不放 Valve 的素材。 */
+     **背景是同一局的游戏截图**（2026-10-15 起，v1.4.0）：覆盖层的东西都贴在顶栏、计时牌、小地图上，
+     离了游戏画面就看不出贴在哪儿。截图是 m9044675249 9:46 那一刻，按 Ctrl+Alt+F11 收起覆盖层截的，
+     通知和聊天打了码；数据是同一局 9:36~10:00 那一段（见 tools/make_demo.py 的预热）。
+     截图 2560×1600，iframe 固定 1280×800（同为 16:10），背景拉满，覆盖层按屏高缩放正好对上。
+     背景出中英两张：demo-bg.jpg 是用 tools/relabel_shot.ps1 改成英文客户端样子的，demo-bg-zh.jpg 是原图；
+     首页按页面语言换（index.html 的 apply()）。画面 © Valve。 */
   html, body { margin: 0; height: 100%; overflow: hidden; }
-  body { background: linear-gradient(135deg, #0b1410, #132018 60%, #0a0f0c); }
+  body { background: #000 url(demo-bg.jpg) 0 0 / 100% 100% no-repeat; }
 </style>
 <body>
 <div id="panel"></div>
 <div id="editor" hidden></div>
 <script>
-  // 摆位和设置要在 main.js 之前写好：块的位置每帧由 render() 重新套用，
-  // 事后改 inline style 会被立刻覆盖。和 tools/make_shots.py 是同一个道理。
-  const AT = { econ: [16, 14], wardmap: [16, 94], timers: [252, 14], enemy: [252, 109] };
-  localStorage.setItem("layout", JSON.stringify(
-    Object.fromEntries(Object.entries(AT).map(([k, [x, y]]) => [k, { x, y }]))));
-  localStorage.setItem("settings", JSON.stringify(
-    { scale: 1, opacity: 1, panelBg: 0.72, wardSize: 180 }));
+  // 设置用默认值（九项全开、小地图自动 = 浏览器里读不到 Dota 设置，按左下 · 普通，正好是截图里的样子）。
+  // 清掉旧版 demo 写进 localStorage 的摆位和设置，免得访客浏览器里残留的值影响显示
+  try { localStorage.removeItem("layout"); localStorage.removeItem("settings"); } catch { /* 无痕模式 */ }
   window.HELPER2_DEMO = "demo.jsonl";
 </script>
 <script type="module" src="ui/js/main.js"></script>

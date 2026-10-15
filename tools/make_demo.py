@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """把一份对局录制剪成 GitHub Pages 上那个 live demo 用的数据。
 
-    python tools/make_demo.py <录制文件> --from 60 --to 300 [--out site/demo.jsonl]
+    python tools/make_demo.py <录制文件> --from 576 --to 600 --warmup-from -100 [--out site/demo.jsonl]
+
+**预热**（`--warmup-from`，2026-10-15 加）：主页 demo 只循环播二十来秒，但塔防冷却、记住的敌方眼、净资产
+都依赖之前发生过的事——只喂这二十秒，塔防会显示成"可用"、地图上一个敌方眼都没有。所以把
+`--warmup-from` 到 `--from` 之间的包也写进去，文件第一行写 `{"demo":{"warmup":N}}`：
+播放时先把这 N 包瞬间喂完建好状态（不出画面），再按原速播后面的，每次循环都重新预热（见 source.js）。
 
 **裁剪即脱敏。** 这里走的是白名单：只保留 `ui/js` 真正读的字段，别的一律丢。
 比"逐个删掉 steamid / accountid / name"更安全——后者要求我们记全所有身份字段，
@@ -165,26 +170,35 @@ def main():
     ap.add_argument("source")
     ap.add_argument("--from", dest="start", type=int, default=0, help="起始 clock_time（秒）")
     ap.add_argument("--to", dest="end", type=int, default=10 ** 9, help="结束 clock_time（秒）")
+    ap.add_argument("--warmup-from", dest="warm", type=int, default=None,
+                    help="从这个 clock 起到 --from 之前的包作预热，播放时瞬间喂完、不出画面")
     ap.add_argument("--out", default=str(ROOT / "site" / "demo.jsonl"))
     a = ap.parse_args()
+    lo = a.start if a.warm is None else min(a.warm, a.start)
 
     out_path = Path(a.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    total = kept = 0
+    total = kept = warm = 0
     raw_bytes = 0
+    lines = []
+    for pkt in packets(a.source):
+        total += 1
+        c = (pkt.get("map") or {}).get("clock_time")
+        if not isinstance(c, int) or not (lo <= c <= a.end):
+            continue
+        s = scrub(pkt)
+        if not s:
+            continue
+        lines.append(json.dumps(s, separators=(",", ":"), ensure_ascii=False))
+        kept += 1
+        if c < a.start:
+            warm += 1
+        raw_bytes += len(json.dumps(pkt, separators=(",", ":"), ensure_ascii=False))
     with open(out_path, "w", encoding="utf-8", newline="\n") as g:
-        for pkt in packets(a.source):
-            total += 1
-            c = (pkt.get("map") or {}).get("clock_time")
-            if not isinstance(c, int) or not (a.start <= c <= a.end):
-                continue
-            s = scrub(pkt)
-            if not s:
-                continue
-            line = json.dumps(s, separators=(",", ":"), ensure_ascii=False)
+        if a.warm is not None:
+            g.write(json.dumps({"demo": {"warmup": warm}}) + "\n")
+        for line in lines:
             g.write(line + "\n")
-            kept += 1
-            raw_bytes += len(json.dumps(pkt, separators=(",", ":"), ensure_ascii=False))
 
     text = out_path.read_text(encoding="utf-8")
     hit = FORBIDDEN.search(text)
@@ -193,7 +207,7 @@ def main():
         sys.exit(f"输出里出现了不该有的字段 {hit.group(0)!r}，已删除输出。白名单被放宽了？")
 
     size = out_path.stat().st_size
-    print(f"读 {total} 包，留 {kept} 包（clock {a.start}..{a.end}）")
+    print(f"读 {total} 包，留 {kept} 包（clock {lo}..{a.end}，其中预热 {warm} 包）")
     print(f"裁剪前 {raw_bytes / 1e6:.1f} MB -> 裁剪后 {size / 1e6:.2f} MB"
           f"（{size / raw_bytes * 100:.1f}%）" if raw_bytes else "")
     print(f"写出 {out_path}")

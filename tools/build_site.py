@@ -33,7 +33,7 @@ PORT = 8077
 
 # 首页引用到的截图。只拷用得上的，不把整个 docs/ 发出去——
 # docs/design/ 是中文开发笔记，不是给访客看的。
-SITE_IMAGES = ["timers.jpg", "topbar.jpg", "econ.jpg", "econ-zh.jpg", "minimap.jpg"]
+SITE_IMAGES = ["timers.jpg", "topbar-site.jpg", "econ.jpg", "econ-zh.jpg", "minimap.jpg"]
 
 
 def fill_versions(page):
@@ -57,7 +57,7 @@ def build():
         shutil.rmtree(DIST)
     DIST.mkdir(parents=True)
 
-    for name in ("index.html", "demo.html", "demo.jsonl"):
+    for name in ("index.html", "demo.html", "demo.jsonl", "demo-bg.jpg", "demo-bg-zh.jpg"):
         src = ROOT / "site" / name
         if not src.is_file():
             sys.exit(f"缺 {src}——demo.jsonl 由 tools/make_demo.py 生成")

@@ -110,11 +110,10 @@ Dota's own settings** — nothing to line up by hand.
 
 ## Hide it for a moment
 
-It stays up throughout a match and disappears back in the main menu.
+It stays up throughout a match and disappears by itself back in the main menu.
 
-If it's in the way for a moment, or you want a clean screenshot of the game, press
-**`Ctrl+Alt+F11`** to hide it and again to bring it back. It comes back by itself at the
-next match.
+If it's in your way, press **`Ctrl+Alt+F11`** to hide it and again to bring it back — no need
+to leave the game. It shows up again by itself at the start of the next match.
 
 ## What's supported
 

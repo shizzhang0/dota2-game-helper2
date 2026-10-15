@@ -52,18 +52,12 @@
   }
 
   /* demo 框。里面是 iframe，理由见 demo.html 顶部的注释。
-     **iframe 固定 900×400，再整体缩放去适配容器。** 不能让它跟着容器变宽变窄：
-     块的摆位会被 clamp() 钳进视口，窄一点就会被挤到一起、甚至互相压住。 */
+     **iframe 固定 1280×800，再整体缩放去适配容器。** 背景是 16:10 的游戏截图，覆盖层按视口宽高定位，
+     iframe 跟着容器变宽变窄的话覆盖层就和截图里的顶栏、小地图对不上了——固定尺寸加缩放，任何屏幕上都一样 */
   .demo { position: relative; border: 1px solid var(--hair); border-radius: 12px;
-          overflow: hidden; background: #0a0f0c; aspect-ratio: 900 / 400; }
-  .demo iframe { width: 900px; height: 400px; border: 0; display: block;
+          overflow: hidden; background: #000; aspect-ratio: 1280 / 800; }
+  .demo iframe { width: 1280px; height: 800px; border: 0; display: block;
                  transform-origin: top left; }
-  .hint {
-    position: absolute; inset: auto 0 0 0; padding: 10px 14px;
-    background: linear-gradient(transparent, rgba(0,0,0,.75));
-    color: var(--dim); font-size: 13px; text-align: center;
-    display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap;
-  }
   .caption { color: var(--dim); font-size: 13px; margin: 10px 2px 0; }
 
   /* 按钮两行：上面是按钮名，下面一行小字写版本和区别——版本号不再单独占一行 */
@@ -83,12 +77,17 @@
   ol.steps b, ol.steps code { color: var(--fg); }
 
   h2 { font-size: 22px; margin: 44px 0 14px; }
-  /* 四张卡片排成两行两列；窄屏一列 */
-  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  /* 四张卡片固定两行两列（自动列数在宽屏上会排成三列加一个落单的）；窄屏一列 */
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); }
   .cell { background: var(--card); border: 1px solid var(--hair); border-radius: 10px; padding: 16px 18px; }
   .cell h3 { margin: 0 0 6px; font-size: 15px; }
   .cell p { margin: 0; color: var(--dim); font-size: 14px; }
-  .cell img { width: 100%; height: auto; border-radius: 6px; margin-bottom: 10px; display: block; }
+  /* 四张图比例差得多（倒计时、净资产约 3:1，买活两行约 2:1，眼位是正方形），直接铺满宽度时卡片高低不齐。
+     统一放进同样高的深色画框，图完整显示、居中，不裁 */
+  .cell .shot { height: 170px; margin-bottom: 12px; border-radius: 6px; background: #0a0d12;
+                display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  /* 不写 display：会盖掉按页面语言藏起另一张图的那条规则（同样的特异度，写在后面的赢），净资产的中英两张就一起出来了 */
+  .cell .shot img { max-width: 100%; max-height: 100%; }
 
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   td { border-top: 1px solid var(--hair); padding: 9px 10px; vertical-align: top; }
@@ -99,8 +98,7 @@
            color: var(--dim); font-size: 13px; text-align: center; }
   @media (max-width: 620px) {
     h1 { font-size: 28px } header { padding-top: 34px }
-    /* 小屏上 demo 框只有一百多像素高，两行提示会盖掉大半个画面 */
-    .hint { font-size: 11px; padding: 6px 10px; }
+    .grid { grid-template-columns: 1fr; }
   }
 </style>
 <body>
@@ -122,16 +120,13 @@
 
   <div class="demo">
     <iframe id="demo" src="demo.html" title="Live overlay demo" scrolling="no"></iframe>
-    <div class="hint">
-      <span lang="en">This is the real overlay, running the same code as the download.</span>
-      <span lang="zh">这就是那个覆盖层本身，跑的和下载到的是同一份代码。</span>
-    </div>
   </div>
   <p class="caption">
-    <span lang="en">Driven by an actual recorded match, replayed at real speed and
-      looping. The background is a placeholder colour, not real gameplay.</span>
-    <span lang="zh">由一份真实对局录制驱动，按原速循环播放。
-      背景是占位色，不是真实游戏画面。</span>
+    <span lang="en">This is the real overlay, running the same code as the download, driven by a recorded
+      match at real speed and looping. The background is a screenshot from the same match, with chat and
+      notifications blurred. Game imagery © Valve.</span>
+    <span lang="zh">这就是那个覆盖层本身，跑的和下载到的是同一份代码，由一份真实对局录制驱动、按原速循环播放；
+      背景是同一局的游戏截图，聊天和通知打了码。游戏画面 © Valve。</span>
   </p>
 
   <!-- 链到不带版本号的那两份，永远是最新版（发版时 tools/release.py 一起传）。
@@ -141,8 +136,8 @@
       <span lang="en">Download installer</span><span lang="zh">下载安装版</span>
       <small><span lang="en">v{{APP_VERSION}} · one-click updates</span><span lang="zh">v{{APP_VERSION}} · 带一键更新</span></small></a>
     <a class="btn ghost" href="https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-portable.zip">
-      <span lang="en">Portable zip</span><span lang="zh">便携版 zip</span>
-      <small><span lang="en">v{{APP_VERSION}} · single exe</span><span lang="zh">v{{APP_VERSION}} · 解压即用</span></small></a>
+      <span lang="en">Download portable</span><span lang="zh">下载便携版</span>
+      <small><span lang="en">v{{APP_VERSION}} · zip, no install</span><span lang="zh">v{{APP_VERSION}} · zip 解压即用</span></small></a>
   </div>
   <p class="sub">
     <a href="https://github.com/shizzhang0/dota2-game-helper2/releases"><span lang="en">All releases</span><span lang="zh">历史版本</span></a>
@@ -151,7 +146,7 @@
   <h2><span lang="en">What it keeps track of</span><span lang="zh">它替你记的那些事</span></h2>
   <div class="grid">
     <div class="cell">
-      <img src="docs/images/timers.jpg" alt="">
+      <div class="shot"><img src="docs/images/timers.jpg" alt=""></div>
       <h3><span lang="en">Timers</span><span lang="zh">倒计时</span></h3>
       <p lang="en">Mid rune, bounty, Wisdom Shrine, lotus and the stacking window, right
          below the game clock. A nearly-empty ring means it's nearly up. Turbo timings
@@ -160,7 +155,8 @@
          环快走完就是快刷了，不用读数字。快速模式自动识别。</p>
     </div>
     <div class="cell">
-      <img src="docs/images/topbar.jpg" alt="">
+      <!-- 主页用两行的版本：README 那张整条顶栏太长，缩进卡片里看不清 -->
+      <div class="shot"><img src="docs/images/topbar-site.jpg" alt=""></div>
       <h3><span lang="en">Buyback and enemy glyph</span><span lang="zh">买活与敌方塔防</span></h3>
       <p lang="en">Buyback cooldown under every player's portrait, teammates included —
          the game shows it nowhere. Enemy glyph with the full refresh rules and the exact
@@ -170,15 +166,14 @@
     </div>
     <div class="cell">
       <!-- 截图里有客户端文字（击/死/助），中英各一张，跟着页面语言切换 -->
-      <img src="docs/images/econ.jpg" alt="" lang="en">
-      <img src="docs/images/econ-zh.jpg" alt="" lang="zh">
+      <div class="shot"><img src="docs/images/econ.jpg" alt="" lang="en"><img src="docs/images/econ-zh.jpg" alt="" lang="zh"></div>
       <h3><span lang="en">Net worth</span><span lang="zh">净资产</span></h3>
       <p lang="en">Net worth, GPM and XPM right next to the kill counter — items, stash,
          ward dispenser, courier and gold all counted.</p>
       <p lang="zh">净资产、GPM、XPM，就在击杀数旁边。装备、储藏处、眼架、信使在途、金钱都算进去。</p>
     </div>
     <div class="cell">
-      <img src="docs/images/minimap.jpg" alt="">
+      <div class="shot"><img src="docs/images/minimap.jpg" alt=""></div>
       <h3><span lang="en">Wards</span><span lang="zh">眼位</span></h3>
       <p lang="en">Enemy wards stay on Dota's own minimap after they leave vision, fading
          as the information ages. Dewarded wards get a cross; expiring ones a countdown.</p>
@@ -275,6 +270,7 @@
     document.title = T[lang].title;
     // 悬停提示是属性，没法像正文那样靠 [lang] 的 CSS 二选一，跟着标题一起在这里换
     document.querySelector(".patch").title = T[lang].patch;
+    demoBg();
     for (const b of document.querySelectorAll(".langs button"))
       b.setAttribute("aria-pressed", String(b.dataset.set === lang));
   }
@@ -290,9 +286,15 @@
   // **不再演示按 Alt**（v1.4.0）：对局中一直显示（2026-10-14 起没有「按住 Alt 才显示」了），
   // demo 就照这个样子常显。
   const frame = document.getElementById("demo");
-  function fit() { frame.style.transform = `scale(${frame.parentElement.clientWidth / 900})`; }
+  // demo 的背景截图也分中英（英文那张是改过客户端文字的，见 demo.html）。iframe 同源，直接改它的背景；
+  // 还没加载完时改不了，load 里再调一次
+  function demoBg() {
+    try { frame.contentDocument.body.style.backgroundImage = `url(${lang === "zh" ? "demo-bg-zh.jpg" : "demo-bg.jpg"})`; }
+    catch { /* 还没加载 */ }
+  }
+  function fit() { frame.style.transform = `scale(${frame.parentElement.clientWidth / 1280})`; }
   addEventListener("resize", fit);
   apply();
   fit();
-  frame.addEventListener("load", fit);
+  frame.addEventListener("load", () => { fit(); demoBg(); });
 </script>

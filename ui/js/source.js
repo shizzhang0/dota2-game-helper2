@@ -76,14 +76,29 @@ async function replayFile(url, onPacket, speed, loop) {
     console.error("[source] 静态回放读不出来:", url, e);
     return;
   }
+  // 第一行可以是 {"demo":{"warmup":N}}：前 N 包是预热，瞬间喂完、不出画面（见 tools/make_demo.py）
+  const meta = packets[0]?.demo ? packets.shift().demo : null;
+  const warm = Math.min(meta?.warmup || 0, packets.length);
   if (!packets.length) return;
-  const step = tickFromClocks(packets) / speed;
-  let i = 0;
-  const tick = () => {
-    onPacket(packets[i++]);
+  const step = tickFromClocks(packets.slice(warm)) / speed;
+  // **预热要一包一包等着喂**：onPacket 是 async 的，连着调会在 await 处交错，后面的包先把缓存池改了，
+  // 前面那包的 tracker 拿到的就是后面的状态。预热期间 HELPER2_WARMING 让 main.js 不刷新画面，
+  // 免得数字从开局一路跳上来。循环时先喂一个换了对局号的空包，让 main.js 把所有状态清掉再重新预热——
+  // 不清的话时钟倒回去，眼位那边按"换局"把记住的敌方眼全清掉，第二圈起地图就是空的
+  const warmup = async () => {
+    window.HELPER2_WARMING = true;
+    await onPacket({ map: { matchid: "demo-restart" } });
+    for (let k = 0; k < warm; k++) await onPacket(packets[k]);
+    window.HELPER2_WARMING = false;
+  };
+  let i = warm;
+  await warmup();
+  const tick = async () => {
+    await onPacket(packets[i++]);
     if (i >= packets.length) {
       if (!loop) return;
-      i = 0;
+      i = warm;
+      await warmup();
     }
     setTimeout(tick, step);
   };

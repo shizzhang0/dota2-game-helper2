@@ -108,6 +108,8 @@ const IDLE = {
 };
 
 setInterval(() => {
+  // 主页 demo 预热时不刷新：状态正从开局一路追到要播的那一刻，画出来就是数字乱跳（见 source.js）
+  if (window.HELPER2_WARMING) return;
   // 不要在这里提前 return：退出编辑态时若恰好没有 GSI 数据，
   // render 就再也不会被调用，面板会永远停在编辑态的样子上。
   // 有 IDLE 占位，照常渲染即可（visible 自然算成 false，面板隐藏）。
