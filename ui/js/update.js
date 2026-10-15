@@ -71,9 +71,37 @@ export function checkUpdate() {
       last = { state: "new", version: latest.version.replace(/^v?/, "v") };
     } else last = { state: "latest" };
     for (const cb of listeners) cb(last);
+    // 托盘菜单据此多一项「有新版本」；没有新版本时清掉
+    window.__TAURI__.core.invoke("set_update_available",
+      { version: last.state === "new" ? last.version : null }).catch(() => {});
     return last;
   })().finally(() => { running = null; });
   return running;
+}
+
+/** 是不是安装版（有 nsis 的 uninstall.exe）。一键更新只对安装版生效，绿色版只能去下载页，
+    见 src-tauri/src/updater.rs。只问一次，运行中不会变 */
+let installedOnce = null;
+export function isInstalled() {
+  if (!isTauri()) return Promise.resolve(false);
+  installedOnce ??= window.__TAURI__.core.invoke("app_installed").catch(() => false);
+  return installedOnce;
+}
+
+/** 一键更新：下载、验签、静默安装，装完程序自己重启。`onProgress(下载字节, 总字节|null)`。
+    成功时程序在安装器启动那一刻就退出了，这个 Promise 不会 resolve；
+    resolve 了就是失败，值是错误信息（"none" = latest.json 里没有更新的版本）。 */
+export async function installUpdate(onProgress) {
+  const ev = window.__TAURI__.event;
+  const off = await ev.listen("update-progress", (e) => onProgress?.(e.payload.downloaded, e.payload.total));
+  try {
+    await window.__TAURI__.core.invoke("update_install");
+    return "unknown";
+  } catch (e) {
+    return String(e);
+  } finally {
+    off();
+  }
 }
 
 /** 用默认浏览器打开 Releases 页。地址写死在 Rust 那边，前端传不进任意 URL。 */

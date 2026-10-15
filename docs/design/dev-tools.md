@@ -37,6 +37,8 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 > 设置里的统计与一键清空、断流看门狗、文件被外部删掉的检测。
 > 完整的生命周期写在 [overlay.md 的「录制的生命周期」](overlay.md#录制的生命周期2026-09-16-重做)。
 > **仍然不自动清理**——攒下来的录像是对账语料，程序不该替你决定哪份没用了。
+>
+> 收尾的几条路：回到主菜单、换局、**比赛结束 10 秒后**（2026-10-09）、断流 40 秒、程序退出、关开关。
 
 > **必须重新序列化，不能原样写 body。** Dota 推过来的 HTTP body 是**带制表符缩进的多行 JSON**，
 > 一包摊成几十行；原样落盘就不是 JSONL 了，`replay.py` 按行读会**一条都解析不出来**。
@@ -92,7 +94,7 @@ Rust 侧有 17 处 `println!`，但 `windows_subsystem = "windows"` 让正式构
 
 静态服务 `ui/` 与 `constants/`，并通过 SSE 重放 dump。
 打开 <http://127.0.0.1:8000/dev.html> 就能用真实对局数据驱动前端，不必反复进游戏。
-`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 切换始终显示（和卡片上的勾是同一个值）、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
+`?file=` 选文件、`?speed=` 调倍速；页面内 `v` / `Ctrl+Alt+F11` 临时隐藏、`e` / `Ctrl+Alt+F10` 编辑态、`b` 换背景——两个热键和正式版一致，`v` / `e` 是简写。
 
 两处实现上必须注意：
 
@@ -188,12 +190,148 @@ import { EconTracker } from ".../ui/js/networth.js";
 
 ## 发版
 
-1. 三处版本号一起改：`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`（`cargo build` 会跟着改）、
-   `src-tauri/tauri.conf.json`
-2. `cargo build --release --manifest-path src-tauri/Cargo.toml`
-3. 打 zip：exe + 两份 README，名字 `dota2-game-helper2-vX.Y.Z-windows-x64.zip`
-4. `gh release create vX.Y.Z`，标题就是 `vX.Y.Z`。「检查更新」只读 tag，标题和正文怎么写都不影响它
-5. 把 zip 下载回来核对 SHA256
+v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认它）、**绿色版 zip**（exe + 两份 README）、
+**`latest.json`**（一键更新读的清单）。安装包和 zip 各**另传一份不带版本号的**
+（`dota2-game-helper2-setup.exe`、`dota2-game-helper2-portable.zip`）：项目主页和 README 的下载链接写的是
+`releases/latest/download/<这个名字>`，永远指向最新版，发版不用改链接（2026-10-10）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
+**本地和 GitHub Actions 用的是同一个脚本**。
+
+### 平时：推 tag，Actions 自动发
+
+1. `python tools/release.py bump 1.4.0` 改三处版本号（`Cargo.toml`、`Cargo.lock`、`tauri.conf.json`），
+   再跑一次 `python tools/make_shots.py`（README 里卡片截图上有版本号），照常提 PR、CI 过了合进 main
+2. 在 main 上打**带注释的 tag**，注释就是 Release 正文（只写 Changelog，见下），推上去：
+
+   ```bash
+   git tag -a v1.4.0 -F notes.md
+   ```
+
+   ```bash
+   git push origin v1.4.0
+   ```
+
+3. [`release.yml`](../../.github/workflows/release.yml) 接手：核对 tag 和代码里的版本号一致 →
+   `release.py build` → `release.py publish`（建 Release、传五个文件）→ `release.py verify`（下载回来核对）。
+   跑成功之后 [`pages.yml`](../../.github/workflows/pages.yml) 自动重新发项目主页（下载按钮下的版本号跟着变）
+
+签名私钥在仓库 Secrets 的 `TAURI_SIGNING_PRIVATE_KEY`。没有它流水线直接失败，不会发出一个没签名的安装包。
+
+### 兜底：本地发
+
+Actions 坏了，或者要本地先试打一个包：
+
+```bash
+python tools/release.py build
+```
+
+```bash
+python tools/release.py publish notes.md
+```
+
+```bash
+python tools/release.py verify 1.4.0
+```
+
+`build` 本地会去读 `~/.tauri/dota2-game-helper2.key`。产物在 `dist/release/`。
+
+### build 做了什么
+
+- **`ui/` 里有没进仓库的文件就不打**（`git ls-files --others ui`）。`frontendDist` 是整个 `ui/`，
+  gitignore 挡不住打包——2026-10-08 开发页的测试截图和录像切片就这样被嵌进 exe（6.7MB 涨到 9.2MB）。
+  开发素材固定放仓库根的 **`devdata/`**（不进仓库），回放服务器把 `/dev/…` 指到那里；
+  原先是放在 `ui/dev/`、打包时挪出去再挪回来，一次中途被打断就丢在了临时目录里
+- 用 Tauri 命令行打包（`cargo build` 只出 exe，不出安装包和签名），版本跟着 `Cargo.lock` 里的 `tauri` 走
+  （现在 2.11.5）。第一次跑会自己下 NSIS 工具链
+- exe 应约 **7.5MB**（v1.3.x 是 6.7MB，多的是更新插件的 HTTP 下载依赖；更新插件的 HTTPS 换成了
+  Windows 自带的 SChannel，用默认的 rustls 会到 8.6MB）。大很多说明 `ui/` 里混进了别的东西
+- 生成 `latest.json`：安装包下载地址 + `.sig` 签名原文
+
+### 几条规矩
+
+- **Release 正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档
+  （用户 2026-10-09 定；PR 描述同理）。标题就是 `vX.Y.Z`
+- 「检查更新」只读 tag；一键更新读最新 Release 里的 `latest.json`——**漏传它，装了安装版的人就收不到这一版**，
+  所以 `publish` 五个文件缺一样就不发（不带版本号的两份漏了，主页的下载按钮就 404）
+
+> **签名私钥** `~/.tauri/dota2-game-helper2.key`（没设密码）**不进仓库，要备份**；Secrets 里那份
+> 读不出来，不能当备份。公钥写在 `tauri.conf.json` 的 `plugins.updater.pubkey`，装好的程序靠它验安装包。
+> **私钥丢了，已经装了安装版的人就再也收不到一键更新**——换一把新钥匙签出来的包，旧程序验不过，
+> 只能让他们手动下载重装一次。
+
+## README 截图改英文 `tools/relabel_shot.ps1`
+
+**只截中文客户端的图，英文版由它生成**（2026-10-14 用户定）。README 首图和净资产特写上带客户端文字，
+英文 README 放中文截图很尴尬；为此专门切英文客户端打一局又麻烦。所以截一张中文的，这个工具把客户端文字换成英文。
+
+```bash
+pwsh tools/relabel_shot.ps1 -In devdata/shots/中文.png -Out devdata/shots/中文-en.png -Hero "Outworld Destroyer"
+```
+
+`-Hero` 是英雄的英文名（英文客户端里显示的那个，大小写无所谓，会转成大写）。它只生成整张英文图，
+之后裁 `overlay.jpg` / `econ.jpg` 等照 [overlay.md](overlay.md)「截图」那一节手工裁。
+
+### 截中文图时的要求
+
+截图上带客户端文字的有五处，工具换四处，第五处**截图时避开**：
+
+| 位置 | 中文 | 英文 | 处理 |
+|---|---|---|---|
+| 左上角 | 击/死/助、正/反 | K / D / A、LH / DN | 工具换（后面的数字跟着左移 23px，英文标签窄） |
+| 右上角 | 输入/输出丢失 | LOSS IN/OUT | 工具换 |
+| 底部 | 英雄名 | `-Hero` 给的英文名 | 工具换（字体写，见下） |
+| 右下角 | 快速购买提示（栏空着时才有） | Drag or shift-click items to add to Quickbuy. | 工具换（2026-10-14 加） |
+| 右下角金钱上方 | 买活框 | NO BUYBACK (−xxx) | **截图时避开**：**别按 Alt**，它只在按住 Alt 时出现 |
+
+另外别截到击杀播报、聊天、打赏面板——那上面是别的玩家的昵称，中英文都不该放。
+
+### 怎么换的
+
+**不是贴一块英文截图上去**——两张图背景不一样，贴上去就是一块颜色不同的补丁。做法分两步：
+
+1. **抹字**：一块区域里比亮度中位数亮 45 以上（字）、暗 30 以上（字的阴影）的像素算文字，往外扩三圈，
+   再一圈一圈用外面已知像素的平均值往里补
+2. **画字**：英文原版那一块同样抹一遍，得到它自己的背景。只从英文原版取**字形**——每个像素比它的背景亮多少
+   （字的覆盖度，按那块最亮 3% 归一化）、暗多少（阴影）；**颜色取中文原字的**（抹字之前，那块最亮 3% 像素的平均色），
+   画到中文图补好的背景上。字形是英文原版的，颜色和背景都是这张图自己的
+
+   > 第一版是直接叠"英文原图 − 英文背景"这个差值。参照截图那块背景偏红（塔的攻击范围）时，减出来的字就偏青，
+   > LOSS IN/OUT 比旁边原生的 FPS / PING 又亮又粗，一眼看出是贴的（用户 2026-10-14 指出）。
+
+英文原版取自 `tools/relabel_ref/` 里三小块，**都裁自同一张英文客户端截图**（2026-10-14，试玩地图，**不按 Alt**，共 67KB）：
+`en_kda.png` 对应截图 (0,90) 起 244×68，`en_netgraph.png` 对应 (2290,25) 起 180×37，
+`en_quickbuy.png` 对应 (2130,1452) 起 300×58。重裁时参照截图**不能按着 Alt**：按住时快速购买提示下面贴着
+BUYBACK 框，"Quickbuy." 的下沿会被切掉（第一版就是这样）。
+
+**英雄名只能用字体写**——英文截图里不一定有同一个英雄。对着原版 "MONKEY KING" 校准过五种字体，
+Segoe UI 加粗 19px、字距 3.2 最接近（写出来宽 169，原版 166），颜色 (232,184,112)、黑色阴影偏移 (1.5,2)。
+放大能看出不是原版字体，正常尺寸下不明显。
+
+名字位置**自动找**：底部 y 1355~1383 这一行里含金黄 / 橙色像素的列切成几段，第一段是名字左边的橙色徽章
+（实测固定在 633~683），后面挨着的是中文名（居中摆，位置随名字长短变）。英文名从徽章右缘 +15 开始写
+（原版的间距），中文名所在的**整个矩形**重新补背景——只按笔画抹会漏掉阴影边缘，
+短英文名（AXE）盖不住原来的位置，漏的阴影就露成一块污迹。
+
+### 限制和坑
+
+- **坐标是按 2560×1600 量的**（用户的屏幕），别的分辨率直接报错。要支持就按屏高等比换算重新量：
+  Dota 的界面按屏高缩放，左上角、底部按 `k = 屏高 / 1600` 缩放，右上角还要从右边缘算
+- 界面改版（Valve 动了字体、位置）就要重裁 `relabel_ref/` 和重量坐标。量的时候注意别把标尺的边距算进去——
+  第一版就是这样所有坐标偏了 13px，数字前面多出半个残影
+- **PowerShell 变量名不分大小写**：参数 `$Out` 和内部的 `$out` 会互相覆盖。第一版就这样把输入截图覆盖成了半成品
+  （从「图片\Screenshots」里的原图恢复了）。现在输出路径等于输入会直接报错
+- **别拿 `Erase`、`Clear` 之类当函数名**：`Erase` 是 `Remove-Item` 的别名
+- 新版 PowerShell（.NET 6+）里 `Add-Type` 要显式引用 `System.Drawing.Common` / `Primitives` / `Collections`
+
+## 截图打码 `tools/mosaic.ps1`
+
+截图里别的玩家的昵称、聊天、物品打造通知这类东西，打马赛克就行，不用为了躲它们重截（2026-10-14 用户定）。
+
+```bash
+pwsh tools/mosaic.ps1 -In 截图.png -Out 截图-码.png -Rects "1997,712,2560,821" "664,1084,1292,1124"
+```
+
+`-Rects` 每一项是原图像素的 `x0,y0,x1,y1`，`-Block` 是格子边长（默认 14）。做法是把那块缩到每格一个像素再最近邻放回去。
+和 `relabel_shot.ps1` 一起用时**先改英文再打码**——反过来改字工具就找不到原来的字了。
 
 ## 开发顺序（当初的路径，供参考）
 

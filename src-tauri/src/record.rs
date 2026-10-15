@@ -23,6 +23,11 @@ struct Recorder {
     since_flush: u32,
     /// 当前文件属于哪一局。换局就收尾，下一包懒建新文件。
     match_id: Option<String>,
+    /// 这一局第一次进入 POST_GAME 的 unix 秒。过了 `POST_TAIL_SECS` 就收尾，见 `write`。
+    ended_at: Option<u64>,
+    /// 因比赛结束而收尾的那一局。它后面还会推结算期间的 POST_GAME 包，
+    /// 这些包不能再懒建出一个新文件——否则每局都多一个只有结算包的碎片。
+    sealed: Option<String>,
 }
 
 /// 每多少包 flush 一次。gzip 把数据缓存在内存里，只有 finish/flush 才落盘；
@@ -37,6 +42,13 @@ const FLUSH_EVERY: u32 = 50;
 /// GSI 只剩心跳；原先的 20 秒会在每两次心跳之间封口一次，暂停就把一局切成两段，
 /// 回放不关就每 30 秒冒一个 1 包的空文件。40 与前端暂停时的断流阈值同理。
 const IDLE_SECS: u64 = 40;
+
+/// **比赛结束后再录多久就收尾**（2026-10-09）。遗迹倒下、`map.game_state` 变成
+/// `DOTA_GAMERULES_STATE_POST_GAME`（同一包 `win_team` 从 none 变成 radiant / dire）之后，
+/// 对账要的只是结束那一刻的几包——官方净资产、胜方。之后结算画面挂着、GSI 照推，
+/// 回放里甚至还在继续加钱（m9035205154 结束后十几包从 9017 涨到 9069），全是噪声；
+/// 而且原先要等回到主菜单才收尾。留 10 秒（约 5 包）足够把结束那一刻录全。
+const POST_TAIL_SECS: u64 = 10;
 
 static REC: Mutex<Option<Recorder>> = Mutex::new(None);
 /// 最后一次写入的 unix 秒。看门狗靠它判断断流；0 表示还没写过任何东西。
@@ -72,6 +84,11 @@ fn files(app: &tauri::AppHandle) -> Vec<std::path::PathBuf> {
 /// 主菜单的包：没有 `map`，`player` 是空对象。
 fn is_menu(v: &serde_json::Value) -> bool {
     v.get("map").is_none() && v.get("player").and_then(|p| p.as_object()).is_some_and(|o| o.is_empty())
+}
+
+fn is_post_game(v: &serde_json::Value) -> bool {
+    v.get("map").and_then(|m| m.get("game_state")).and_then(|s| s.as_str())
+        == Some("DOTA_GAMERULES_STATE_POST_GAME")
 }
 
 /// 这一包说自己属于哪一局。`"0"` 和空串当作"不知道"——主菜单就是这个样子。
@@ -123,6 +140,17 @@ impl Recorder {
             Err(e) => logf!(Level::Error, "[record] 收尾失败（{why}）: {e}"),
         }
         self.since_flush = 0;
+        self.ended_at = None;
+    }
+
+    /// 比赛结束够久了没有：到了就收尾，并记住这一局，别让它后面的结算包再建新文件。
+    fn seal_if_ended(&mut self) {
+        let Some(t) = self.ended_at else { return };
+        if now().saturating_sub(t) < POST_TAIL_SECS {
+            return;
+        }
+        self.sealed = self.match_id.clone();
+        self.close("比赛结束");
     }
 
     /// 懒建文件：只有真有数据要写的时候才建。
@@ -148,7 +176,7 @@ impl Recorder {
 /// 启动录制子系统。必须在 GSI 起来之前调用。
 pub fn init(app: &tauri::AppHandle) {
     *REC.lock().unwrap() = Some(Recorder { enabled: false, sink: None, since_flush: 0,
-                                           match_id: None });
+                                           match_id: None, ended_at: None, sealed: None });
     refresh(app);
     watchdog();
 }
@@ -203,6 +231,12 @@ pub fn write(app: &tauri::AppHandle, v: &serde_json::Value) {
             r.close("换局");
         }
     }
+    let post = is_post_game(v);
+    // 已经因比赛结束收尾的那一局，结算期间的包不再录。**只挡 POST_GAME 的包**：
+    // 同一局的回放从头再看一遍时状态会退回去，那是新的一次录制，照常建文件
+    if r.sink.is_none() && post && id.is_some() && id == r.sealed {
+        return;
+    }
     if r.sink.is_none() {
         // **没有 matchid 的包不建文件。** Dota 在主菜单里推的是这样的心跳包：
         // `{"provider":{…},"player":{},"events":[]}`，一包 114 字节。
@@ -216,6 +250,9 @@ pub fn write(app: &tauri::AppHandle, v: &serde_json::Value) {
     }
     if id.is_some() {
         r.match_id = id;
+    }
+    if post && r.ended_at.is_none() {
+        r.ended_at = Some(now());
     }
     let line = v.to_string();
     let Some(enc) = r.sink.as_mut() else { return };
@@ -231,8 +268,10 @@ pub fn write(app: &tauri::AppHandle, v: &serde_json::Value) {
         if enc.flush().is_err() {
             logf!(Level::Error, "[record] flush 失败，停止录制");
             r.close("flush 失败");
+            return;
         }
     }
+    r.seal_if_ended();
 }
 
 /// 程序退出时收尾。挂在 `RunEvent::Exit` 上——托盘退出走 `app.exit()`，
@@ -243,11 +282,13 @@ pub fn shutdown() {
     }
 }
 
-/// 看门狗：2 秒一跳，管两件事。
+/// 看门狗：2 秒一跳，管三件事。
 ///
 /// 1. **断流** —— 超过 `IDLE_SECS` 没写过东西就给当前文件收尾封口。
 ///    之后若又来了包，`write` 会懒建一个新文件。
 /// 2. **文件被删** —— 见 `vanished()`。
+/// 3. **比赛结束** —— 结束后 GSI 可能只剩 30 秒一个的心跳，等下一包才收尾就太晚了，
+///    这里按时间补一刀（`POST_TAIL_SECS`）。
 fn watchdog() {
     std::thread::spawn(|| loop {
         std::thread::sleep(std::time::Duration::from_secs(2));
@@ -262,6 +303,8 @@ fn watchdog() {
         }
         if idle {
             r.close("断流");
+        } else if r.ended_at.is_some() {
+            r.seal_if_ended();
         } else if vanished() {
             // 收尾的是个幽灵句柄，写不到任何地方，但要把 sink 清掉，
             // 好让下一包懒建出一个新文件，这一局剩下的部分还能录到

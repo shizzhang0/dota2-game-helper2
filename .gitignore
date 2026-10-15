@@ -10,7 +10,7 @@ node_modules/
 tmp_verify_*
 
 # 个人游戏截图（调样式用的开发资源）
-ui/dev/
+devdata/
 
 # Python
 __pycache__/

@@ -22,7 +22,7 @@ export function parseWards(state) {
     const kind = WARD_UNITS[o.unitname];
     if (!kind) continue;
     out.push({ key: `${o.team}|${kind}|${o.xpos}|${o.ypos}`,
-               team: o.team, kind, x: o.xpos, y: o.ypos });
+               team: o.team, kind, x: o.xpos, y: o.ypos, vision: o.visionrange });
   }
   return out;
 }
@@ -50,6 +50,17 @@ function nearMe(state, w) {
   const h = state.hero;
   if (!h || typeof h.xpos !== "number" || typeof h.ypos !== "number") return false;
   return Math.hypot(w.x - h.xpos, w.y - h.ypos) <= PLACE_RADIUS;
+}
+
+/** 这个敌方眼旁边有没有我方真视的来源：我方真眼（照射 1050，放宽到 1250），
+    或我方英雄（粉 / 宝石，1050 再加两包之间的位移，取 1450）。见 design/wards.md「死眼的尸体」。 */
+const SIGHT_FROM_SENTRY = 1250, SIGHT_FROM_HERO = 1450;
+function trueSightNear(w, seen, state, myTeam) {
+  if (myTeam === null) return true;          // 不知道哪边是自己，宁可不判
+  if (seen.some(s => s.team === myTeam && s.kind === "sentry" &&
+                     Math.hypot(s.x - w.x, s.y - w.y) <= SIGHT_FROM_SENTRY)) return true;
+  return objects(state).some(o => o.team === myTeam && /hero/.test(o.unitname || "") &&
+                                  Math.hypot(o.xpos - w.x, o.ypos - w.y) <= SIGHT_FROM_HERO);
 }
 
 export class WardTracker {
@@ -148,6 +159,24 @@ export class WardTracker {
       } else {
         // 刚判定被我方排掉的，压制期内不再加回来（GSI 滞后，见 noteWardKills）
         if (this.dewarded.has(w.key)) continue;
+        // **视野为 0 的假眼是尸体**（2026-10-11）。眼死了（到期或被排）之后 GSI 还会把它报 6~7 秒，
+        // 这几秒里它对我们可见，假眼的 visionrange 从 1600 变成 0。原先把这种"临终才第一次看见"的
+        // 当成新眼，按"第一次看见 + 寿命"又挂了 6 分钟——三局自视角录制里一共 6 个，
+        // 是用户报"敌方眼位对不上"的主要来源。见 design/wards.md「死眼的尸体」。
+        // 真眼活着时 visionrange 本来就是 0，分不出来，只能管假眼。
+        if (w.kind === "obs" && w.vision === 0) {
+          this.enemy.delete(w.key);
+          this.dewarded.set(w.key, clock);
+          continue;
+        }
+        // 真眼的尸体靠"旁边有没有真视的来源"认：真眼本身隐身，要看见它，附近得有我方真眼
+        // 或者带粉 / 宝石的我方英雄（半径都在 1050 以内）。**第一次看见**时两样都离得很远，
+        // 看见的只能是尸体。m9029221681 里两个挂了 7 分钟的幽灵，离最近的我方真眼和英雄都有一万多；
+        // 同局所有真看见的真眼旁边都有来源。只在第一次看见时判，已经在记的不动。
+        if (w.kind === "sentry" && !this.enemy.has(w.key) && !trueSightNear(w, seen, state, info.myTeam)) {
+          this.dewarded.set(w.key, clock);
+          continue;
+        }
         const was = this.enemy.get(w.key);
         // firstSeen 要留住：眼**不可能活过"第一次看见 + 寿命"**——我们第一次看见它时
         // 它已经活着了，所以这是个物理上界，用它剪枝不会漏报。
@@ -172,8 +201,8 @@ export class WardTracker {
       }
       this.own.delete(key);
     }
-    // 被排的叉保留多久。**原先写死 3 秒，太短了**——面板默认按住 Alt 才出现，
-    // 3 秒意味着那一眼没正好按下去就彻底错过。走常数表，用户嫌长嫌短都能自己改。
+    // 被排的叉保留多久。**原先写死 3 秒，太短了**——那时面板要按住 Alt 才出现，
+    // 3 秒意味着那一眼没正好按下去就彻底错过。走常数表（现在 45 秒）。
     this.killed = this.killed.filter(k => clock - k.at < killedShow(this.C));
 
     // 我方真眼此刻的位置。用本包看到的而不是 this.own：真眼要是同一刻也没了，
@@ -222,7 +251,10 @@ export class WardTracker {
         // 用"离物理上界还剩多少"当置信度，比"多久没看见"更贴近真实剩余寿命
         const left = life - (clock - (w.firstSeen ?? w.lastSeen));
         const conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
-        return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)) };
+        // visible：这一包里还看得见它。GSI 的 minimap 只推我方此刻看得见的敌方单位，
+        // 所以"本包有它" = 有视野 = 原生小地图正画着它，渲染层据此不重复画（见 wardmap.js）
+        return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)),
+                 visible: w.lastSeen === clock };
       }),
       // 叉也带 conf，和敌方眼一个路子：**刚排的扎眼、快过期的几乎看不见**。
       // 这样时长放到 20 秒也不糊——新旧一眼能分开，而不是一片同样实的叉。

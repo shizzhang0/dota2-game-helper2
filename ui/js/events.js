@@ -105,12 +105,13 @@ export class EventTracker {
       : this.C.glyphCooldown;
     return { ready: rem === 0, remaining: rem, total };
   }
-  enemyBuybacks(info) {
-    const range = info.myTeam === 2 ? [5, 9] : [0, 4];
+  // **十个人都给，包括自己和队友**（2026-10-08 起）。原生界面里队友的买活冷却
+  // 哪儿都看不到——记分板没有、顶栏也没有（用户实测）；自己的只在死了以后的按钮上有。
+  // 事件本来就双方都推，原先只是把己方那一半筛掉了。
+  buybacks(info) {
     const out = [];
     for (const [slot, at] of Object.entries(this.buyback)) {
       const s = Number(slot);
-      if (s < range[0] || s > range[1]) continue;
       const rem = Math.ceil(at + this.C.buybackCooldown - info.clock);
       if (rem > 0) out.push({ slot: s, remaining: rem });
     }
