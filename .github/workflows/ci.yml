@@ -73,5 +73,7 @@ jobs:
 
       # release 而不是 debug：windows_subsystem = "windows" 只在 release 生效，
       # 而 release 才是实际要跑的那个产物。
+      # --locked：Cargo.lock 和 Cargo.toml 对不上就失败，不许在 CI 里悄悄解析出一套新版本——
+      # 那样 CI 编过的就不是仓库里锁住的那套依赖
       - name: 构建
-        run: cargo build --release --manifest-path src-tauri/Cargo.toml
+        run: cargo build --release --locked --manifest-path src-tauri/Cargo.toml

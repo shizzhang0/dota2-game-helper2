@@ -78,7 +78,9 @@ class H(BaseHTTPRequestHandler):
         else:
             f = ROOT / "ui" / rel
         f = f.resolve()
-        if not (str(f).startswith(str(ROOT)) and f.is_file()):
+        # 按路径的组成部分比，不按字符串前缀：仓库在 D:/a/repo 时，字符串前缀会把旁边的
+        # D:/a/repo2/… 也当成仓库里的东西放出去
+        if not (f.is_relative_to(ROOT) and f.is_file()):
             self.send_error(404); return
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(f.name)[0] or "application/octet-stream")
@@ -88,7 +90,13 @@ class H(BaseHTTPRequestHandler):
 
     def stream(self, q):
         name = q.get("file", ["raw_20260831_215612.jsonl"])[0]
-        speed = float(q.get("speed", ["8"])[0])
+        # speed=0（或负数、写错）下面会除零 / 睡负数秒，直接拒掉
+        try:
+            speed = float(q.get("speed", ["8"])[0])
+        except ValueError:
+            speed = 0
+        if not speed > 0:
+            self.send_error(400, "speed must be > 0"); return
         path = DUMP / name
         if not path.is_file():
             # 也在程序自己录的目录里找

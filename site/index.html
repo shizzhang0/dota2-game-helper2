@@ -132,7 +132,7 @@
   </header>
 
   <div class="demo">
-    <iframe id="demo" src="demo.html" title="Live overlay demo" scrolling="no"></iframe>
+    <iframe id="demo" src="demo.html" title="Live overlay demo" scrolling="no" loading="lazy"></iframe>
   </div>
   <p class="caption">
     <span lang="en">This is the real overlay, running the same code as the download, driven by a recorded
@@ -159,7 +159,7 @@
   <h2><span lang="en">What it keeps track of</span><span lang="zh">它替你记的那些事</span></h2>
   <div class="grid">
     <div class="cell">
-      <div class="shot"><img src="docs/images/timers.jpg" alt=""></div>
+      <div class="shot"><img src="docs/images/timers.jpg" alt="" loading="lazy"></div>
       <h3><span lang="en">Timers</span><span lang="zh">倒计时</span></h3>
       <p lang="en">Mid rune, bounty, Wisdom Shrine, lotus and the stacking window, right
          below the game clock. A nearly-empty ring means it's nearly up. Turbo timings
@@ -169,7 +169,7 @@
     </div>
     <div class="cell">
       <!-- 主页用两行的版本：README 那张整条顶栏太长，缩进卡片里看不清 -->
-      <div class="shot"><img src="docs/images/topbar-site.jpg" alt=""></div>
+      <div class="shot"><img src="docs/images/topbar-site.jpg" alt="" loading="lazy"></div>
       <h3><span lang="en">Buyback and enemy glyph</span><span lang="zh">买活与敌方塔防</span></h3>
       <p lang="en">Buyback cooldown under every player's portrait, teammates included —
          the game shows it nowhere. Enemy glyph with the full refresh rules and the exact
@@ -179,14 +179,14 @@
     </div>
     <div class="cell">
       <!-- 截图里有客户端文字（击/死/助），中英各一张，跟着页面语言切换 -->
-      <div class="shot"><img src="docs/images/econ.jpg" alt="" lang="en"><img src="docs/images/econ-zh.jpg" alt="" lang="zh"></div>
+      <div class="shot"><img src="docs/images/econ.jpg" alt="" lang="en" loading="lazy"><img src="docs/images/econ-zh.jpg" alt="" lang="zh" loading="lazy"></div>
       <h3><span lang="en">Net worth</span><span lang="zh">净资产</span></h3>
       <p lang="en">Net worth, GPM and XPM right next to the kill counter — items, stash,
          ward dispenser, courier and gold all counted.</p>
       <p lang="zh">净资产、GPM、XPM，就在击杀数旁边。装备、储藏处、眼架、信使在途、金钱都算进去。</p>
     </div>
     <div class="cell">
-      <div class="shot"><img src="docs/images/minimap.jpg" alt=""></div>
+      <div class="shot"><img src="docs/images/minimap.jpg" alt="" loading="lazy"></div>
       <h3><span lang="en">Wards</span><span lang="zh">眼位</span></h3>
       <p lang="en">Enemy wards stay on Dota's own minimap after they leave vision, fading
          as the information ages. Dewarded wards get a cross; expiring ones a countdown.</p>
@@ -271,7 +271,11 @@
     },
   };
   const pick = () => {
-    const saved = (() => { try { return localStorage.getItem("lang"); } catch { return null; } })();
+    // 键名带 helper2: 前缀（2026-10-15，github.io 下同一用户名的页面共用一个源）；
+    // 读的时候兜一下没前缀的旧键，老访客选过的语言不丢
+    const saved = (() => {
+      try { return localStorage.getItem("helper2:lang") ?? localStorage.getItem("lang"); } catch { return null; }
+    })();
     if (saved === "en" || saved === "zh") return saved;
     return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
   };
@@ -290,7 +294,7 @@
   for (const b of document.querySelectorAll(".langs button")) {
     b.addEventListener("click", () => {
       lang = b.dataset.set;
-      try { localStorage.setItem("lang", lang); } catch { /* 无痕模式，不记就是了 */ }
+      try { localStorage.setItem("helper2:lang", lang); } catch { /* 无痕模式，不记就是了 */ }
       apply();
     });
   }

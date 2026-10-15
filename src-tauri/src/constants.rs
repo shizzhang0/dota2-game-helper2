@@ -54,9 +54,18 @@ pub fn get_constants(name: String) -> serde_json::Value {
 
 /// 读一张常数表。前端走上面那个命令，Rust 侧（语言包）直接调这里。
 pub fn read(name: &str) -> serde_json::Value {
-    // 名字只认白名单，避免被拼成任意路径
-    let name = if NAMES.contains(&name) { name } else { "normal" };
-    serde_json::from_str(embedded(name)).unwrap_or_else(|_| serde_json::json!({}))
+    // 名字只认白名单，避免被拼成任意路径。不认识的名字仍回退 normal，但记一条——
+    // 前端拼错表名时拿到的是一份"看起来正常"的常数，不留痕迹的话很难查
+    let name = if NAMES.contains(&name) {
+        name
+    } else {
+        logf!(Level::Warn, "[constants] 不认识的常数表 {name:?}，按 normal 给");
+        "normal"
+    };
+    serde_json::from_str(embedded(name)).unwrap_or_else(|e| {
+        logf!(Level::Error, "[constants] 内嵌的 {name} 解析失败：{e}");
+        serde_json::json!({})
+    })
 }
 
 /// 给设置卡片的开发区用：程序版本 + 价格表对齐的 Dota 版本。

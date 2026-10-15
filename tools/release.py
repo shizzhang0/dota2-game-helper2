@@ -81,7 +81,9 @@ def build():
     if stray:
         sys.exit("ui/ 里有没进仓库的文件，会被打进 exe，先挪走：\n  " + "\n  ".join(stray))
     npx = "npx.cmd" if os.name == "nt" else "npx"
-    run([npx, "-y", TAURI_CLI, "build"], env=env)
+    # `--` 后面的参数传给 cargo。--locked：发出去的包必须用 Cargo.lock 锁住的那套依赖编，
+    # 锁文件和 Cargo.toml 对不上就停（CI 那边同样加了，见 ci.yml）
+    run([npx, "-y", TAURI_CLI, "build", "--", "--locked"], env=env)
 
     rel = TAURI / "target" / "release"
     nsis = rel / "bundle" / "nsis"

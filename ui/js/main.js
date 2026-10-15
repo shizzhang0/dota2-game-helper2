@@ -77,7 +77,18 @@ function isMenu(pkt) {
          && Object.keys(p).length === 0;
 }
 
-connectSource(async (pkt) => {
+// **一包处理完再处理下一包**（2026-10-15）。回调里有 await（loadConstants），Tauri 事件和 SSE
+// 又是来一包调一次、不等上一次——上一包卡在 await 上时下一包先跑完，而两包手里的 st
+// 是池子里同一个对象，tracker 拿到的就是后一包的状态，顺序也乱了。
+// 串成一条链：每包排在上一包后面。返回值就是这一包处理完的 promise，
+// source.js 回放预热那边的 await 照样等得到。出错只断这一包，不断整条链
+let queue = Promise.resolve();
+connectSource((pkt) => (queue = queue.then(() => onPacket(pkt)).catch((e) => {
+  console.error("[main] 处理一包时出错:", e);
+  send("error", e?.stack || e);
+})));
+
+async function onPacket(pkt) {
   // **回到主菜单就退回待机**（2026-10-15）。原先这种包照常进池子：池子守着空对象不覆盖，
   // 留着上一局的 map，inMatch 按旧的 game_state 算成"还在打"，而主菜单每 30 秒一次的心跳
   // 又不停刷新 lastAt——面板挂着旧数据迟迟不消失；最后一包若是暂停态（STALE_PAUSED_MS 40 秒
@@ -115,7 +126,7 @@ connectSource(async (pkt) => {
   last = { st, info, econ: frozen ? last.econ
                                   : econ.update(st, prices, C, info.clock, wards.newOwnSentries) };
   lastAt = Date.now();
-});
+}
 
 onToggleHide(() => { hidden = !hidden; send("info", `[hide] 临时隐藏 = ${hidden}`); });
 

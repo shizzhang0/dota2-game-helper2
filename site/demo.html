@@ -22,8 +22,11 @@
 <div id="editor" hidden></div>
 <script>
   // 设置用默认值（九项全开、小地图自动 = 浏览器里读不到 Dota 设置，按左下 · 普通，正好是截图里的样子）。
-  // 清掉旧版 demo 写进 localStorage 的摆位和设置，免得访客浏览器里残留的值影响显示
-  try { localStorage.removeItem("layout"); localStorage.removeItem("settings"); } catch { /* 无痕模式 */ }
+  // 清掉 localStorage 里的摆位和设置，免得访客浏览器里残留的值影响显示。
+  // 键名 2026-10-15 起带 helper2: 前缀（见 ui/js/settings.js 的 STORE_KEY），没前缀的是更早的版本留下的
+  try {
+    for (const k of ["layout", "settings", "helper2:settings"]) localStorage.removeItem(k);
+  } catch { /* 无痕模式 */ }
   window.HELPER2_DEMO = "demo.jsonl";
 </script>
 <script type="module" src="ui/js/main.js"></script>

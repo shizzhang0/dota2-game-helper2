@@ -7,6 +7,8 @@ license = "MIT"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# build.rs 用它校验内嵌的常数表是合法 JSON（见 build.rs 的 check_constants）
+serde_json = "1"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }

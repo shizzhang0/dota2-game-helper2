@@ -120,6 +120,17 @@ export function render(m) {
     const off = (CIRC * (1 - frac)).toFixed(1);
     if (prev[t.id + ".o"] !== off) { prev[t.id + ".o"] = off; c.fg.style.strokeDashoffset = off; }
   }
+  // **这一刻没给出来的格子退回初始的 "--"**（2026-10-15）。号角前 computeTimers 不出堆野
+  //（clock < 0 时没有意义），而上面只写给出来的那几格——堆野格子就停在上一局最后的数字和环上，
+  // 新局选人、策略阶段一直挂着旧值。和 ring() 建出来时一个样子：数字 "--"、满环、远。
+  const given = new Set((m.timers || []).map(t => t.id));
+  for (const id of TIMER_IDS) {
+    const c = els.cells[id];
+    if (!c || given.has(id)) continue;
+    set(c.num, id + ".n", "--");
+    if (prev[id + ".u"] !== "far") { prev[id + ".u"] = "far"; c.root.dataset.urgency = "far"; }
+    if (prev[id + ".o"] !== "0") { prev[id + ".o"] = "0"; c.fg.style.strokeDashoffset = "0"; }
+  }
 
   placeBlocks();
   renderTopbar(root, m, show);

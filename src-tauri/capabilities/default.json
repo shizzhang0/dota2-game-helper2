@@ -1,15 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "覆盖层窗口所需的最小权限集",
+  "description": "覆盖层窗口所需的最小权限集：前端只用 invoke 调自己的命令（不需要声明）和 event.listen 收事件。窗口、热键都在 Rust 侧做，不给前端。理由见 design/overlay.md「前端的权限与 CSP」",
   "windows": [
     "overlay"
   ],
   "permissions": [
-    "core:default",
-    "core:event:default",
-    "core:window:default",
-    "core:webview:default",
-    "global-shortcut:default"
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
   ]
 }

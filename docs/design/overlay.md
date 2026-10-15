@@ -189,6 +189,29 @@
 实测那样写 cargo 认不出来，会把 crate 当成永远是脏的，**每次** build 都重编一遍
 （一次 3 分半），比它要解决的问题更糟。
 
+`build.rs` 还会校验内嵌的几张常数表（`constants/*.json`）是合法 JSON，坏了直接编译失败（2026-10-15）：
+运行时解析失败只能退回空表，价格全按 0 算、计时全没了，用户那边只看到"数字不对"。
+
+### 前端的权限与 CSP（2026-10-15）
+
+**权限只给前端真用到的两条**：`core:event:allow-listen` / `allow-unlisten`（`capabilities/default.json`）。
+前端对 Tauri 只做两件事：`invoke` 调我们自己的命令（自己的命令不需要声明权限），`event.listen`
+收 `gsi` / `edit` / `settings` / `toggle-hide` / `update-progress`。窗口摆位、鼠标穿透、全局热键全在 Rust 侧，
+前端一条都不调。原先给的是 `core:default` + `global-shortcut:default`，顺带放开了菜单、托盘、窗口、
+发事件等一整套写权限——前端万一被注入了什么，能动的东西远比它需要的多。实测 `event.emit` 现在会被拒。
+
+**CSP**（`tauri.conf.json` 的 `security.csp`，原先是 `null`）：
+
+| 指令 | 值 | 为什么 |
+|---|---|---|
+| `default-src` / `script-src` | `'self'` | 脚本只有 `ui/js` 下的模块；Tauri 自己注入的脚本它会自动补哈希 |
+| `style-src` | `'self' 'unsafe-inline'` | 渲染层大量用 `style="..."` 和 `el.style` 写位置、CSS 变量 |
+| `img-src` | `'self' data:` | 图标是内联 SVG |
+| `connect-src` | `'self' ipc: http://ipc.localhost https://api.github.com` | 前两个是 Tauri 的 IPC；GitHub 是「检查更新」，请求故意从前端发（走系统代理，见「检查更新」） |
+
+**加新的外部请求要同时改这里**，否则在 Tauri 里会被静默挡掉（浏览器开发页不受影响，那边没有这条 CSP）。
+2026-10-15 用 debug exe 实测过：面板、设置卡片、检查更新都正常，访问别的域名会被挡、控制台报 CSP 违规。
+
 ### 录制的生命周期（2026-09-16 重做）
 
 > 录制是开发者工具：2026-09-29 起要 `settings.json` 里 `devTools` 为真才显示、才会录，

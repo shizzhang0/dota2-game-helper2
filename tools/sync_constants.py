@@ -127,6 +127,8 @@ def vpk_read(dota_dir, wanted):
         f.read(16)          # v2 头部后面还有 16 字节，用不到
     elif ver != 1:
         die(f"不认识的 VPK 版本 {ver}")
+    # 目录树之后紧跟着"内嵌在 dir 文件里"的数据区（archive == 0x7FFF 的条目，offset 从这里算起）
+    data_start = f.tell() + tree_size
 
     def cstr():
         buf = bytearray()
@@ -150,12 +152,13 @@ def vpk_read(dota_dir, wanted):
                 if not name:
                     break
                 _crc, preload, archive, off, length, _term = struct.unpack("<IHHIIH", f.read(18))
-                # preload 不为 0 时紧跟着内嵌数据，**必须读掉**，否则整棵树从这里错位
-                if preload:
-                    f.read(preload)
+                # preload 不为 0 时紧跟着内嵌数据，**必须读掉**，否则整棵树从这里错位。
+                # 它也不是可以扔掉的东西：**preload 就是这个文件的开头**，取文件时要拼在前面
+                # （原先读掉就丢了，眼下要的几份文件 preload 恰好都是 0，才没出事）
+                pre = f.read(preload) if preload else b""
                 full = f"{path}/{name}.{ext}"
                 if full in wanted:
-                    found[full] = (archive, off, length)
+                    found[full] = (pre, archive, off, length)
     f.close()
 
     missing = set(wanted) - set(found)
@@ -164,11 +167,21 @@ def vpk_read(dota_dir, wanted):
             "\n      Valve 可能改了数据格式。**不要退回网上的价格源**，先看 dota2 是不是把它编译了。")
 
     out = {}
-    for full, (archive, off, length) in found.items():
-        pak = dota_dir / f"pak01_{archive:03d}.vpk"
+    for full, (pre, archive, off, length) in found.items():
+        # archive == 0x7FFF：数据不在 pak01_NNN.vpk，而在 dir 文件自己的树后面（VPK 规范）。
+        # 不单独处理的话会去开一个不存在的 pak01_32767.vpk，报的是一个看不出原因的 FileNotFoundError
+        if archive == 0x7FFF:
+            pak, base = dirpak, data_start
+        else:
+            pak, base = dota_dir / f"pak01_{archive:03d}.vpk", 0
+            if not pak.is_file():
+                die(f"{full} 在 {pak.name} 里，但这个文件不存在——Dota 的安装可能不完整，在 Steam 里验证一下文件")
         with pak.open("rb") as a:
-            a.seek(off)
-            out[full] = a.read(length)
+            a.seek(base + off)
+            data = a.read(length) if length else b""
+        if len(data) != length:
+            die(f"{full} 应有 {length} 字节，从 {pak.name} 只读到 {len(data)}")
+        out[full] = pre + data
     return out
 
 
