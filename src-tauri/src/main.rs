@@ -2,6 +2,7 @@
 
 mod constants;
 mod dotacfg;
+mod foreground;
 mod gsi;
 mod gsicfg;
 mod hittest;
@@ -126,6 +127,7 @@ fn main() {
             record::init(app.handle());          // 必须在 gsi 之前：第一包来的时候它得已经在
             gsi::spawn(app.handle().clone());
             hittest::spawn(app.handle().clone());
+            foreground::spawn(app.handle().clone());
             gsicfg::ensure_cfg();
             Ok(())
         })
@@ -133,6 +135,7 @@ fn main() {
             constants::get_constants,
             constants::get_versions,
             dotacfg::dota_hud,
+            foreground::dota_front,
             hittest::set_card_rect,
             updater::app_installed,
             updater::set_update_available,

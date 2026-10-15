@@ -1,4 +1,4 @@
-import { connectSource, onToggleHide, isTauri } from "./source.js";
+import { connectSource, onToggleHide, onDotaFront, isTauri } from "./source.js";
 import { CachePool } from "./cachepool.js";
 import { MatchTracker } from "./match.js";
 import { loadConstants, computeTimers } from "./timers.js";
@@ -27,6 +27,8 @@ const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker
 let tracker = null, C = null, last = null, editMode = false;
 // 临时隐藏（Ctrl+Alt+F11）：只在内存里，换下一局、重启程序都自动恢复显示
 let hidden = false;
+// Dota 在不在前台（2026-10-15）：切到别的程序时面板收起，切回来再出现。见 foreground.rs
+let dotaFront = true;
 let wards = null;
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
 // Dota 自己的 HUD 设置：启动时读一次，之后每局开始再读（见 dotahud.js）
@@ -129,6 +131,7 @@ async function onPacket(pkt) {
 }
 
 onToggleHide(() => { hidden = !hidden; send("info", `[hide] 临时隐藏 = ${hidden}`); });
+onDotaFront((v) => { dotaFront = v; });
 
 // 没有 GSI 数据时的占位，用于编辑态——调设置、看位置对不对，恰恰要在开游戏之前做，
 // 若等到有数据才渲染，没开 Dota 时面板根本不出现。
@@ -160,7 +163,8 @@ setInterval(() => {
     // **对局中一直显示**（2026-10-14 起；原先有「按住 Alt 才显示」可选，连同 Alt 检测一起去掉了）。
     // 不绕过 inMatch：主菜单里照样消失，不会杵在桌面上。Ctrl+Alt+F11 可以临时收起。
     // 编辑态则要绕过，调设置这件事恰恰要在开游戏之前做；断流时同理，编辑态里照样看得到最后一刻。
-    visible: editMode || (info.inMatch && !stale && !hidden),
+    // 切到别的程序（Dota 不在前台）也收起：后台照样推包，不挡的话面板压在浏览器、桌面上（2026-10-15）。
+    visible: editMode || (info.inMatch && !stale && !hidden && dotaFront),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
     glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },

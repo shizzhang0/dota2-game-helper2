@@ -111,3 +111,11 @@ async function replayFile(url, onPacket, speed, loop) {
 export function onToggleHide(cb) {
   if (isTauri()) window.__TAURI__.event.listen("toggle-hide", () => cb());
 }
+
+/** Dota 是不是前台窗口（Rust 轮询，见 foreground.rs）。先取一次当前值，之后变了才回调。
+    浏览器里没有这回事（开发页、主页 demo），不回调，调用方按"在前台"算 */
+export function onDotaFront(cb) {
+  if (!isTauri()) return;
+  window.__TAURI__.event.listen("dota-front", (e) => cb(e.payload === true));
+  window.__TAURI__.core.invoke("dota_front").then((v) => cb(v === true), () => {});
+}
