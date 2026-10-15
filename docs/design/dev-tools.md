@@ -203,8 +203,11 @@ v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认�
 2. 在 main 上打**带注释的 tag**，注释就是 Release 正文（只写 Changelog，见下），推上去：
 
    ```bash
-   git tag -a v1.4.0 -F notes.md
+   git tag -a v1.4.0 --cleanup=verbatim -F notes.md
    ```
+
+   **`--cleanup=verbatim` 不能省**：git 打 tag 时默认把 `#` 开头的行当注释删掉，Changelog 里的 `## 改动`、`## 修复`
+   小标题会整行消失（v1.4.0 就这样，事后用 `gh release edit v1.4.0 --notes-file notes.md` 补回来的）
 
    ```bash
    git push origin v1.4.0
