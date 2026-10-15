@@ -66,8 +66,8 @@ To turn items on or off: **left-click the tray icon**, or right-click → Settin
 | Stacking | Neutrals spawn on the minute; counts you down to it | Same |
 
 Turbo is detected automatically. A row of small rings sits below the game clock, and
-**the ring is the progress bar**: nearly empty means nearly up, and it thickens for the
-last 10 seconds.
+**the ring is the progress bar**: nearly empty means nearly up, and the whole ring lights up
+for the last 10 seconds.
 
 ### Buyback and enemy glyph
 
