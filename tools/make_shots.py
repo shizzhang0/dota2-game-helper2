@@ -99,7 +99,12 @@ def build_site(work, clock):
         for line in f:
             if not line.strip():
                 continue
-            if (json.loads(line).get("map") or {}).get("clock_time", 0) > clock:
+            obj = json.loads(line)
+            # 主页 demo 数据第一行是预热说明 {"demo":{"warmup":N}}（见 make_demo.py）。这里截的是开头一段，
+            # 留着它的话这几百包全被当成预热吃掉，一包都不播，截出来一片空白
+            if "demo" in obj:
+                continue
+            if (obj.get("map") or {}).get("clock_time", 0) > clock:
                 break
             g.write(line)
             n += 1

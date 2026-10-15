@@ -78,7 +78,8 @@ async function replayFile(url, onPacket, speed, loop) {
   }
   // 第一行可以是 {"demo":{"warmup":N}}：前 N 包是预热，瞬间喂完、不出画面（见 tools/make_demo.py）
   const meta = packets[0]?.demo ? packets.shift().demo : null;
-  const warm = Math.min(meta?.warmup || 0, packets.length);
+  // 预热包数不小于总包数说明数据被截过（只剩开头一段），这时没有可播的，干脆不预热
+  const warm = (meta?.warmup || 0) < packets.length ? (meta?.warmup || 0) : 0;
   if (!packets.length) return;
   const step = tickFromClocks(packets.slice(warm)) / speed;
   // **预热要一包一包等着喂**：onPacket 是 async 的，连着调会在 await 处交错，后面的包先把缓存池改了，
