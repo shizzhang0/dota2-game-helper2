@@ -34,8 +34,11 @@ const itemNames = (st) => {
   }
   return out;
 };
+// 结束后那个定格的数（main.js 在 POST_GAME 第一包定格）——用户在结算画面对照的就是它
+let ourFinal = null, truthFinal = null;
 await runSelf(recs.self, ({ st, info, econ }) => {
   heroName ??= st.hero?.name || null;
+  if (info.gameState === "DOTA_GAMERULES_STATE_POST_GAME") ourFinal ??= econ.networth;
   if (info.clock === null || !info.inMatch && info.gameState !== "DOTA_GAMERULES_STATE_POST_GAME") return;
   ours.set(info.clock, { nw: econ.networth, items: itemNames(st), gameState: info.gameState });
 });
@@ -54,6 +57,7 @@ for (const { clock, pkt } of spectateTimeline(recs.spectate)) {
   }
   const nw = who && pkt.player?.[who.team]?.[who.slot]?.net_worth;
   if (typeof nw === "number" && pkt.map?.game_state === "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS") truth.set(clock, nw);
+  if (typeof nw === "number" && pkt.map?.game_state === "DOTA_GAMERULES_STATE_POST_GAME") truthFinal ??= nw;
 }
 if (!who) { console.log(`回放里找不到 ${heroName}`); process.exit(1); }
 console.log(`英雄 ${heroName.replace("npc_dota_hero_", "")}（回放里是 ${who.team}.${who.slot}）\n`);
@@ -82,7 +86,14 @@ console.log(`  完全一致     ${pct(r => r.d === 0)}`);
 console.log(`  差 50 以内   ${pct(r => Math.abs(r.d) <= 50)}`);
 console.log(`  差 100 以内  ${pct(r => Math.abs(r.d) <= 100)}`);
 console.log(`  平均 |差|    ${mean.toFixed(0)}    中位 ${sorted[n >> 1]}    最大 ${sorted[n - 1]}`);
-console.log(`  终局         我们 ${last.ours}  官方 ${last.truth}  差 ${last.d >= 0 ? "+" : ""}${last.d}（${mmss(last.clock)}）\n`);
+// **终局看结束后的定格，不看"对局中最后一包"**：后者和结束那一刻之间还有一两秒被动收入，
+// 两边按整秒对齐时会差几块（m9045983491 报过 +2，而结算画面上两边一分不差）
+const sign = (d) => `${d >= 0 ? "+" : ""}${d}`;
+if (ourFinal !== null && truthFinal !== null) {
+  console.log(`  终局（结束后定格，即结算画面上的数）  我们 ${ourFinal}  官方 ${truthFinal}  差 ${sign(ourFinal - truthFinal)}\n`);
+} else {
+  console.log(`  终局（录制里没有结束后的包，取对局中最后一刻）  我们 ${last.ours}  官方 ${last.truth}  差 ${sign(last.d)}（${mmss(last.clock)}）\n`);
+}
 
 // ── 偏差段：|差| ≥ EPISODE_MIN 的连续时刻并成一段（中间断开不超过 5 秒），按"时长 × 平均偏差"排 ──
 const eps = [];
