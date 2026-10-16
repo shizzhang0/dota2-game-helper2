@@ -28,7 +28,7 @@ simulated input ([why this is safe](#why-this-is-safe)).
 ![The game with the overlay](docs/images/overlay.jpg)
 
 <sub>A real in-game screenshot: buyback under each portrait, enemy glyph at the enemy end
-of the top bar, the five timers below the game clock, net worth next to the kill counter,
+of the top bar, the five timers below the game clock, net worth at your end of the top bar,
 enemy wards on the minimap. Game imagery © Valve.</sub>
 
 ## Up and running in three minutes
@@ -87,7 +87,7 @@ glyph right now**, not just when they last used one.
 
 ![Net worth](docs/images/econ.jpg)
 
-Net worth, GPM and XPM, next to the kill counter at the top left. Net worth = items +
+Net worth, GPM and XPM, at your team's end of the top bar (the enemy glyph sits at the other end). Net worth = items +
 stash + ward dispenser + items in transit on the courier + gold.
 
 > Net worth is an **approximation**: GSI only sends your own inventory, so items on the
