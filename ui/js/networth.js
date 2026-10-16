@@ -670,8 +670,7 @@ export class EconTracker {
                        goldBefore === null ? 0 : goldBefore - gold,
                        (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
                        died);
-    this.noteProxy(state.items, prices, state.player, clock,
-                   goldBefore === null ? 0 : gold - goldBefore);
+    this.noteProxy(state.items, prices, state.player, clock);
     this.noteVariants(state.items);
     this.noteBuyback(state, clock);
     const tpFree = died || this.noteTpGift(state.items, clock);
@@ -882,7 +881,7 @@ export class EconTracker {
    *
    * 只接管 `TRANSIT_TTL` 之后的时间段：前 90 秒归在途账管（信使在送），不重叠。
    */
-  noteProxy(items, prices, player, clock, goldUp) {
+  noteProxy(items, prices, player, clock) {
     const mine = mySlot(player);
     let inSlot = 0, inStash = 0;
     for (const [k, it] of Object.entries(items || {})) {
@@ -898,11 +897,14 @@ export class EconTracker {
     this.prevProxySlot = inSlot;
     this.prevProxyStash = inStash;
     if (clock === null) return;
-    const cost = prices.gem?.cost ?? 900;
     const held = inSlot + inStash, prev = pSlot + pStash;
     // 回到包里了：销账。（装备栏↔储藏处之间挪动不算离开，held 不变）
     for (let i = held - prev; i > 0 && this.proxy.length; i--) this.proxy.shift();
-    // 离开包里了。卖掉不算——Dota 卖价是半价。
+    // 离开包里了。**真视宝石不能卖**，离开物品栏只能是给了人或阵亡掉落，一律接着算。
+    //
+    // 原先这里有一道"同一包金钱涨了半价以上就当卖掉、不算"的豁免（2026-10-16 去掉）。
+    // 宝石卖不掉，这道豁免只会误伤：手递手给队友的那一包恰好有人头 / 助攻进账，
+    // 这颗宝石就整局不计、一直少 900。二十份录制里宝石离开物品栏 19 次，它一次都没触发过。
     //
     // **从哪一侧离开决定什么时候开始算。** 从储藏处离开的，在途账会为它记一笔
     // （`lost = prevStash - stash`），所以让位 `TRANSIT_TTL` 秒免得重复；
@@ -913,7 +915,6 @@ export class EconTracker {
     // 那 6 次立刻开始算。
     let fromSlot = Math.max(0, pSlot - inSlot);
     for (let i = prev - held; i > 0; i--) {
-      if (goldUp >= cost / 2) break;
       const bySlot = fromSlot > 0;
       if (bySlot) fromSlot--;
       this.proxy.push({ at: clock, now: bySlot });

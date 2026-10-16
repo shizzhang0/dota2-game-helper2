@@ -210,26 +210,19 @@ export class WardTracker {
     // 3 秒意味着那一眼没正好按下去就彻底错过。走常数表（现在 45 秒）。
     this.killed = this.killed.filter(k => clock - k.at < killedShow(this.C));
 
-    // 我方真眼此刻的位置。用本包看到的而不是 this.own：真眼要是同一刻也没了，
-    // 就不该再拿它当"真视还在"的凭据。
-    const sentries = seen.filter(w => w.kind === "sentry" &&
-                                      info.myTeam !== null && w.team === info.myTeam);
-    const covered = (x, y) => sentries.some(
-      s => Math.hypot(x - s.x, y - s.y) <= this.C.sentryTrueSight);
-
     for (const [key, w] of [...this.enemy]) {
-      // 本包还看得见的不动——它就在真视范围内，covered() 必然为真，会被误删
+      // 本包还看得见的不动
       if (seenKeys.has(key)) continue;
-      // 消失的那一刻仍被我方真视覆盖 = 它是真没了（被排或到期），立刻移除。
-      // GSI 没有击杀眼的事件，这是唯一能判定的途径：敌方眼平时每局几十次进出
-      // 视野，"从数据里消失"本身完全不能说明问题，但"在我方真视底下消失"可以。
+      // **从数据里消失不说明它没了，一律按寿命兜底保留**（2026-10-16）。
       //
-      // 删的同时也压制一段，和 noteWardKills 同一个口径（2026-10-15）：GSI 偶尔会再报一次
-      // 已经没了的眼，不压的话它以 firstSeen = 现在 重新挂满一个寿命。代价是同一个点
-      // wardKillSuppress 秒内被重新插眼时晚一点才显示——两处原本就是这个取舍
-      if (covered(w.x, w.y)) { this.enemy.delete(key); this.dewarded.set(key, clock); continue; }
-      // 否则只能当作真视断了，按该类型的寿命兜底保留。必须按类型分——
-      // 原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
+      // 原先有一条"消失的那一刻仍在我方真眼的真视范围里 = 真没了，立刻删"（covered()）。
+      // 端到端对账（tools/verify_wards.mjs，三局自己视角 + 回放）推翻了它：**真视只让隐身的东西现形，
+      // 前提是那里有普通视野**——我方英雄一走，真视底下照样看不见。三局里它删掉 6 个还活着的眼
+      // （漏显示合计约 1289 秒，三个是敌方插在我方真眼旁边 33~378 的），只帮着及时删掉 4 个真没了的。
+      // 去掉之后漏显示归零，幽灵多 4 个（按"多久没看见"淡化，见 wards.md）。
+      // 被我方排掉的照样立刻删：那条走排眼事件（noteWardKills），不靠这里。
+      //
+      // 按该类型的寿命兜底。必须按类型分——原先真假眼都用一个 366，敌方真眼（426）会在还活着时就被抹掉。
       const memory = w.kind === "sentry" ? this.C.wardSentryDuration
                                          : this.C.wardObserverDuration;
       // 两个上界取紧的那个：从最后一次看见起算的兜底，以及"第一次看见 + 寿命"这个
