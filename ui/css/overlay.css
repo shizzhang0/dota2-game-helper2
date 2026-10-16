@@ -188,6 +188,13 @@ html, body {
    而且 `.cell.wide` 的 space-between 特异度更高，会把金额顶到上沿、GPM 压到下沿，
    中间空出一截——所以这里用 .cell.econ 压回去，让两行贴着。 */
 .cell.econ { justify-content: flex-start; gap: 2px; height: auto; }
+/* **净资产带一块暗底**（2026-10-16 起）：挪到顶栏外侧之后，它直接压在游戏画面上，亮草地、技能特效上
+   GPM/XPM 那行小字读不清。照 Dota 左上角 KDA 面板的样子给一块方形半透明暗底，读起来就是"顶栏多出来的一格"。
+   KDA 面板实测只叠了约 22~25% 的黑（面板内外同一块草地 (97,135,113) 对 (129,173,128)），
+   我们取 35%：比它略深一点更显眼，又还是同一种观感（对比过 25% / 38% / 62%，62% 像一块黑布）。
+   上下各留 2，盒子从屏顶 0 到约 42，和头像一样高；格子宽度本来就钉死 116，盒子不会跟着数字位数伸缩。
+   倒计时和塔防不加：它们是圆、自带底盘 */
+[data-block="econ"] .cell.econ { background: rgba(0, 0, 0, .35); padding: 2px 0; }
 .nw {
   font-size: 22px; font-weight: 600; color: #FFD76A; line-height: 1.1;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
