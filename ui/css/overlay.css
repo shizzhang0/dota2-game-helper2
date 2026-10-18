@@ -192,9 +192,18 @@ html, body {
    GPM/XPM 那行小字读不清。照 Dota 左上角 KDA 面板的样子给一块方形半透明暗底，读起来就是"顶栏多出来的一格"。
    KDA 面板实测只叠了约 22~25% 的黑（面板内外同一块草地 (97,135,113) 对 (129,173,128)），
    我们取 35%：比它略深一点更显眼，又还是同一种观感（对比过 25% / 38% / 62%，62% 像一块黑布）。
-   上下各留 2，盒子从屏顶 0 到约 42，和头像一样高；格子宽度本来就钉死 116，盒子不会跟着数字位数伸缩。
-   倒计时和塔防不加：它们是圆、自带底盘 */
-[data-block="econ"] .cell.econ { background: rgba(0, 0, 0, .35); padding: 2px 0; }
+   2026-10-18 起和敌方塔防一起放在小地图上方（minibar，见 render.js）：两格各一块暗底，中间留 4 的缝，
+   净资产 160 + 缝 4 + 塔防 67 = 231，正好是普通小地图的宽度，左右都和小地图对齐。
+   净资产格子固定 160 宽、42 高，金额和 GPM/XPM 靠左（贴小地图那一侧），不会跟着数字位数伸缩。
+   倒计时不加：它们是圆、自带底盘 */
+.block[data-block="minibar"] { gap: 4px; }
+.block[data-block="minibar"].right { flex-direction: row-reverse; }   /* 小地图在右边：整栏镜像，净资产贴右边缘 */
+[data-block="minibar"] .cell.econ {
+  box-sizing: border-box; width: 160px; height: 42px; padding: 2px 8px;
+  align-items: flex-start; justify-content: center;
+  background: rgba(0, 0, 0, .35);
+}
+[data-block="minibar"] .cell.econ .inline-row { justify-content: flex-start; }
 .nw {
   font-size: 22px; font-weight: 600; color: #FFD76A; line-height: 1.1;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
@@ -252,20 +261,31 @@ html, body {
 /* 编辑态的占位：十个位置都画出来，好一眼看出对不对得上头像 */
 .tb-bb[data-v="slot"] { border: 1px dashed rgba(255, 211, 77, .6); opacity: .6; }
 
-/* 敌方塔防：敌方那一端、挨着顶栏最外侧头像（天辉在左、夜魇在右）。
-   **和倒计时同一套圆**：带颜色的暗底盘 + 进度环 + 中间一座塔（游戏里塔防按钮就是塔）。
-   基准 52px 的格子按 0.72 缩，和倒计时的圆一样大（直径约 37）。
-   原先是一条 120 宽的底板放盾 + 数字 + 进度线，太长（2026-10-09 改）。 */
-.tb-glyph {
+/* 敌方塔防：minibar 里净资产旁边那一格（2026-10-18 起；原先在顶栏敌方那一端，跟着阵营左右换边，用户觉得奇怪）。
+   **和倒计时同一套圆**：带颜色的暗底盘 + 进度环 + 中间一座塔（游戏里塔防按钮就是塔），外径 34。
+   格子和净资产一样一块 35% 暗底，**另加一圈淡红光晕**表示"这是敌人的"：从中间往四边淡出、铺满整格
+   （只在圆环外面薄薄一圈的话会被底盘挡掉大半，深浅调了也看不出差别）。冷却中 16%；**可用时加深到 55%**，
+   配合满环和点亮的塔，变成提醒。对比过 30 / 45 / 60，30 太淡（用户），60 醒目但稍冲。
+   区分敌我试过顶边色条（自己绿、敌人红）、细红描边、整格泛红，前两个用户嫌丑，整格泛红让可用时的红环压在红底上反而不显眼 */
+.mb-glyph {
   --accent: var(--k-threat);
-  width: 52px; height: 52px;
-  transform: translate(-50%, -50%) scale(calc(var(--hud-k, 1) * .72));
+  position: relative; box-sizing: border-box; width: 67px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .35);
   color: var(--k-threat);
 }
-.tb-glyph svg.ring { width: 52px; height: 52px; display: block; overflow: visible;
-                     filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
-.tb-glyph .ring-fg { stroke-width: 5; }
-.tb-glyph-ico {
+.mb-glyph::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse farthest-side, rgba(255, 77, 77, .16) 25%, transparent 100%);
+}
+.mb-glyph[data-ready="1"]::before {
+  background: radial-gradient(ellipse farthest-side, rgba(255, 77, 77, .55) 25%, transparent 100%);
+}
+.mb-ring { position: relative; width: 34px; height: 34px; }
+.mb-ring svg.ring { width: 34px; height: 34px; display: block; overflow: visible;
+                    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
+.mb-glyph .ring-fg { stroke-width: 5; }
+.mb-glyph-ico {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
@@ -274,20 +294,20 @@ html, body {
     color-mix(in srgb, var(--accent) 55%, rgb(10, 13, 18)) 0,
     rgba(10, 13, 18, .45) 72%, transparent 76%);
 }
-.tb-glyph svg.ico { width: 30px; height: 30px; stroke-width: 2.1; opacity: .3;
+.mb-glyph svg.ico { width: 20px; height: 20px; stroke-width: 2.1; opacity: .3;
                     filter: drop-shadow(0 0 2px #000); }
-/* 冷却中的剩余时间，压在变暗的塔上。4:52 这种四个字符要塞进约 40px 的底盘，字号到 15 为止 */
-.tb-glyph-ico span {
+/* 冷却中的剩余时间，压在变暗的塔上。4:52 这种四个字符要塞进约 26 的底盘，字号到 11 为止 */
+.mb-glyph-ico span {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px; font-weight: 700; letter-spacing: -.3px; line-height: 1;
+  font-size: 11px; font-weight: 700; letter-spacing: -.3px; line-height: 1;
   color: #FFE3E3;
   text-shadow: 0 0 3px #000, 0 1px 2px #000;
 }
-.tb-glyph-ico span:empty { display: none; }
+.mb-glyph-ico span:empty { display: none; }
 /* ready：环满、塔点亮并填实、环加粗——"敌方此刻有塔防"是威胁态，要最显眼 */
-.tb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; }
-.tb-glyph[data-ready="1"] .ring-fg { stroke-width: 7; }
+.mb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; }
+.mb-glyph[data-ready="1"] .ring-fg { stroke-width: 7; }
 
 /* ── 眼位：贴在原生小地图上 ─────────────────────────────
    位置和大小由 wardmap.js 按 Dota 的小地图算（left/top/width/height 直接写），

@@ -27,9 +27,8 @@ simulated input ([why this is safe](#why-this-is-safe)).
 
 ![The game with the overlay](docs/images/overlay.jpg)
 
-<sub>A real in-game screenshot: buyback under each portrait, enemy glyph at the enemy end
-of the top bar, the five timers below the game clock, net worth at your end of the top bar,
-enemy wards on the minimap. Game imagery © Valve.</sub>
+<sub>A real in-game screenshot: buyback under each portrait, the five timers below the game clock,
+net worth and enemy glyph just above the minimap, enemy wards on the minimap. Game imagery © Valve.</sub>
 
 ## Up and running in three minutes
 
@@ -78,8 +77,9 @@ small pile of coins plus the seconds left, shown only while on cooldown. The gam
 announces an enemy buyback once and then it's gone; **a teammate's buyback cooldown isn't
 shown anywhere** (the gold bar under the portrait only says whether they can buy back now).
 
-**Enemy glyph**: at the enemy end of the top bar, with the seconds left in the centre while
-on cooldown, lit up when ready. Losing the first T1, the first T2 or the first melee
+**Enemy glyph**: just above the minimap, next to your net worth, with a faint red glow so it
+reads as the enemy's. The seconds left sit in the centre while on cooldown; when it's ready the
+ring fills, the tower lights up and the glow gets stronger. Losing the first T1, the first T2 or the first melee
 barracks refreshes it, and that's all accounted for — it shows whether the enemy **has a
 glyph right now**, not just when they last used one.
 
@@ -87,7 +87,7 @@ glyph right now**, not just when they last used one.
 
 ![Net worth](docs/images/econ.jpg)
 
-Net worth, GPM and XPM, at your team's end of the top bar (the enemy glyph sits at the other end). Net worth = items +
+Net worth, GPM and XPM, just above the minimap (the enemy glyph sits beside it). Net worth = items +
 stash + ward dispenser + items in transit on the courier + gold.
 
 > Net worth is an **approximation**: GSI only sends your own inventory, so items on the
