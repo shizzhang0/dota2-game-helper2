@@ -1,4 +1,4 @@
-import { initWardMap, renderWardMap } from "./wardmap.js";
+import { initWardMap, renderWardMap, minimapBox } from "./wardmap.js";
 import { icon, CELL_ICON } from "./icons.js";
 import { initTopbar, renderTopbar } from "./topbar.js";
 
@@ -9,11 +9,11 @@ const R = 26, CIRC = 2 * Math.PI * R;
 const TIMER_IDS = ["mid", "bounty", "wisdom", "lotus", "stack"];
 
 // 两个块。cells 用来判断"这一块是不是该整体隐藏"。位置固定，见下面的 placeBlocks。
-// 敌方塔防、买活和眼位不在这里：它们贴着 Dota 自己的顶栏 / 小地图画、位置跟着游戏走，
-// 见 topbar.js 和 wardmap.js。
+// 买活和眼位不在这里：它们贴着 Dota 自己的顶栏 / 小地图画、位置跟着游戏走，见 topbar.js 和 wardmap.js。
+// minibar 是小地图上方那一栏：自己的净资产 + 敌方塔防（2026-10-18 起，见 placeBlocks）
 export const BLOCKS = [
   { id: "timers",  cells: ["mid", "bounty", "lotus", "wisdom", "stack"] },
-  { id: "econ",    cells: ["econ"] },
+  { id: "minibar", cells: ["econ", "glyph"] },
 ];
 
 let root = null, els = null, prev = {};
@@ -32,13 +32,24 @@ function ring(id) {
 
 const INNER = {
   timers: () => TIMER_IDS.map(ring).join(""),
-  econ: () => `
+  // 两格：自己的净资产、敌方塔防。塔防格子里是一个和倒计时同款的小圆环（进度 = 剩余冷却），
+  // 格子本身带一圈淡红光晕表示"这是敌人的"，可用时光晕加深（overlay.css 的 .mb-glyph）
+  minibar: () => `
     <div class="cell wide econ" data-cell="econ">
       <div class="inline-row">
         <div class="lab">${icon("coin")}</div>
         <div class="nw">--</div>
       </div>
       <div class="rate"><span class="gpm">--</span><span class="xpm">--</span></div>
+    </div>
+    <div class="mb-glyph" data-cell="glyph" data-ready="1">
+      <div class="mb-ring">
+        <svg class="ring" viewBox="0 0 60 60" aria-hidden="true">
+          <circle class="ring-bg" cx="30" cy="30" r="${R}"/>
+          <circle class="ring-fg" cx="30" cy="30" r="${R}" stroke-dasharray="${CIRC}" stroke-dashoffset="0"/>
+        </svg>
+        <div class="mb-glyph-ico">${icon("glyph")}<span></span></div>
+      </div>
     </div>`,
 };
 
@@ -55,7 +66,9 @@ export function initPanel(container, towers) {
   els = { blocks: {}, cells: {},
           nw: root.querySelector(".nw"),
           gpm: root.querySelector(".gpm"),
-          xpm: root.querySelector(".xpm") };
+          xpm: root.querySelector(".xpm"),
+          glyph: root.querySelector(".mb-glyph") };
+  els.gnum = els.glyph.querySelector(".mb-glyph-ico span");
   for (const b of BLOCKS) els.blocks[b.id] = root.querySelector(`[data-block="${b.id}"]`);
   for (const c of root.querySelectorAll("[data-cell]")) {
     els.cells[c.dataset.cell] = { root: c, num: c.querySelector(".num"),
@@ -132,7 +145,17 @@ export function render(m) {
     if (prev[id + ".o"] !== "0") { prev[id + ".o"] = "0"; c.fg.style.strokeDashoffset = "0"; }
   }
 
-  placeBlocks(m.myTeam);
+  // 敌方塔防：剩下多少冷却环就有多长（逆时针退回 12 点）；可用时环是满的、塔点亮、光晕加深——
+  // "敌方此刻有塔防"是威胁态，要最显眼。冷却中在圆心写剩余时间（和游戏里技能冷却一样），
+  // 倒计时那排不写数字，但塔防要算"还剩几秒能强推"，用户要精确值（2026-10-09）
+  const gm = m.glyph || { ready: true, remaining: 0, total: 300 };
+  if (prev["g.r"] !== gm.ready) { prev["g.r"] = gm.ready; els.glyph.dataset.ready = gm.ready ? "1" : "0"; }
+  set(els.gnum, "g.t", gm.ready ? "" : fmt(gm.remaining));
+  const gfrac = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 300)));
+  const goff = (CIRC * (1 - gfrac)).toFixed(1);
+  if (prev["g.o"] !== goff) { prev["g.o"] = goff; els.cells.glyph.fg.style.strokeDashoffset = goff; }
+
+  placeBlocks(m.minimap || { large: false, right: false });
   renderTopbar(root, m, show);
 
   const e = m.econ || { networth: 0, gpm: 0, xpm: 0 };
@@ -154,34 +177,34 @@ export function render(m) {
     位置和大小都已经跟着游戏界面定好了，再给一个能调的旋钮只会把它调歪。）
       · 倒计时：紧贴顶栏中间那块计时牌下面、水平居中，圆环顶边在 42（计时牌底边约 40），见下面 TIMERS_TOP。
         只有圆环没有数字，整排宽约 ±112，夹在两侧最靠中线的买活（±118 起）之间
-      · 净资产：**顶栏我方那一端的头像外侧**，和顶栏顶部对齐（2026-10-16 起）。我方天辉放左端、
-        夜魇放右端；敌方那一端是塔防（topbar.js 的 GLYPH_X），两头各放一样、互不挤。
-        还不知道自己是哪一方时（开局前、没开游戏进编辑态）按天辉算放左端，和塔防同一个口径。
-        原先在左上角「击 / 死 / 助」面板右边（横 175、纵 64）：**开了 Dota Plus 那块面板会变宽**——
-        多一列「目标」、下面还有承受伤害条，横向到约 270、纵向到约 230（量自一张开 Plus 的直播截图），
-        正好压住。GSI 不说用户开没开 Plus，所以挑了一个开不开都空着的位置，不做开关。
-        4:3 屏上左端会离 Plus 面板太近（头像外缘在 300，Plus 面板到 270，放不下），没处理，见 backlog */
+      · minibar（自己的净资产 + 敌方塔防）：**原生小地图正上方**，和小地图左边缘对齐（小地图在右边时
+        整栏镜像、和右边缘对齐），底边离小地图顶边 7（2026-10-18 起，见 MB_GAP）。
+        经过：净资产在左上角 KDA 右边、塔防在顶栏敌方那一端 → 开了 Dota Plus，左上角那块面板变宽
+        （多一列「目标」和承受伤害条，横到约 270），压住净资产 → 净资产挪到顶栏我方那一端（2026-10-16）
+        → 用户觉得两样**跟着阵营左右换边很奇怪** → 用试验版（编辑态里能拖）实战找位置，
+        定在小地图上方：和阵营无关；Dota 自己的塔防按钮就在小地图旁边；开不开 Plus 都空着。
+        两样放一起时用两格区分——敌方那格带一圈淡红光晕，可用时加深（用户否掉了顶边色条、描边，嫌丑）。
+        只开一样时剩下那格贴着小地图边缘（flex 自然收拢），都关掉时整栏不画。
+        击杀播报从小地图上方往上堆（约 725~785），碰不到这一栏（793~835），用户实战确认（2026-10-18） */
 // 倒计时紧贴计时牌底边（约 40），**塞在计时牌和下面那行字之间**：按住 Alt 时游戏在 73~84
 // 写"5:00 UNTIL NIGHT"，开局号角前也有提示。空当只有约 33，所以环缩到外径约 28（见 BASE），上下各留 2~3。
 // 不按 Alt 时那一块游戏什么都不放（Dota Plus 自带的符文倒计时也只在按住 Alt 时出现），环就贴着计时牌，
 // 和开了 Plus 的样子一样。经过：44 → 50（用户要求下移一点）→ 88（挪到字下面，不挡字；
 // 但不按 Alt 时悬在半空、按住 Alt 时和队友的 TP 圈挤成一排）→ 42（2026-10-14，挪到字上面）
 const TIMERS_TOP = 42;
-// 净资产格子靠头像那一侧的边离中线多远、顶边离屏顶多远。头像最外缘离中线 413（topbar.js）。
-// 格子带一块暗底（overlay.css），暗底的边就是格子的边，所以取 416：和头像留 3 的缝，不压头像
-// （原先没有暗底时取 410，靠的是格子两侧看不见的留白；加了暗底实测会压进头像 4）。
-// 上下各留 2，格子顶边贴屏顶（0），暗底和头像一样从屏顶开始
-const ECON_EDGE = 416, ECON_TOP = 0;
+// minibar 底边离小地图顶边多远。用户在试验版里拖出来的位置：净资产底边 835、塔防圆心 812，
+// 普通小地图顶边 842（2560×1600、2026-10-18）——取 7
+const MB_GAP = 7;
 // 各块自己的基准大小。倒计时原先 0.62：圆环直径约 32，去掉数字之后一排五个刚好塞进
 // 计时牌下面、两侧买活中间那块空地（用户指定的位置，2026-10-08）；之后缩到 0.5 嫌小，回到 0.6；
 // 再参照 Dota Plus 的符文倒计时加了底盘、放到 0.72（实测外径约 35，Plus 自带的约 34、中心距约 40，
 // 我们 42——比例基本一样），同时把格子从 60 收到 52，整排不变宽。
 // 2026-10-14 挪到计时牌和 UNTIL NIGHT 之间，空当放不下 Plus 那么大的环，整体缩到 0.58（外径约 28，Plus 的八成）
-const BASE = { timers: 0.58, econ: 1 };
+const BASE = { timers: 0.58, minibar: 1 };
 // 块的边框 1 + 上内边距 8：内容顶边离块顶边多远（未缩放）
 const INSET = 9;
 
-function placeBlocks(myTeam) {
+function placeBlocks(mmOpt) {
   const W = innerWidth, H = innerHeight;
   if (!W || !H) return;
   const k = H / 1080;
@@ -199,10 +222,17 @@ function placeBlocks(myTeam) {
   // 宽度每轮现量：显示项开关会让块变窄，字体加载前后也不一样。offsetWidth 是未缩放的值
   const t = els.blocks.timers, st = sc("timers");
   put(t, W / 2 - t.offsetWidth * st / 2, TIMERS_TOP * k - INSET * st);
-  // 格子在块里的横向偏移和宽度（未缩放）：.cell 的 offsetParent 是块（position: fixed）
-  const cell = els.cells.econ.root, se = sc("econ");
-  const x = myTeam === 3
-    ? W / 2 + ECON_EDGE * k - cell.offsetLeft * se                       // 夜魇：右端，格子左边贴过去
-    : W / 2 - ECON_EDGE * k - (cell.offsetLeft + cell.offsetWidth) * se;  // 天辉 / 不知道：左端，格子右边贴过去
-  put(els.blocks.econ, x, ECON_TOP * k - INSET * se);
+
+  // minibar：看得见的那几格的外框（未缩放，相对块），左/右边贴小地图边缘、底边离小地图顶边 MB_GAP。
+  // 小地图在右边时块按 row-reverse 排（净资产在最右、贴边），所以同样取外框，不用分开算
+  const b = els.blocks.minibar, sm = sc("minibar");
+  if (prev["mb.r"] !== !!mmOpt.right) { prev["mb.r"] = !!mmOpt.right; b.classList.toggle("right", !!mmOpt.right); }
+  const cells = [els.cells.econ.root, els.glyph].filter(c => !c.hidden);
+  if (!cells.length) return;
+  const l = Math.min(...cells.map(c => c.offsetLeft));
+  const r = Math.max(...cells.map(c => c.offsetLeft + c.offsetWidth));
+  const bottom = Math.max(...cells.map(c => c.offsetTop + c.offsetHeight));
+  const mm = minimapBox(mmOpt, W, H);
+  const x = mmOpt.right ? mm.left + mm.size - r * sm : mm.left - l * sm;
+  put(b, x, mm.top - MB_GAP * k - bottom * sm);
 }

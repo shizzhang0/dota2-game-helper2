@@ -81,18 +81,25 @@ export function initWardMap(container, towers) {
   prevDead = null; geo = "";
 }
 
+/** 原生小地图那个 ±8400 正方形在屏幕上的位置（像素）：左、上、边长。
+    净资产和敌方塔防那一栏贴在它上方，也用这个（render.js 的 minibar）。 */
+export function minimapBox(opt, W = innerWidth, H = innerHeight) {
+  const g = opt.large ? GEO.large : GEO.normal, k = H / 1080;
+  const size = 2 * g.half * k;
+  const cx = opt.right ? W - g.cx * k : g.cx * k;
+  return { left: cx - size / 2, top: H - g.cy * k - size / 2, size };
+}
+
 /** 摆到小地图上。只在视口或小地图设置变了时才重算。 */
 function place(opt) {
   const W = innerWidth, H = innerHeight;
   const key = `${W}x${H}:${opt.large}:${opt.right}`;
   if (!W || !H || key === geo) return;
   geo = key;
-  const g = opt.large ? GEO.large : GEO.normal, k = H / 1080;
-  const size = 2 * g.half * k;
-  const cx = opt.right ? W - g.cx * k : g.cx * k;
-  root.style.left = `${cx - size / 2}px`;
-  root.style.top = `${H - g.cy * k - size / 2}px`;
-  root.style.width = root.style.height = `${size}px`;
+  const b = minimapBox(opt, W, H);
+  root.style.left = `${b.left}px`;
+  root.style.top = `${b.top}px`;
+  root.style.width = root.style.height = `${b.size}px`;
 }
 
 /** 塔只在编辑态画，当作对齐的参照：进编辑态看一眼，我们的塔压不压在原生的塔上，
