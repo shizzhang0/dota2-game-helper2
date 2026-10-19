@@ -228,11 +228,9 @@ function placeBlocks(mmOpt) {
   put(t, W / 2 - t.offsetWidth * st / 2, TIMERS_TOP * k - INSET * st);
 
   // minibar：宽度 = 小地图外框的宽（屏幕边到外框另一侧），底边贴外框顶边。
-  // 小地图在右边时只是整栏挪过去，内部顺序不变（用户定：不镜像）；只开一样时 .solo（不斜切）
+  // 小地图在右边时只是整栏挪过去，内部顺序不变（用户定：不镜像）
   const b = els.blocks.minibar, sm = sc("minibar");
   const right = !!mmOpt.right;
-  const solo = els.cells.econ.root.hidden !== els.glyph.hidden;
-  if (prev["mb.s"] !== solo) { prev["mb.s"] = solo; b.classList.toggle("solo", solo); }
   const mm = minimapBox(mmOpt, W, H);
   const width = (right ? W - mm.left : mm.left + mm.size) / sm + FRAME_SIDE;   // 未缩放
   const wpx = `${width.toFixed(1)}px`;

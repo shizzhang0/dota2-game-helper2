@@ -190,15 +190,16 @@ html, body {
 .cell.econ { justify-content: flex-start; gap: 2px; height: auto; }
 /* ── 小地图上方那一栏（minibar）：自己的净资产 + 敌方塔防 ─────────────
    **做成小地图外框的"顶盖"**（2026-10-19 起）：贴着外框顶边、不留缝，左右和外框对齐（左边一直到屏幕边），
-   深石板色、86% 不透明，看起来就是小地图面板往上多长出一截。
+   石板色 (38,44,50)、70% 不透明，看起来就是小地图面板往上多长出一截。
    原先是离小地图 7 的两块 35% 灰底（照 KDA 面板），用户实战截图后嫌"空"、像漂着：灰底透出地面纹理，
    和上面那排半透明的击杀播报像是同一类东西。颜色取自外框本身（约 60,66,70）再压暗。
-   **两段之间斜切**，不用竖线（用户嫌竖线难看）：净资产段右边往左下斜 8、塔防段往左伸进去，留一道 3 的斜缝，
-   和击杀播报、顶栏头像那种斜边是同一种界面语言。只开一样时不切（.solo）。
+   起初是 (22,26,30) 86%，用户实战嫌深，对比过 78% / 70% / 62% 取 70%——62% 又开始透出地面纹理。
+   **两段之间不加线、不留缝，靠塔防段的暖色底区分**（见 .mb-glyph）。试过竖线、斜切（实战看着别扭）、
+   直缝、两块圆角，用户都没要。
    净资产段**横向排**：金额大字在左，GPM / XPM 两行在右——原先金额下压一行小字，右半边整个空着（用户嫌空）。
    塔防段收窄到 51（圆环 34），不让圆环漂在一大块空格里。 */
 .block[data-block="minibar"] {
-  --mb-bg: rgba(22, 26, 30, .86);
+  --mb-bg: rgba(38, 44, 50, .70);
   padding: 0; border: 0; border-radius: 0; gap: 0;
   height: 42px; align-items: stretch;
 }
@@ -206,15 +207,15 @@ html, body {
 [data-block="minibar"] .cell.econ {
   flex: 1 1 auto; width: auto; height: 42px; box-sizing: border-box;
   flex-direction: row; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 0 16px 0 12px;
+  padding: 0 12px;
   background: var(--mb-bg);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 [data-block="minibar"] .cell.econ .inline-row { justify-content: flex-start; }
 [data-block="minibar"] .cell.econ .lab svg.ico { width: 17px; height: 17px; }
 [data-block="minibar"] .nw { font-size: 24px; }
 [data-block="minibar"] .rate { flex-direction: column; align-items: flex-end; gap: 0; font-size: 11px; line-height: 1.35; }
-[data-block="minibar"].solo .cell.econ { clip-path: none; }
+/* 数字变长、净资产段变窄时别把 "1129 XPM" 挤成两行 */
+[data-block="minibar"] .rate span { white-space: nowrap; }
 .nw {
   font-size: 22px; font-weight: 600; color: #FFD76A; line-height: 1.1;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
@@ -280,15 +281,14 @@ html, body {
    区分敌我试过顶边色条（自己绿、敌人红）、细红描边、整格泛红，前两个用户嫌丑，整格泛红让可用时的红环压在红底上反而不显眼 */
 .mb-glyph {
   --accent: var(--k-threat);
-  position: relative; box-sizing: border-box; width: 51px; height: 42px; flex: none;
+  position: relative; box-sizing: border-box; width: 48px; height: 42px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  padding-left: 4px;               /* 左边被斜切掉一角，圆环往右挪一点才在视觉上居中 */
-  margin-left: -5px;               /* 伸进净资产段的斜边下面，两段之间剩一道 3 的斜缝 */
-  background: var(--mb-bg);
-  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
+  /* 和净资产段同一块顶盖，**底色偏暖一点**（暗红棕）来区分敌我：不加线、不留缝（2026-10-19，用户选的）。
+     冷却中光晕很淡的时候也分得出这段是敌人的。深浅跟着 --mb-bg 一起调 */
+  background: rgba(64, 36, 38, .74);
   color: var(--k-threat);
 }
-.solo .mb-glyph { margin: 0; padding: 0; clip-path: none; }
+
 .mb-glyph::before {
   content: ""; position: absolute; inset: 0;
   background: radial-gradient(ellipse farthest-side, rgba(255, 77, 77, .16) 25%, transparent 100%);
