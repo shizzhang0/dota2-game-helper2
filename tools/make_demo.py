@@ -43,7 +43,7 @@
 整段丢掉的：provider / buildings / abilities / wearables。
 它们在 cachepool.js 的 SECTIONS 里，但全项目没有任何消费者——2026-09-17 逐个 grep 过。
 """
-import argparse, json, re, sys
+import argparse, gzip, json, re, sys
 from pathlib import Path
 
 # Windows 控制台默认是 cp1252/cp936，脚本的输出全是中文，不改会在 print 那里
@@ -140,7 +140,9 @@ def packets(path):
     所以按流式解码而不是按行切。录制器写出来的紧凑 JSONL 同样能被它读。"""
     dec = json.JSONDecoder()
     buf = ""
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    # 录制器 2026-10 起写的是 .jsonl.gz
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8", errors="replace") as f:
         while True:
             chunk = f.read(1 << 20)
             if not chunk:
@@ -172,6 +174,8 @@ def main():
     ap.add_argument("--to", dest="end", type=int, default=10 ** 9, help="结束 clock_time（秒）")
     ap.add_argument("--warmup-from", dest="warm", type=int, default=None,
                     help="从这个 clock 起到 --from 之前的包作预热，播放时瞬间喂完、不出画面")
+    ap.add_argument("--clock0", type=float, default=None,
+                    help="背景录屏第 0 秒时的游戏时间（带小数）。给了就写进第一行，demo 按视频进度喂包（见 source.js 的 followVideo）")
     ap.add_argument("--out", default=str(ROOT / "site" / "demo.jsonl"))
     a = ap.parse_args()
     lo = a.start if a.warm is None else min(a.warm, a.start)
@@ -195,8 +199,13 @@ def main():
             warm += 1
         raw_bytes += len(json.dumps(pkt, separators=(",", ":"), ensure_ascii=False))
     with open(out_path, "w", encoding="utf-8", newline="\n") as g:
+        meta = {}
         if a.warm is not None:
-            g.write(json.dumps({"demo": {"warmup": warm}}) + "\n")
+            meta["warmup"] = warm
+        if a.clock0 is not None:
+            meta["clock0"] = a.clock0
+        if meta:
+            g.write(json.dumps({"demo": meta}) + "\n")
         for line in lines:
             g.write(line + "\n")
 
