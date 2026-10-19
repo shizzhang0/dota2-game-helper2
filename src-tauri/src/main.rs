@@ -146,7 +146,6 @@ fn main() {
             settings::open_data_dir,
             settings::open_release_page,
             record::records_stat,
-            record::clear_records,
             log::log_front,
             exit_edit
         ])

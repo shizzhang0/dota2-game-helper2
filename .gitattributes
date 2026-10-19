@@ -1,0 +1,2 @@
+# 托盘图标的裸 RGBA 像素（tools/make_icons.py 生成）：二进制，不能让 Git 改换行
+*.rgba binary

@@ -122,7 +122,7 @@ Dota 发来的只有"请求行 + 头 + Content-Length 定长 body"这一种形�
 
 ### ~~录制的后续处理~~ —— 2026-09-20 起陆续做完
 
-手动清理（开发区显示个数与总体积 + 「清空录制」按钮，刻意不自动清理）、
+手动清理（开发区显示个数与总体积，刻意不自动清理；「清空录制」按钮 2026-10-19 去掉了，清理走「打开数据目录」）、
 按对局分文件、导出片段（`tools/make_demo.py`）都做完了。
 见 [design/overlay.md](design/overlay.md) 的「录制的生命周期」
 与 [design/dev-tools.md](design/dev-tools.md) 的「对局录制」。

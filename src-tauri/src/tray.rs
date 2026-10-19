@@ -48,11 +48,38 @@ pub fn apply_lang(app: &tauri::AppHandle) {
     }
 }
 
+/// 托盘图标：按系统小图标的实际尺寸挑一张**专门渲染**的（2026-10-19）。
+///
+/// 原先直接用窗口图标（`default_window_icon`），Tauri 给的是 ico 里最大的 256 那张，
+/// Windows 再缩到托盘尺寸——150% 缩放下是 24——硬缩下来是糊的（用户反馈）。
+/// 现在 `tools/make_icons.py` 按 `TRAY` 里这几档各渲染一张裸 RGBA，这里挑
+/// "不小于系统小图标尺寸的最小那张"，正好的话就不缩放；都比它小就用最大的。
+/// 尺寸按系统 DPI 取（托盘在主屏任务栏上），不跟着窗口所在的显示器走。
+const TRAY: [(u32, &[u8]); 7] = [
+    (16, include_bytes!("../icons/tray/16.rgba")),
+    (20, include_bytes!("../icons/tray/20.rgba")),
+    (24, include_bytes!("../icons/tray/24.rgba")),
+    (28, include_bytes!("../icons/tray/28.rgba")),
+    (32, include_bytes!("../icons/tray/32.rgba")),
+    (40, include_bytes!("../icons/tray/40.rgba")),
+    (48, include_bytes!("../icons/tray/48.rgba")),
+];
+
+fn tray_icon() -> tauri::image::Image<'static> {
+    use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi};
+    use windows::Win32::UI::WindowsAndMessaging::SM_CXSMICON;
+    // SAFETY: 两个都是无参数 / 只读的系统查询
+    let want = unsafe { GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()) }.max(16) as u32;
+    let (size, rgba) = TRAY.iter().copied().find(|(s, _)| *s >= want).unwrap_or(TRAY[TRAY.len() - 1]);
+    logf!(Level::Debug, "[tray] 系统小图标 {want}px，用 {size}px 那张");
+    tauri::image::Image::new(rgba, size, size)
+}
+
 pub fn setup(app: &tauri::AppHandle) -> tauri::Result<()> {
     let menu = build_menu(app)?;
 
     TrayIconBuilder::with_id("main")
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(tray_icon())
         // 悬停提示带版本号：用户报问题时鼠标移上去就能念出来，不用进设置卡片
         .tooltip(format!("dota2-game-helper2 v{}", app.package_info().version))
         .menu(&menu)

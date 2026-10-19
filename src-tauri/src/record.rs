@@ -53,7 +53,7 @@ const POST_TAIL_SECS: u64 = 10;
 static REC: Mutex<Option<Recorder>> = Mutex::new(None);
 /// 最后一次写入的 unix 秒。看门狗靠它判断断流；0 表示还没写过任何东西。
 static LAST_WRITE: AtomicU64 = AtomicU64::new(0);
-/// 当前正在写的那个文件。清理命令必须知道它——见 `clear_records` 的注释。
+/// 当前正在写的那个文件（看门狗查"文件被删"、收尾改名时用）。
 static CURRENT: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
 
 fn now() -> u64 {
@@ -340,35 +340,4 @@ fn vanished() -> bool {
 pub fn records_stat(app: tauri::AppHandle) -> serde_json::Value {
     let fs_ = files(&app);
     serde_json::json!({ "count": fs_.len(), "bytes": fs_.iter().map(|p| size(p)).sum::<u64>() })
-}
-
-/// 清空录制。**刻意不做自动清理**：按时间或大小自动删，删掉的很可能正是
-/// 待验清单在等的那一局，而打过的对局回不来。做决定的必须是人。
-///
-/// **正在录的那个跳过。** `Recorder` 攥着它的 `GzEncoder<File>`，删掉之后这一局
-/// 后面的数据会静默流进一个已经不存在的文件。跳过而不是"先停录再删"——
-/// 别让一次清理顺手关掉用户正在录的对局。
-#[tauri::command]
-pub fn clear_records(app: tauri::AppHandle) -> serde_json::Value {
-    let cur = CURRENT.lock().unwrap().clone();
-    let (mut deleted, mut freed, mut kept) = (0u32, 0u64, 0u32);
-    for p in files(&app) {
-        if cur.as_deref() == Some(p.as_path()) {
-            kept += 1;
-            continue;
-        }
-        let n = size(&p);
-        match std::fs::remove_file(&p) {
-            Ok(()) => {
-                deleted += 1;
-                freed += n;
-            }
-            Err(e) => {
-                kept += 1;
-                logf!(Level::Error, "[record] 删除 {} 失败: {e}", p.display());
-            }
-        }
-    }
-    logf!(Level::Info, "[record] 清空录制：删了 {deleted} 个（{freed} 字节），留下 {kept} 个");
-    serde_json::json!({ "deleted": deleted, "freed": freed, "kept": kept })
 }

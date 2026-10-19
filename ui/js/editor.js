@@ -68,24 +68,17 @@ function mb(bytes) {
   return (v > 0 && v < 0.05 ? "<0.1" : v.toFixed(1)) + " MB";
 }
 
-/** 开发区的录制那一组：一行统计 + 一个清空按钮。
+/** 开发区的录制那一行：有几个文件、一共多大。
 
-    **清空要点两下。** 第一下把按钮文字换成"确定删除？"，第二下才动手，
-    5 秒无操作自动退回。录像不可再生——打过的对局回不来——所以这一下值得。
-    不用 `confirm()`：它会弹一个抢焦点的系统框，而编辑态本来就在跟焦点较劲。 */
-function initRecords(stat, btn) {
-  if (!isTauri()) { stat.textContent = "—"; btn.disabled = true; return; }
-  const inv = (cmd) => window.__TAURI__.core.invoke(cmd);
-  const label = btn.textContent;
-  let armed = 0, timer = 0;
-
+    **原先还有一个「清空录制」按钮，2026-10-19 去掉了**（用户定）：录像是对账语料，
+    一键全删太容易误伤——要清理就点「打开数据目录」自己挑着删。 */
+function initRecords(stat) {
+  if (!isTauri()) { stat.textContent = "—"; return; }
   const show = (s) => {
     // 单位跟着语言走。**别在 JS 里写死"个"**——英文那份会变成 "3 个 · 12.0 MB"。
     stat.textContent = s && s.count ? `${s.count}${t("card.recUnit")} · ${mb(s.bytes)}` : "—";
-    btn.disabled = !(s && s.count);
   };
-  const disarm = () => { armed = 0; clearTimeout(timer); btn.textContent = label; };
-  const refresh = () => inv("records_stat").then(show).catch(() => show(null));
+  const refresh = () => window.__TAURI__.core.invoke("records_stat").then(show).catch(() => show(null));
   // 装出去给 setEditorOpen 和录制开关用。
   //
   // **这个数字原先只在程序启动那一刻拉过一次。** 打开/关闭卡片走的是
@@ -95,21 +88,6 @@ function initRecords(stat, btn) {
   // 不做轮询：这个数字只有卡片开着时有人看，开的那一刻拉一次就够，
   // 代价是一次 readdir。
   recRefresh = refresh;
-
-  btn.addEventListener("click", async () => {
-    if (!armed) {
-      armed = 1;
-      btn.textContent = t("card.clearRecConfirm");
-      timer = setTimeout(disarm, 5000);
-      return;
-    }
-    disarm();
-    // 留下的那个是正在录的——不提示反而像没删干净，所以把它说出来
-    const r = await inv("clear_records").catch(() => null);
-    if (r && r.kept) stat.textContent = t("card.recKept");
-    else await refresh();
-    if (r && r.kept) setTimeout(refresh, 2500);
-  });
   refresh();
 }
 
@@ -231,8 +209,7 @@ async function build(s) {
     <div class="ed-sep"></div>
     <div class="ed-sec">${t("card.dev")}</div>
     <label class="ed-row"><input id="edRecord" type="checkbox">${t("card.record")}</label>
-    <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b>
-      <button id="edClear" type="button">${t("card.clearRec")}</button></div>` : ""}
+    <div class="ed-row ed-ver">${t("card.recFiles")}<b id="edRecStat">—</b></div>` : ""}
     <div class="ed-foot">
       <button id="edReset" type="button">${t("card.reset")}</button>
       <span class="ed-hint">${t("card.hint")}</span>
@@ -310,7 +287,7 @@ async function build(s) {
     doneCb?.();
     if (isTauri()) window.__TAURI__.core.invoke("open_data_dir");
   });
-  if (record) initRecords($("edRecStat"), $("edClear"));
+  if (record) initRecords($("edRecStat"));
   else recRefresh = null;
   initUpdate($("edNew"), $("edUpdMsg"), $("edUpd"), $("edRel"), $("edNow"));
   $("edDone").addEventListener("click", doneCb);
