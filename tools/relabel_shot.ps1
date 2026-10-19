@@ -8,6 +8,7 @@
   2. 右上角  输入/输出丢失     → LOSS IN/OUT
   3. 底部    英雄名            → -Hero 给的英文名（大写，和英文客户端一样，比如 "MONKEY KING"）
   4. 右下角  快速购买提示      → Drag or shift-click items to add to Quickbuy.（快速购买栏空着时才有）
+     快速购买栏里有东西时没有这行提示，要加 -HasQuickbuy 跳过这一处，不然会把物品图标抹掉、写上提示（2026-10-20 那张就是）
 第五处（右下角金钱上方的买活框）截图时避开：**别按 Alt**，它只在按住 Alt 时出现。
 
 做法：先把中文字抹掉、用周围背景补上，再按英文原版的字形把英文画上去，颜色用中文原字的——
@@ -26,7 +27,8 @@
 param(
   [Parameter(Mandatory)][string]$In,
   [Parameter(Mandatory)][string]$Out,
-  [Parameter(Mandatory)][string]$Hero
+  [Parameter(Mandatory)][string]$Hero,
+  [switch]$HasQuickbuy
 )
 $ErrorActionPreference = 'Stop'
 $inFull = [System.IO.Path]::GetFullPath($In); $outFull = [System.IO.Path]::GetFullPath($Out)
@@ -140,13 +142,17 @@ function Load-Pixels($path) {
 
 $src = [Relabel]::Read($bmp)
 $bg = $src.Clone()
-[Relabel]::EraseText($bg, $W, 6, 94, 240, 154, $false)       # 只到 x=240：再往右是净资产的金币图标
+# 抹到 x=262：两位数的击杀 / 死亡 / 助攻（比如 "1 / 9 / 24"）会伸到 x≈250。原先只抹到 240，理由是再往右是
+# 净资产的金币图标——那是旧布局，净资产 2026-10-18 挪到小地图上方了，这一带现在只有游戏画面。
+# 只抹到 240 时第二位数被截成半截、又叠上参照图的残影（2026-10-19 那张 "24" 就是这样）
+# 也别抹太宽：抹到 300 时把右边树枝的亮边当成字擦了，留下一块发白的痕迹。两位数到 x≈250，262 够用
+[Relabel]::EraseText($bg, $W, 6, 94, 262, 154, $false)
 [Relabel]::EraseText($bg, $W, 2296, 29, 2466, 57, $false)
-[Relabel]::EraseText($bg, $W, 2134, 1456, 2434, 1508, $false)  # 快速购买提示；右边 2438 起是锁形图标，不碰。抹到 2434 才盖住「入」字最后一笔的淡尾巴
+if (-not $HasQuickbuy) { [Relabel]::EraseText($bg, $W, 2134, 1456, 2434, 1508, $false) }  # 快速购买提示；右边 2438 起是锁形图标，不碰。抹到 2434 才盖住「入」字最后一笔的淡尾巴
 $res = $src.Clone()
-[Relabel]::CopyRect($res, $bg, $W, 6, 94, 240, 154)
+[Relabel]::CopyRect($res, $bg, $W, 6, 94, 262, 154)
 [Relabel]::CopyRect($res, $bg, $W, 2296, 29, 2466, 57)
-[Relabel]::CopyRect($res, $bg, $W, 2134, 1456, 2434, 1508)
+if (-not $HasQuickbuy) { [Relabel]::CopyRect($res, $bg, $W, 2134, 1456, 2434, 1508) }
 
 # 英文参照图都裁自同一张英文客户端截图（2026-10-14，试玩地图，不按 Alt），位置和中文截图一样。
 # 换上去的字用中文原字的颜色（TextColor，在抹字之前从 $src 取）
@@ -155,7 +161,7 @@ $res = $src.Clone()
 $kda = Load-Pixels (Join-Path $refDir "en_kda.png")
 $kdaBg = $kda.px.Clone(); [Relabel]::EraseText($kdaBg, $kda.w, 6, 4, 240, 64, $false)
 [Relabel]::PaintText($res, $W, 6, 94, 106, 60, $kda.px, $kdaBg, $kda.w, 6, 4, [Relabel]::TextColor($src, $W, 6, 94, 120, 154))
-[Relabel]::AddText($res, $W, 116, 94, 101, 60, $src, $bg, $W, 139, 94)     # 这张图自己的数字，左移 23
+[Relabel]::AddText($res, $W, 116, 94, 123, 60, $src, $bg, $W, 139, 94)     # 这张图自己的数字（139~262），左移 23
 
 # 2) 右上角第二行标签（两列数字不动）。英文参照图左上角对应截图的 (2290,25)
 $net = Load-Pixels (Join-Path $refDir "en_netgraph.png")
@@ -164,9 +170,11 @@ $netBg = $net.px.Clone(); [Relabel]::EraseText($netBg, $net.w, 6, 4, 176, 32, $f
 
 # 4) 右下角快速购买提示。英文参照图左上角对应截图的 (2130,1452)，300×58，两行字到 y≈1503 为止。
 #    参照截图不能按着 Alt：按住时提示框下面贴着 BUYBACK 框，"Quickbuy." 的下沿会被切掉（第一版就是这样）
-$qb = Load-Pixels (Join-Path $refDir "en_quickbuy.png")
-$qbBg = $qb.px.Clone(); [Relabel]::EraseText($qbBg, $qb.w, 4, 4, 298, 56, $false)
-[Relabel]::PaintText($res, $W, 2136, 1458, 280, 50, $qb.px, $qbBg, $qb.w, 6, 6, [Relabel]::TextColor($src, $W, 2134, 1456, 2434, 1508))   # 英文止于 x≈2412
+if (-not $HasQuickbuy) {
+  $qb = Load-Pixels (Join-Path $refDir "en_quickbuy.png")
+  $qbBg = $qb.px.Clone(); [Relabel]::EraseText($qbBg, $qb.w, 4, 4, 298, 56, $false)
+  [Relabel]::PaintText($res, $W, 2136, 1458, 280, 50, $qb.px, $qbBg, $qb.w, 6, 6, [Relabel]::TextColor($src, $W, 2134, 1456, 2434, 1508))   # 英文止于 x≈2412
+}
 
 # 3) 英雄名：自动找徽章和中文名的位置。不同英雄底部面板宽度不同（技能个数不一样），名字位置跟着变
 $runs = [Relabel]::GoldRuns($res, $W, 560, 1150, 1355, 1383)

@@ -68,27 +68,29 @@ Turbo is detected automatically. A row of small rings sits below the game clock,
 **the ring is the progress bar**: nearly empty means nearly up, and the whole ring lights up
 for the last 10 seconds.
 
-### Buyback and enemy glyph
+### Buyback
 
-![Buyback and glyph](docs/images/topbar.jpg)
+![Buyback](docs/images/topbar.jpg)
 
-**Buyback**: all ten players' buyback cooldowns, each under that player's portrait — a
-small pile of coins plus the seconds left, shown only while on cooldown. The game
-announces an enemy buyback once and then it's gone; **a teammate's buyback cooldown isn't
-shown anywhere** (the gold bar under the portrait only says whether they can buy back now).
+All ten players' buyback cooldowns, each under that player's portrait — a small pile of coins
+plus the seconds left, shown only while on cooldown. The game announces an enemy buyback once
+and then it's gone; **a teammate's buyback cooldown isn't shown anywhere** (the gold bar under
+the portrait only says whether they can buy back now).
 
-**Enemy glyph**: just above the minimap, next to your net worth, with a faint red glow so it
-reads as the enemy's. The seconds left sit in the centre while on cooldown; when it's ready the
-ring fills, the tower lights up and the glow gets stronger. Losing the first T1, the first T2 or the first melee
-barracks refreshes it, and that's all accounted for — it shows whether the enemy **has a
-glyph right now**, not just when they last used one.
+### Net worth and enemy glyph
 
-### Net worth
+![Net worth and enemy glyph](docs/images/econ.jpg)
 
-![Net worth](docs/images/econ.jpg)
+A strip on top of the minimap frame.
 
-Net worth, GPM and XPM, just above the minimap (the enemy glyph sits beside it). Net worth = items +
-stash + ward dispenser + items in transit on the courier + gold.
+**Net worth**, with GPM and XPM beside it. Net worth = items + stash + ward dispenser + items in
+transit on the courier + gold.
+
+**Enemy glyph**: the warm-tinted cell on the right, so it reads as the enemy's. The seconds left
+sit in the centre while on cooldown; when it's ready the ring fills, the tower lights up and the
+glow gets stronger. Losing the first T1, the first T2 or the first melee barracks refreshes it,
+and that's all accounted for — it shows whether the enemy **has a glyph right now**, not just
+when they last used one.
 
 > Net worth is an **approximation**: GSI only sends your own inventory, so items on the
 > ground or held by a teammate can't be counted.

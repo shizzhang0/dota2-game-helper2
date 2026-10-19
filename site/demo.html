@@ -8,16 +8,18 @@
      **必须是 iframe。** 覆盖层贴着 Dota 的界面画，位置全按视口宽高算（顶栏居中、按屏高缩放、
      小地图在左下角），直接嵌进首页的话它会按整个页面算。iframe 给了它一个自己的视口。
 
-     **背景是同一局的游戏截图**（2026-10-15 起，v1.4.0）：覆盖层的东西都贴在顶栏、计时牌、小地图上，
-     离了游戏画面就看不出贴在哪儿。截图是 m9044675249 9:46 那一刻，按 Ctrl+Alt+F11 收起覆盖层截的，
-     通知和聊天打了码；数据是同一局 9:36~10:00 那一段（见 tools/make_demo.py 的预热）。
-     截图 2560×1600，iframe 固定 1280×800（同为 16:10），背景拉满，覆盖层按屏高缩放正好对上。
-     背景出中英两张：demo-bg.jpg 是用 tools/relabel_shot.ps1 改成英文客户端样子的，demo-bg-zh.jpg 是原图；
-     首页按页面语言换（index.html 的 apply()）。画面 © Valve。 */
-  html, body { margin: 0; height: 100%; overflow: hidden; }
-  body { background: #000 url(demo-bg.jpg) 0 0 / 100% 100% no-repeat; }
+     **背景是同一局的录屏**（2026-10-20 起）：覆盖层的东西都贴在顶栏、计时牌、小地图上，离了游戏画面
+     就看不出贴在哪儿。原先是一张截图（2026-10-15，v1.4.0），倒计时在走、画面不动，看着别扭，换成了录屏。
+     录屏是 m9052676196 15:53~16:28，按 Ctrl+Alt+F11 收起覆盖层录的，名字打了码（tools/make_demo_video.mjs）；
+     数据是同一局同一段，带预热（tools/make_demo.py）。**包按视频进度喂**（source.js 的 followVideo，
+     认 id="bg"），视频缓冲、后台暂停时覆盖层跟着停，不会错开。
+     录屏 16:10，iframe 固定 1280×800，视频拉满，覆盖层按屏高缩放正好对上。
+     录屏只有中文客户端一份（截图那时改过英文，视频改不了）。画面 © Valve。 */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: fill; }
 </style>
 <body>
+<video id="bg" src="demo.mp4" autoplay muted loop playsinline></video>
 <div id="panel"></div>
 <div id="editor" hidden></div>
 <script>

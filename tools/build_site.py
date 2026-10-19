@@ -13,6 +13,7 @@
       index.html      site/ 来的落地页
       demo.html       site/ 来的 iframe 内容（真覆盖层）
       demo.jsonl      site/ 来的回放数据（已脱敏裁剪，见 make_demo.py）
+      demo.mp4        site/ 来的背景录屏（名字打了码，见 make_demo_video.mjs）
       icon.png        src-tauri/icons/ 来的
       ui/             **原样拷贝，不改一个字**
       constants/      同上
@@ -33,7 +34,7 @@ PORT = 8077
 
 # 首页引用到的截图。只拷用得上的，不把整个 docs/ 发出去——
 # docs/design/ 是中文开发笔记，不是给访客看的。
-SITE_IMAGES = ["timers.jpg", "topbar-site.jpg", "econ.jpg", "econ-zh.jpg", "minimap.jpg"]
+SITE_IMAGES = ["timers.jpg", "topbar-site.jpg", "econ.jpg", "minimap.jpg"]
 
 
 def fill_versions(page):
@@ -57,10 +58,10 @@ def build():
         shutil.rmtree(DIST)
     DIST.mkdir(parents=True)
 
-    for name in ("index.html", "demo.html", "demo.jsonl", "demo-bg.jpg", "demo-bg-zh.jpg", "og.jpg"):
+    for name in ("index.html", "demo.html", "demo.jsonl", "demo.mp4", "og.jpg"):
         src = ROOT / "site" / name
         if not src.is_file():
-            sys.exit(f"缺 {src}——demo.jsonl 由 tools/make_demo.py 生成")
+            sys.exit(f"缺 {src}——demo.jsonl 由 tools/make_demo.py 生成，demo.mp4 由 tools/make_demo_video.mjs 生成")
         shutil.copy2(src, DIST / name)
     fill_versions(DIST / "index.html")
 

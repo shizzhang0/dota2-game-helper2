@@ -94,6 +94,9 @@ async function replayFile(url, onPacket, speed, loop) {
   };
   let i = warm;
   await warmup();
+  // 主页 demo 的背景是同一局的录屏时（第一行带 clock0），按视频进度喂，见 followVideo
+  const video = typeof meta?.clock0 === "number" && document.getElementById("bg");
+  if (video) return followVideo(video, meta.clock0, packets, warm, warmup, onPacket);
   const tick = async () => {
     await onPacket(packets[i++]);
     if (i >= packets.length) {
@@ -104,6 +107,26 @@ async function replayFile(url, onPacket, speed, loop) {
     setTimeout(tick, step);
   };
   tick();
+}
+
+/** 跟着背景视频喂包（2026-10-19 起，主页 demo 的背景从截图换成了同一局的录屏）。
+
+    **不用自己的节拍。** 视频会缓冲、会被浏览器在后台标签页里暂停，自己按定时器放的话
+    几圈下来覆盖层和画面就错开了；按 `currentTime` 算，视频停覆盖层也停。
+    `clock0` 是视频第 0 秒时的游戏时间（带小数，make_demo.py 写进第一行）：
+    游戏时间走到 `clock0 + currentTime` 时，`clock_time` 不超过它的包都该喂了。
+    视频循环回到开头时 `currentTime` 变小，这时清掉状态重新预热，和定时器那条路的循环一样。 */
+function followVideo(video, clock0, packets, warm, warmup, onPacket) {
+  let i = warm, lastT = 0, busy = false;
+  setInterval(async () => {
+    if (busy) return;   // 预热要好几百包，喂完之前不重入
+    busy = true;
+    const t = video.currentTime;
+    if (t < lastT) { i = warm; await warmup(); }
+    lastT = t;
+    while (i < packets.length && !(packets[i]?.map?.clock_time > clock0 + t)) await onPacket(packets[i++]);
+    busy = false;
+  }, 50);
 }
 
 /** Ctrl+Alt+F11（全局热键，Rust 注册）按一下就回调一次：切换临时隐藏。

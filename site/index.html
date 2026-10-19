@@ -65,8 +65,8 @@
   }
 
   /* demo 框。里面是 iframe，理由见 demo.html 顶部的注释。
-     **iframe 固定 1280×800，再整体缩放去适配容器。** 背景是 16:10 的游戏截图，覆盖层按视口宽高定位，
-     iframe 跟着容器变宽变窄的话覆盖层就和截图里的顶栏、小地图对不上了——固定尺寸加缩放，任何屏幕上都一样 */
+     **iframe 固定 1280×800，再整体缩放去适配容器。** 背景是 16:10 的游戏录屏，覆盖层按视口宽高定位，
+     iframe 跟着容器变宽变窄的话覆盖层就和画面里的顶栏、小地图对不上了——固定尺寸加缩放，任何屏幕上都一样 */
   .demo { position: relative; border: 1px solid var(--hair); border-radius: 12px;
           overflow: hidden; background: #000; aspect-ratio: 1280 / 800; }
   .demo iframe { width: 1280px; height: 800px; border: 0; display: block;
@@ -136,10 +136,10 @@
   </div>
   <p class="caption">
     <span lang="en">This is the real overlay, running the same code as the download, driven by a recorded
-      match at real speed and looping. The background is a screenshot from the same match, with chat and
-      notifications blurred. Game imagery © Valve.</span>
-    <span lang="zh">这就是那个覆盖层本身，跑的和下载到的是同一份代码，由一份真实对局录制驱动、按原速循环播放；
-      背景是同一局的游戏截图，聊天和通知打了码。游戏画面 © Valve。</span>
+      match and kept in step with the video behind it — a screen recording of the same moment in that match,
+      with player names blurred. Game imagery © Valve.</span>
+    <span lang="zh">这就是那个覆盖层本身，跑的和下载到的是同一份代码，由一份真实对局录制驱动，
+      和背后的视频同步播放——视频是同一局同一段的录屏，玩家名字打了码。游戏画面 © Valve。</span>
   </p>
 
   <!-- 链到不带版本号的那两份，永远是最新版（发版时 tools/release.py 一起传）。
@@ -170,20 +170,20 @@
     <div class="cell">
       <!-- 主页用两行的版本：README 那张整条顶栏太长，缩进卡片里看不清 -->
       <div class="shot"><img src="docs/images/topbar-site.jpg" alt="" loading="lazy"></div>
-      <h3><span lang="en">Buyback and enemy glyph</span><span lang="zh">买活与敌方塔防</span></h3>
+      <h3><span lang="en">Buyback</span><span lang="zh">买活</span></h3>
       <p lang="en">Buyback cooldown under every player's portrait, teammates included —
-         the game shows it nowhere. Enemy glyph with the full refresh rules and the exact
-         seconds left.</p>
-      <p lang="zh">十个人的买活冷却挂在各自头像底下，队友的也有——游戏里哪儿都看不到。
-         敌方塔防实现了完整的刷新规则，冷却中写精确秒数。</p>
+         the game shows it nowhere.</p>
+      <p lang="zh">十个人的买活冷却挂在各自头像底下，队友的也有——游戏里哪儿都看不到。</p>
     </div>
     <div class="cell">
-      <!-- 截图里有客户端文字（击/死/助），中英各一张，跟着页面语言切换 -->
-      <div class="shot"><img src="docs/images/econ.jpg" alt="" lang="en" loading="lazy"><img src="docs/images/econ-zh.jpg" alt="" lang="zh" loading="lazy"></div>
-      <h3><span lang="en">Net worth</span><span lang="zh">净资产</span></h3>
-      <p lang="en">Net worth, GPM and XPM just above the minimap — items, stash,
-         ward dispenser, courier and gold all counted.</p>
-      <p lang="zh">净资产、GPM、XPM，就在小地图正上方。装备、储藏处、眼架、信使在途、金钱都算进去。</p>
+      <!-- 小地图上方那一栏里没有客户端文字，中英共用一张（原先裁左上角，有"击/死/助"，要两张） -->
+      <div class="shot"><img src="docs/images/econ.jpg" alt="" loading="lazy"></div>
+      <h3><span lang="en">Net worth and enemy glyph</span><span lang="zh">净资产与敌方塔防</span></h3>
+      <p lang="en">A strip on top of the minimap: your net worth, GPM and XPM — items, stash,
+         ward dispenser, courier and gold all counted — and the enemy glyph with the full refresh
+         rules and the exact seconds left.</p>
+      <p lang="zh">贴在小地图上面的一栏：净资产、GPM、XPM（装备、储藏处、眼架、信使在途、金钱都算进去），
+         和敌方塔防——完整的刷新规则，冷却中写精确秒数。</p>
     </div>
     <div class="cell">
       <div class="shot"><img src="docs/images/minimap.jpg" alt="" loading="lazy"></div>
@@ -287,7 +287,6 @@
     document.title = T[lang].title;
     // 悬停提示是属性，没法像正文那样靠 [lang] 的 CSS 二选一，跟着标题一起在这里换
     document.querySelector(".patch").title = T[lang].patch;
-    demoBg();
     for (const b of document.querySelectorAll(".langs button"))
       b.setAttribute("aria-pressed", String(b.dataset.set === lang));
   }
@@ -303,15 +302,10 @@
   // **不再演示按 Alt**（v1.4.0）：对局中一直显示（2026-10-14 起没有「按住 Alt 才显示」了），
   // demo 就照这个样子常显。
   const frame = document.getElementById("demo");
-  // demo 的背景截图也分中英（英文那张是改过客户端文字的，见 demo.html）。iframe 同源，直接改它的背景；
-  // 还没加载完时改不了，load 里再调一次
-  function demoBg() {
-    try { frame.contentDocument.body.style.backgroundImage = `url(${lang === "zh" ? "demo-bg-zh.jpg" : "demo-bg.jpg"})`; }
-    catch { /* 还没加载 */ }
-  }
+  // 背景原先是截图，分中英两张、切语言时换（2026-10-15）；换成录屏后只有中文客户端一份，不再换（见 demo.html）
   function fit() { frame.style.transform = `scale(${frame.parentElement.clientWidth / 1280})`; }
   addEventListener("resize", fit);
   apply();
   fit();
-  frame.addEventListener("load", () => { fit(); demoBg(); });
+  frame.addEventListener("load", fit);
 </script>
