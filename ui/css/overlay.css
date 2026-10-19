@@ -188,22 +188,33 @@ html, body {
    而且 `.cell.wide` 的 space-between 特异度更高，会把金额顶到上沿、GPM 压到下沿，
    中间空出一截——所以这里用 .cell.econ 压回去，让两行贴着。 */
 .cell.econ { justify-content: flex-start; gap: 2px; height: auto; }
-/* **净资产带一块暗底**（2026-10-16 起）：挪到顶栏外侧之后，它直接压在游戏画面上，亮草地、技能特效上
-   GPM/XPM 那行小字读不清。照 Dota 左上角 KDA 面板的样子给一块方形半透明暗底，读起来就是"顶栏多出来的一格"。
-   KDA 面板实测只叠了约 22~25% 的黑（面板内外同一块草地 (97,135,113) 对 (129,173,128)），
-   我们取 35%：比它略深一点更显眼，又还是同一种观感（对比过 25% / 38% / 62%，62% 像一块黑布）。
-   2026-10-18 起和敌方塔防一起放在小地图上方（minibar，见 render.js）：两格各一块暗底，中间留 4 的缝，
-   净资产 160 + 缝 4 + 塔防 67 = 231，正好是普通小地图的宽度，左右都和小地图对齐。
-   净资产格子固定 160 宽、42 高，金额和 GPM/XPM 靠左（贴小地图那一侧），不会跟着数字位数伸缩。
-   倒计时不加：它们是圆、自带底盘 */
-.block[data-block="minibar"] { gap: 4px; }
-.block[data-block="minibar"].right { flex-direction: row-reverse; }   /* 小地图在右边：整栏镜像，净资产贴右边缘 */
+/* ── 小地图上方那一栏（minibar）：自己的净资产 + 敌方塔防 ─────────────
+   **做成小地图外框的"顶盖"**（2026-10-19 起）：贴着外框顶边、不留缝，左右和外框对齐（左边一直到屏幕边），
+   深石板色、86% 不透明，看起来就是小地图面板往上多长出一截。
+   原先是离小地图 7 的两块 35% 灰底（照 KDA 面板），用户实战截图后嫌"空"、像漂着：灰底透出地面纹理，
+   和上面那排半透明的击杀播报像是同一类东西。颜色取自外框本身（约 60,66,70）再压暗。
+   **两段之间斜切**，不用竖线（用户嫌竖线难看）：净资产段右边往左下斜 8、塔防段往左伸进去，留一道 3 的斜缝，
+   和击杀播报、顶栏头像那种斜边是同一种界面语言。只开一样时不切（.solo）。
+   净资产段**横向排**：金额大字在左，GPM / XPM 两行在右——原先金额下压一行小字，右半边整个空着（用户嫌空）。
+   塔防段收窄到 51（圆环 34），不让圆环漂在一大块空格里。 */
+.block[data-block="minibar"] {
+  --mb-bg: rgba(22, 26, 30, .86);
+  padding: 0; border: 0; border-radius: 0; gap: 0;
+  height: 42px; align-items: stretch;
+}
+/* 小地图在右边时**只是整栏挪过去，内部不镜像**（用户定，2026-10-19）：顺序、斜缝方向都和左边一样 */
 [data-block="minibar"] .cell.econ {
-  box-sizing: border-box; width: 160px; height: 42px; padding: 2px 8px;
-  align-items: flex-start; justify-content: center;
-  background: rgba(0, 0, 0, .35);
+  flex: 1 1 auto; width: auto; height: 42px; box-sizing: border-box;
+  flex-direction: row; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 0 16px 0 12px;
+  background: var(--mb-bg);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 [data-block="minibar"] .cell.econ .inline-row { justify-content: flex-start; }
+[data-block="minibar"] .cell.econ .lab svg.ico { width: 17px; height: 17px; }
+[data-block="minibar"] .nw { font-size: 24px; }
+[data-block="minibar"] .rate { flex-direction: column; align-items: flex-end; gap: 0; font-size: 11px; line-height: 1.35; }
+[data-block="minibar"].solo .cell.econ { clip-path: none; }
 .nw {
   font-size: 22px; font-weight: 600; color: #FFD76A; line-height: 1.1;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
@@ -263,17 +274,21 @@ html, body {
 
 /* 敌方塔防：minibar 里净资产旁边那一格（2026-10-18 起；原先在顶栏敌方那一端，跟着阵营左右换边，用户觉得奇怪）。
    **和倒计时同一套圆**：带颜色的暗底盘 + 进度环 + 中间一座塔（游戏里塔防按钮就是塔），外径 34。
-   格子和净资产一样一块 35% 暗底，**另加一圈淡红光晕**表示"这是敌人的"：从中间往四边淡出、铺满整格
+   和净资产段同一块顶盖底色，**另加一圈淡红光晕**表示"这是敌人的"：从中间往四边淡出、铺满整格
    （只在圆环外面薄薄一圈的话会被底盘挡掉大半，深浅调了也看不出差别）。冷却中 16%；**可用时加深到 55%**，
    配合满环和点亮的塔，变成提醒。对比过 30 / 45 / 60，30 太淡（用户），60 醒目但稍冲。
    区分敌我试过顶边色条（自己绿、敌人红）、细红描边、整格泛红，前两个用户嫌丑，整格泛红让可用时的红环压在红底上反而不显眼 */
 .mb-glyph {
   --accent: var(--k-threat);
-  position: relative; box-sizing: border-box; width: 67px; height: 42px;
+  position: relative; box-sizing: border-box; width: 51px; height: 42px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, .35);
+  padding-left: 4px;               /* 左边被斜切掉一角，圆环往右挪一点才在视觉上居中 */
+  margin-left: -5px;               /* 伸进净资产段的斜边下面，两段之间剩一道 3 的斜缝 */
+  background: var(--mb-bg);
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
   color: var(--k-threat);
 }
+.solo .mb-glyph { margin: 0; padding: 0; clip-path: none; }
 .mb-glyph::before {
   content: ""; position: absolute; inset: 0;
   background: radial-gradient(ellipse farthest-side, rgba(255, 77, 77, .16) 25%, transparent 100%);
