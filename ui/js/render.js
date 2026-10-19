@@ -177,8 +177,9 @@ export function render(m) {
     位置和大小都已经跟着游戏界面定好了，再给一个能调的旋钮只会把它调歪。）
       · 倒计时：紧贴顶栏中间那块计时牌下面、水平居中，圆环顶边在 42（计时牌底边约 40），见下面 TIMERS_TOP。
         只有圆环没有数字，整排宽约 ±112，夹在两侧最靠中线的买活（±118 起）之间
-      · minibar（自己的净资产 + 敌方塔防）：**原生小地图正上方**，和小地图左边缘对齐（小地图在右边时
-        整栏镜像、和右边缘对齐），底边离小地图顶边 7（2026-10-18 起，见 MB_GAP）。
+      · minibar（自己的净资产 + 敌方塔防）：**原生小地图外框的"顶盖"**——底边贴着外框顶边，左边一直到屏幕边、
+        右边和外框对齐；小地图在右边时整栏挪过去、贴屏幕右边，**内部不镜像**，见 FRAME_TOP / FRAME_SIDE。样子见 overlay.css 的 minibar 那段。
+        （2026-10-18 先是离小地图 7、和地图区域对齐的两块灰底；2026-10-19 用户嫌空、像漂着，改成贴外框的顶盖）
         经过：净资产在左上角 KDA 右边、塔防在顶栏敌方那一端 → 开了 Dota Plus，左上角那块面板变宽
         （多一列「目标」和承受伤害条，横到约 270），压住净资产 → 净资产挪到顶栏我方那一端（2026-10-16）
         → 用户觉得两样**跟着阵营左右换边很奇怪** → 用试验版（编辑态里能拖）实战找位置，
@@ -192,9 +193,12 @@ export function render(m) {
 // 和开了 Plus 的样子一样。经过：44 → 50（用户要求下移一点）→ 88（挪到字下面，不挡字；
 // 但不按 Alt 时悬在半空、按住 Alt 时和队友的 TP 圈挤成一排）→ 42（2026-10-14，挪到字上面）
 const TIMERS_TOP = 42;
-// minibar 底边离小地图顶边多远。用户在试验版里拖出来的位置：净资产底边 835、塔防圆心 812，
-// 普通小地图顶边 842（2560×1600、2026-10-18）——取 7
-const MB_GAP = 7;
+// 小地图**外框**比地图区域（minimapBox 给的那个正方形）大多少：顶边高出 5.3、靠屏幕中间那一侧宽出 7，
+// 靠屏幕边那一侧外框一直到屏幕边。量自普通大小小地图的截图（2560×1600：外框顶边 1240px、右边到 360px，
+// 地图区域顶边 1248、右边 350，2026-10-19）。特大小地图没单独量，按同样厚度算
+const FRAME_TOP = 5.3, FRAME_SIDE = 7;
+// 顶盖高度（未缩放，和 overlay.css 里 minibar 的 height 一致）
+const MB_H = 42;
 // 各块自己的基准大小。倒计时原先 0.62：圆环直径约 32，去掉数字之后一排五个刚好塞进
 // 计时牌下面、两侧买活中间那块空地（用户指定的位置，2026-10-08）；之后缩到 0.5 嫌小，回到 0.6；
 // 再参照 Dota Plus 的符文倒计时加了底盘、放到 0.72（实测外径约 35，Plus 自带的约 34、中心距约 40，
@@ -223,16 +227,15 @@ function placeBlocks(mmOpt) {
   const t = els.blocks.timers, st = sc("timers");
   put(t, W / 2 - t.offsetWidth * st / 2, TIMERS_TOP * k - INSET * st);
 
-  // minibar：看得见的那几格的外框（未缩放，相对块），左/右边贴小地图边缘、底边离小地图顶边 MB_GAP。
-  // 小地图在右边时块按 row-reverse 排（净资产在最右、贴边），所以同样取外框，不用分开算
+  // minibar：宽度 = 小地图外框的宽（屏幕边到外框另一侧），底边贴外框顶边。
+  // 小地图在右边时只是整栏挪过去，内部顺序不变（用户定：不镜像）；只开一样时 .solo（不斜切）
   const b = els.blocks.minibar, sm = sc("minibar");
-  if (prev["mb.r"] !== !!mmOpt.right) { prev["mb.r"] = !!mmOpt.right; b.classList.toggle("right", !!mmOpt.right); }
-  const cells = [els.cells.econ.root, els.glyph].filter(c => !c.hidden);
-  if (!cells.length) return;
-  const l = Math.min(...cells.map(c => c.offsetLeft));
-  const r = Math.max(...cells.map(c => c.offsetLeft + c.offsetWidth));
-  const bottom = Math.max(...cells.map(c => c.offsetTop + c.offsetHeight));
+  const right = !!mmOpt.right;
+  const solo = els.cells.econ.root.hidden !== els.glyph.hidden;
+  if (prev["mb.s"] !== solo) { prev["mb.s"] = solo; b.classList.toggle("solo", solo); }
   const mm = minimapBox(mmOpt, W, H);
-  const x = mmOpt.right ? mm.left + mm.size - r * sm : mm.left - l * sm;
-  put(b, x, mm.top - MB_GAP * k - bottom * sm);
+  const width = (right ? W - mm.left : mm.left + mm.size) / sm + FRAME_SIDE;   // 未缩放
+  const wpx = `${width.toFixed(1)}px`;
+  if (b.style.width !== wpx) b.style.width = wpx;
+  put(b, right ? W - width * sm : 0, mm.top - FRAME_TOP * k - MB_H * sm);
 }
