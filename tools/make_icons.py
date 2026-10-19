@@ -135,6 +135,12 @@ def ico(entries):
 # 前三个是 tauri.conf.json 的 bundle.icon 引用的，icon.png 给 README 和项目主页
 NAMED = {"32x32.png": 32, "128x128.png": 128, "128x128@2x.png": 256, "icon.png": 512}
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
+# 托盘图标**按实际显示尺寸各渲染一张**（2026-10-19）。原先托盘直接用窗口图标，Tauri 取的是 ico 里最大的
+# 256 那张，Windows 再缩到托盘尺寸（150% 缩放下是 24）——硬缩下来是糊的（用户反馈）。
+# 这几档是 Windows 小图标在 100% ~ 300% 缩放下的尺寸（SM_CXSMICON），tray.rs 运行时挑正好那一张。
+# 存成裸 RGBA（`icons/tray/<尺寸>.rgba`），Rust 侧 include_bytes 直接给 tauri::image::Image，
+# 不用为了解 PNG 再拉一个图片库进来
+TRAY_SIZES = [16, 20, 24, 28, 32, 40, 48]
 
 if __name__ == "__main__":
     raw, cache = {}, {}
@@ -154,3 +160,8 @@ if __name__ == "__main__":
     entries = [(s, get(s) if s >= 256 else dib(s, pixels(s))) for s in ICO_SIZES]
     open(os.path.join(OUT, "icon.ico"), "wb").write(ico(entries))
     print(f"{'icon.ico':<24} {ICO_SIZES}  (<256 用 DIB，256 用 PNG)")
+    tray = os.path.join(OUT, "tray")
+    os.makedirs(tray, exist_ok=True)
+    for s in TRAY_SIZES:
+        open(os.path.join(tray, f"{s}.rgba"), "wb").write(pixels(s))
+    print(f"{'tray/*.rgba':<24} {TRAY_SIZES}")
