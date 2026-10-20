@@ -48,7 +48,7 @@ To turn items on or off: **left-click the tray icon**, or right-click → Settin
 
 > **"Windows protected your PC"?** The program isn't code-signed (a certificate costs a few hundred
 > dollars a year), so SmartScreen stops it the first time. Click **More info → Run anyway**.
-> The source is all public. In-app updates afterwards normally don't show it (they don't go through a browser).
+> The source is all public. In-app updates afterwards don't show it.
 
 > **Never shows up?** Check steps 2 and 3 first — no external overlay can draw over
 > exclusive fullscreen; that's an OS limitation. Then look at the logs in
