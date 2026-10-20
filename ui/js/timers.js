@@ -15,22 +15,33 @@ function nextTick(clock, start, every) {
   return clock < start ? start
        : start + (Math.floor((clock - start) / every) + 1) * every;
 }
-function nextMidRune(clock, mr) {
-  for (const e of mr.fixed) if (clock < e.clock) return e;
+/** 下一次刷新，连同上一次刷新的时刻（prev）。第一次刷新之前没有"上一次"，算作策略阶段开始那一刻 */
+function nextMidRune(clock, mr, pregame) {
+  let prev = pregame;
+  for (const e of mr.fixed) {
+    if (clock < e.clock) return { ...e, prev };
+    prev = e.clock;
+  }
   const r = mr.repeat;
-  if (clock < r.fromClock) return { clock: r.fromClock, kind: r.kind };
-  return { clock: nextTick(clock, r.fromClock, r.every), kind: r.kind };
+  if (clock < r.fromClock) return { clock: r.fromClock, kind: r.kind, prev };
+  const next = nextTick(clock, r.fromClock, r.every);
+  return { clock: next, kind: r.kind, prev: next - r.every };
 }
 export function computeTimers(clock, C) {
   if (clock === null) return [];
   const t = [];
-  const mr = nextMidRune(clock, C.midRune);
+  // **环的周期 = 上一次刷新到下一次刷新**（2026-10-20）。原先直接用间隔，号角前就不对了：中路符和赏金符
+  // 都在倒数 0:00 那波赏金符，周期却一个 120 一个 240，同一个剩余秒数两个环一快一慢；智慧神龛、莲花
+  // 剩余比一个间隔还长，环钳在满格一动不动。第一次刷新前从策略阶段开始算（-pregameLength），号角前也在走
+  const pregame = -(C.pregameLength ?? 0);
+  const mr = nextMidRune(clock, C.midRune, pregame);
   t.push({ id: "mid", kind: mr.kind,
-           remaining: mr.clock - clock, period: C.midRune.repeat.every });
+           remaining: mr.clock - clock, period: mr.clock - mr.prev });
   for (const id of ["bounty", "lotus", "wisdom"]) {
     const c = C[id];
-    t.push({ id, kind: id,
-             remaining: nextTick(clock, c.start, c.every) - clock, period: c.every });
+    const next = nextTick(clock, c.start, c.every);
+    const prev = next === c.start ? pregame : next - c.every;
+    t.push({ id, kind: id, remaining: next - clock, period: next - prev });
   }
   if (clock >= 0) {
     const next = (Math.floor(clock / C.stack.every) + 1) * C.stack.every;
