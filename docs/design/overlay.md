@@ -1350,7 +1350,8 @@ nsis，**只给当前用户装**（`installMode: currentUser`）：装到 `%LOCA
 - **没有代码签名**，SmartScreen 会拦（单 exe 也一样，不是新问题）；签名证书一年几百美元，先不买。
   README 安装那步写了「更多信息 → 仍要运行」（2026-10-20 用户装 1.4.0 时撞上）。程序内一键更新是程序自己下的，
   文件不带"来自网络"的标记，**不会再拦**——2026-10-20 1.4.0 → 1.4.1 实测：下载 3 秒、装完自动重启、设置保留、全程没弹 SmartScreen
-- **安装包图标**（2026-10-20）：`nsis.installerIcon` 原先没填，`setup.exe` 是 NSIS 默认的光盘图标，指向 `icons/icon.ico`
+- **安装包、卸载程序的图标**（2026-10-20）：`nsis.installerIcon`、`nsis.uninstallerIcon` 原先没填，`setup.exe` 是 NSIS 默认的光盘图标，
+  卸载窗口的标题栏、右上角和"正在运行"提示框是 NSIS 默认的卸载图标；两项都指向 `icons/icon.ico`。**是两个独立的配置项**，只填一个另一个还是默认的
 - **绿色版 zip 保留**，解压即用；它没有一键更新
 - 应用标识 `dev.dota2helper2.app` 以 `.app` 结尾，打包时 Tauri 会警告（只影响 macOS）。**不改**：
   改了标识 `%APPDATA%` 下的数据目录跟着换，老用户的设置和录制就找不到了
