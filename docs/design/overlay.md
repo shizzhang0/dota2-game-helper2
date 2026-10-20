@@ -440,8 +440,8 @@ SSE            EventSource("stream?speed=…")      开发用的回放服务器
    - 截图是 m9044675249 9:46，按 `Ctrl+Alt+F11` 收起覆盖层截的，通知和聊天用 `tools/mosaic.ps1` 打了码。
      出中英两张：`demo-bg.jpg` 用 `tools/relabel_shot.ps1` 改成英文客户端的样子，`demo-bg-zh.jpg` 是原图，
      首页切语言时换（iframe 同源，直接改它 body 的背景）
-   - **2026-10-20 背景换成录屏**：截图上倒计时在走、画面不动，用户觉得别扭。现在是 m9052676196 15:53~16:28
-     的录屏 `site/demo.mp4`（35 秒、3.5 MB，名字打了码），覆盖层**按视频进度**喂包（`source.js` 的 `followVideo`，
+   - **2026-10-20 背景换成录屏**：截图上倒计时在走、画面不动，用户觉得别扭。现在是 m9053940263 13:42~14:05
+     的录屏 `site/demo.mp4`（23 秒、3.3 MB，名字打了码），覆盖层**按视频进度**喂包（`source.js` 的 `followVideo`，
      `demo.jsonl` 第一行带 `clock0`）。只有中文客户端一份，切语言不再换背景，两张 `demo-bg` 删了。
      怎么录、怎么处理见 [dev-tools.md](dev-tools.md)「主页 demo 录屏」
    - 数据是同一局 9:36~10:00，**带预热**：`make_demo.py --warmup-from -100` 把开局到 9:36 的包也写进去，
