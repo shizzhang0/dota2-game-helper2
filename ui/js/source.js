@@ -115,9 +115,15 @@ async function replayFile(url, onPacket, speed, loop) {
     几圈下来覆盖层和画面就错开了；按 `currentTime` 算，视频停覆盖层也停。
     `clock0` 是视频第 0 秒时的游戏时间（带小数，make_demo.py 写进第一行）：
     游戏时间走到 `clock0 + currentTime` 时，`clock_time` 不超过它的包都该喂了。
-    视频循环回到开头时 `currentTime` 变小，这时清掉状态重新预热，和定时器那条路的循环一样。 */
+    视频循环回到开头时 `currentTime` 变小，这时清掉状态重新预热，和定时器那条路的循环一样。
+
+    **视频由这里开播**（demo.html 里不写 autoplay，2026-10-20）：走到这一步数据已经读完、预热好了。
+    让视频自己 autoplay 的话它先播，覆盖层还在等脚本和数据，开头几秒只有游戏画面。
+    静音视频浏览器允许脚本直接 play()；万一被拦，视频停在第一帧，覆盖层照样按第 0 秒显示 */
 function followVideo(video, clock0, packets, warm, warmup, onPacket) {
   let i = warm, lastT = 0, busy = false;
+  video.currentTime = 0;
+  video.play().catch(() => {});
   setInterval(async () => {
     if (busy) return;   // 预热要好几百包，喂完之前不重入
     busy = true;
