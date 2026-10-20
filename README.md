@@ -129,7 +129,7 @@ to leave the game. It shows up again by itself at the start of the next match.
 ## Settings
 
 **Left-click the tray icon** (or right-click → Settings, or press `Ctrl+Alt+F10`) to open
-the settings card. The whole overlay shows while it's open, so you can check against the
+the settings card. Launching the program again while it's running opens it too — only one copy ever runs. The whole overlay shows while it's open, so you can check against the
 game that everything lines up.
 
 <img src="docs/images/card.png" width="362" alt="The settings card">

@@ -77,6 +77,15 @@ fn main() {
         return;
     }
     tauri::Builder::default()
+        // **同时只跑一个**（2026-10-20）。开着又双击一次，原先会起第二个：GSI 端口 53000 被第一个占着，
+        // 第二个收不到数据，两个热键也注册不上，屏幕上叠两层覆盖层。现在第二个把参数转给第一个就退出，
+        // 第一个打开设置卡片——看得见"它已经开着了"，比什么都不发生好。
+        // **必须是第一个插件**（插件文档的要求：要赶在别的插件做任何事之前判掉第二个进程）。
+        // 卸载器的 `--cleanup` 在这之前就返回了，不受影响：它就是要在程序开着的时候也能跑
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            logf!(Level::Info, "[instance] 又启动了一次，打开设置卡片");
+            set_edit(app, true);
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             // 只装回调，热键在 setup 里注册（见那里的注释）
@@ -104,7 +113,7 @@ fn main() {
 
             // **热键注册失败不退出，记一条 Error 接着跑**（2026-10-15）。原先用插件 Builder 的
             // with_shortcuts 注册：它跑在 setup 之前、log::init 之前，RegisterHotKey 一失败
-            // （热键被别的程序占了，或者程序已经开着又双击了一次）就在 .expect("tauri build")
+            // （热键被别的程序占了，或者程序已经开着又双击了一次——后者 2026-10-20 起由单实例挡掉了）就在 .expect("tauri build")
             // 处 panic，窗口不出、日志没有，看起来就是"双击没反应"。挪到这里之后能记下来，
             // 托盘菜单照样能进设置。逐个注册：一个被占不连累另一个。
             // 这里不是热键回调里，可以注册（回调里绝不能，见 set_edit 的注释）
