@@ -3,7 +3,7 @@
 步骤只写一份。流程见 docs/design/dev-tools.md「发版」。
 
     python tools/release.py bump 1.4.0      # 改三处版本号（之后照常提 PR 合进 main）
-    python tools/release.py build           # 打包：安装包 + 签名、zip、各一份不带版本号的、latest.json → dist/release/
+    python tools/release.py build           # 打包：安装包、zip、latest.json（文件名都不带版本号）→ dist/release/
     python tools/release.py publish NOTES   # 用 build 的产物建**草稿** Release、传文件，NOTES 是正文文件
     python tools/release.py verify 1.4.0    # 把 Release 上的文件下载回来核对 SHA256，全对才把草稿转正
 
@@ -20,9 +20,11 @@ REPO = "shizzhang0/dota2-game-helper2"
 # Tauri 命令行版本跟着 Cargo.lock 里的 tauri 走
 TAURI_CLI = "@tauri-apps/cli@2.11.5"
 KEY_FILE = Path.home() / ".tauri" / "dota2-game-helper2.key"
-# 每版另传一份**不带版本号**的安装包和 zip，项目主页和 README 的下载按钮链到
-# `releases/latest/download/<这个名字>`，永远是最新版，不用每次发版去改链接。
-# 带版本号的那两份照传：在 Releases 页上看得出是哪一版，一键更新的 latest.json 也指着它
+# **文件名不带版本号**，项目主页和 README 的下载按钮链到 `releases/latest/download/<这个名字>`，
+# 永远是最新版，不用每次发版去改链接（2026-10-10）。是哪一版看 Release 的标题。
+# 2026-10-10 ~ v1.4.1 还另传一份带版本号的（同一个文件两个名字），Release 页上一眼看去重复、
+# 不知道下哪个；看了一圈别的项目没有这么做的，固定链接的（Zed）就只发不带版本号的。
+# 2026-10-20 起只发这一份，latest.json 也指向它（带 tag 的地址，不是 latest，指得到确切那一版）
 STABLE_SETUP = "dota2-game-helper2-setup.exe"
 STABLE_ZIP = "dota2-game-helper2-portable.zip"
 
@@ -97,11 +99,10 @@ def build():
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
-    shutil.copy2(setup, OUT / setup.name)
-    shutil.copy2(sig, OUT / sig.name)
+    shutil.copy2(setup, OUT / STABLE_SETUP)
 
     # 绿色版：exe + 两份 README
-    zp = OUT / f"dota2-game-helper2-v{v}-windows-x64.zip"
+    zp = OUT / STABLE_ZIP
     with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(exe, "dota2-game-helper2.exe")
         for readme in ("README.md", "README.zh-CN.md"):
@@ -115,13 +116,10 @@ def build():
         "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platforms": {"windows-x86_64": {
             "signature": sig.read_text(encoding="utf-8").strip(),
-            "url": f"https://github.com/{REPO}/releases/download/v{v}/{setup.name}",
+            "url": f"https://github.com/{REPO}/releases/download/v{v}/{STABLE_SETUP}",
         }},
     }
     (OUT / "latest.json").write_text(json.dumps(latest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    shutil.copy2(OUT / setup.name, OUT / STABLE_SETUP)
-    shutil.copy2(zp, OUT / STABLE_ZIP)
 
     size_mb = exe.stat().st_size / 1048576
     print(f"\nexe {size_mb:.1f} MB（应约 7.5MB，大很多说明 ui/ 里混进了别的东西）")
@@ -130,12 +128,9 @@ def build():
 
 
 def release_files(v):
-    """Release 上应有的五个文件。漏传 latest.json，装了安装版的人就收不到这一版；
-    漏传不带版本号的那两份，主页的下载按钮就 404——所以 publish 缺一样就不发，verify 少一样就不转正"""
-    return [OUT / f"dota2-game-helper2-v{v}-windows-x64.zip",
-            OUT / f"dota2-game-helper2_{v}_x64-setup.exe",
-            OUT / STABLE_ZIP, OUT / STABLE_SETUP,
-            OUT / "latest.json"]
+    """Release 上应有的三个文件。漏传 latest.json，装了安装版的人就收不到这一版；
+    漏传安装包或 zip，主页的下载按钮就 404——所以 publish 缺一样就不发，verify 少一样就不转正"""
+    return [OUT / STABLE_ZIP, OUT / STABLE_SETUP, OUT / "latest.json"]
 
 
 def release_state(tag):

@@ -230,10 +230,11 @@ node tools/verify_wards.mjs 9029221681
 
 ## 发版
 
-v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认它）、**绿色版 zip**（exe + 两份 README）、
-**`latest.json`**（一键更新读的清单）。安装包和 zip 各**另传一份不带版本号的**
-（`dota2-game-helper2-setup.exe`、`dota2-game-helper2-portable.zip`）：项目主页和 README 的下载链接写的是
-`releases/latest/download/<这个名字>`，永远指向最新版，发版不用改链接（2026-10-10）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
+每版发三样：**安装包** `dota2-game-helper2-setup.exe`（一键更新只认它）、**绿色版** `dota2-game-helper2-portable.zip`
+（exe + 两份 README）、**`latest.json`**（一键更新读的清单）。**文件名都不带版本号**：项目主页和 README 的下载链接写的是
+`releases/latest/download/<这个名字>`，永远指向最新版，发版不用改链接（2026-10-10）。
+v1.4.0、v1.4.1 两版还另传了带版本号的同一份（一共五个），Release 页上看着重复、不知道下哪个；
+看了几个开源项目，没有同一个文件传两份的，要固定链接的（Zed）就只发不带版本号的，2026-10-20 起照这样（用户定）。步骤都在 [`tools/release.py`](../../tools/release.py) 里，
 **本地和 GitHub Actions 用的是同一个脚本**。
 
 ### 平时：推 tag，Actions 自动发
@@ -254,8 +255,8 @@ v1.4.0 起每版发三样：**安装包**（`*-setup.exe`，一键更新只认�
    ```
 
 3. [`release.yml`](../../.github/workflows/release.yml) 接手：确认是带注释的 tag（轻量 tag 直接报错）、
-   核对 tag 和代码里的版本号一致 → `release.py build` → `release.py publish`（建**草稿** Release、传五个文件）
-   → `release.py verify`（下载回来核对，五个文件都在、SHA256 全对才转正）。
+   核对 tag 和代码里的版本号一致 → `release.py build` → `release.py publish`（建**草稿** Release、传三个文件）
+   → `release.py verify`（下载回来核对，三个文件都在、SHA256 全对才转正）。
    跑成功之后 [`pages.yml`](../../.github/workflows/pages.yml) 自动重新发项目主页（下载按钮下的版本号跟着变）
 
 签名私钥在仓库 Secrets 的 `TAURI_SIGNING_PRIVATE_KEY`。没有它流水线直接失败，不会发出一个没签名的安装包。
@@ -295,7 +296,7 @@ python tools/release.py verify 1.4.0
 - **Release 正文只写 Changelog**（新增 / 修复 / 改动，一条一句），原因和数据写进提交信息和设计文档
   （用户 2026-10-09 定；PR 描述同理）。标题就是 `vX.Y.Z`
 - 「检查更新」只读 tag；一键更新读最新 Release 里的 `latest.json`——**漏传它，装了安装版的人就收不到这一版**，
-  所以 `publish` 五个文件缺一样就不发（不带版本号的两份漏了，主页的下载按钮就 404）
+  所以 `publish` 三个文件缺一样就不发（安装包或 zip 漏了，主页的下载按钮就 404）
 - **先建草稿、核对通过才转正**（2026-10-15）。原先直接建公开 Release 再逐个传文件：传的那几十秒里它已经是
   latest，装了安装版的人点更新会 404；中途失败留下半份 Release，重跑又因"已存在"失败。
   现在 `verify` 不通过就停在草稿（对外不可见），修好后重跑流水线，`publish` 会接着用这份草稿、覆盖着重传

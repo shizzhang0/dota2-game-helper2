@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: python tools/release.py publish "${RUNNER_TEMP}/notes.md"
 
-      # 五个文件都在、SHA256 全对才转正；不对就停在草稿，修好后重跑这条流水线会接着用这份草稿
+      # 三个文件都在、SHA256 全对才转正；不对就停在草稿，修好后重跑这条流水线会接着用这份草稿
       - name: 下载回来核对，通过后转正
         if: startsWith(github.ref, 'refs/tags/')
         env:
