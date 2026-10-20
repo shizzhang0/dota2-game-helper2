@@ -19,7 +19,9 @@
   #bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: fill; }
 </style>
 <body>
-<video id="bg" src="demo.mp4" autoplay muted loop playsinline></video>
+<!-- 不写 autoplay：等覆盖层的数据读完、预热好了，source.js 的 followVideo 再 play()（2026-10-20）。
+     原先视频自己先播，覆盖层要等脚本、demo.jsonl、常数表都到齐才出来，开头几秒只有游戏画面 -->
+<video id="bg" src="demo.mp4" preload="auto" muted loop playsinline></video>
 <div id="panel"></div>
 <div id="editor" hidden></div>
 <script>
