@@ -140,7 +140,7 @@ game that everything lines up.
 
 | Setting | What it does |
 |---|---|
-| **Display** | A toggle for each of the nine items; the icons double as the legend |
+| **Display** | A toggle for each of the nine items; the icons double as the legend. **Have Dota Plus?** It has its own rune timers — turn off our five timers (mid rune, bounty, wisdom, lotus, stack) here |
 | **Minimap** | "Auto" by default, followed by what it read from Dota's settings; pick it by hand if that's wrong |
 | **Log level · Open data folder** | For bug reports |
 | **Version** | **NEW** appears next to it when there's an update |
