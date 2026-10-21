@@ -12,6 +12,10 @@
 //   · 漏显示：回放里有、我们**见过**、却没画——从没见过的不算，那是本来就不可能知道的
 //   · 被排的叉：我们画的叉，回放里那个我方眼是不是真在到期前没了；以及该画没画的
 //   · 我方眼倒计时：我们显示的剩余秒数 vs 回放里那个眼真实的剩余寿命
+// 另外两项是给以后攒证据的（2026-10-21）：
+//   · 淡化：没视野、我们自己画着的敌方眼，幽灵和活眼各画得多实（平均 conf）——幽灵该比活眼淡
+//   · 排眼播报的两种没处理的情形：无主（-1，小兵 / 塔打掉的）、迟到（来时没有 3 秒内看见过的候选）。
+//     各自数一数回放里那几秒是不是正好死了一个敌方同类眼，攒够了再决定要不要处理（wards.md）
 // 漏显示是危险的一侧（以为安全其实有眼），幽灵是吵的一侧——wards.md 一直按这个方向取舍。
 
 import { findRecordings, matchIdFromArgs, requirePair, runSelf, spectateTimeline, atClock, mmss,
@@ -69,6 +73,9 @@ const misses = new Map();        // 回放里有、见过、没画：life -> { s
 const ownDiff = [];              // 我方眼倒计时：我们 - 真实
 const crosses = new Map();       // 我们画的叉：`x|y|at` -> { x, y, kind, at }
 let posErr = 0, frames = 0;
+const confGhost = [], confAlive = [];   // 没视野、我们画着的敌方眼的 conf
+const broadcasts = [];                  // 排眼播报：{ clock, kind, pid, ours, live, held }
+const seenBroadcast = new Set();
 
 await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   if (info.clock === null || info.clock < 0 || !info.inMatch || info.myTeam === null) return;
@@ -80,6 +87,21 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   for (const w of parseWards(st)) if (w.team === enemyTeam) seenEnemy.push({ ...w, at: clock });
   const list = wards.list(info);
   for (const k of list.killed) crosses.set(`${k.x}|${k.y}|${k.at}`, k);
+  // 排眼播报：同 minimap.js noteWardKills 的去重和候选口径
+  for (const e of st.events || []) {
+    if (e?.event_type !== "generic_event" || typeof e.data !== "string") continue;
+    let j; try { j = JSON.parse(e.data); } catch { continue; }
+    if (!String(j.type || "").includes("WARD_KILLED")) continue;
+    const id = `${j.type}|${j.time}|${j.playerid1}`;
+    if (seenBroadcast.has(id)) continue;
+    seenBroadcast.add(id);
+    const kind = j.type.includes("SENTRY") ? "sentry" : "obs";
+    const lo = myTeam === 2 ? 0 : 5;
+    const mine = [...wards.enemy.values()].filter(w => w.kind === kind);
+    broadcasts.push({ clock, kind, pid: j.playerid1, ours: j.playerid1 >= lo && j.playerid1 <= lo + 4,
+                      live: mine.filter(w => clock - w.lastSeen <= C.wardKillConfirm).length,
+                      held: mine.map(w => ({ x: w.x, y: w.y })) });
+  }
 
   const t = atClock(truthFrames, clock, 4);
   if (!t) return;
@@ -89,6 +111,7 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   // 幽灵
   for (const d of list.enemy) {
     const m = truthEnemy.filter(w => w.kind === d.kind && near(w, d));
+    if (!d.visible) (m.length ? confAlive : confGhost).push(d.conf);
     if (m.length) { posErr = Math.max(posErr, Math.min(...m.map(w => Math.hypot(w.x - d.x, w.y - d.y)))); continue; }
     const key = `${d.kind}|${d.x}|${d.y}`;
     const g = ghosts.get(key) || { kind: d.kind, x: d.x, y: d.y, sec: 0, from: clock, to: clock, conf: d.conf };
@@ -176,3 +199,29 @@ if (ownDiff.length) {
   console.log("\n我方眼倒计时：没有可比的采样");
 }
 console.log(`\n画的位置和真眼的最大距离：${posErr.toFixed(0)}（世界坐标，地图是 ±8400）`);
+
+// ── 淡化 ──
+const avg = (xs) => xs.length ? (sum(xs) / xs.length).toFixed(2) : "-";
+console.log(`\n没视野、我们画着的敌方眼，平均实心程度（1 = 实心，0 = 最淡）：` +
+            `幽灵 ${avg(confGhost)}（${confGhost.length} 个采样），活眼 ${avg(confAlive)}（${confAlive.length} 个采样）`);
+
+// ── 排眼播报里还没处理的两种 ──
+// 对得上 = 回放里播报前 3 秒到后 10 秒之间，正好死了一个提前没了的敌方同类眼，而且我们那时记着它
+const endClock = truthFrames.at(-1)?.clock ?? 0;
+const earlyEnemy = enemyLives.filter(l => l.ended && l.end - l.start < lifeOf(l) - grace);
+function judge(b) {
+  if (endClock - b.clock <= 10) return "比赛快结束，分不清";
+  const dead = earlyEnemy.filter(l => l.kind === b.kind && l.end >= b.clock - 3 && l.end <= b.clock + 10);
+  if (dead.length !== 1) return `那几秒死了 ${dead.length} 个敌方同类眼，对不上`;
+  return b.held.some(h => near(h, dead[0])) ? "对得上（我们记着它）" : "对得上，但我们没记着它";
+}
+const tally = (bs) => {
+  const c = new Map();
+  for (const b of bs) { const r = judge(b); c.set(r, (c.get(r) || 0) + 1); }
+  return [...c].map(([r, n]) => `${r} ${n}`).join("，") || "无";
+};
+const unowned = broadcasts.filter(b => b.pid === -1);
+const late = broadcasts.filter(b => b.ours && b.live === 0);
+console.log(`\n排眼播报（攒证据用，见 wards.md）：`);
+console.log(`  无主（-1，小兵 / 塔）：${unowned.length} 条 —— ${tally(unowned)}`);
+console.log(`  我方排、来时没有 ${C.wardKillConfirm} 秒内看见过的候选：${late.length} 条 —— ${tally(late)}`);

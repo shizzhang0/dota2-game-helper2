@@ -23,5 +23,7 @@
   "wardKilledGrace": 5,
   "wardKilledShow": 45,
   "wardKillConfirm": 3,
-  "wardKillSuppress": 15
+  "wardKillSuppress": 15,
+  "wardBriefSeen": 8,
+  "wardBriefConf": 0.5
 }
