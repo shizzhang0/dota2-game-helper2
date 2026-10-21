@@ -44,6 +44,8 @@ const SELL_TOL = 20;      // 金：判"卖出"时允许的偏差，主要用来�
 const SALE_LAG = 5;
 /** 金：退款晚到那条只认这个数以上的在途账，理由同 PART_SOLD_MIN。 */
 const LATE_SALE_MIN = 200;
+/** 秒：买入后多久之内卖回是全额退款（游戏规则），见 noteSpend 里"买了又撤销" */
+const UNDO_WINDOW = 10;
 
 /** 储藏处少了 V，这是「卖掉了」还是「被信使取走了」？
  *
@@ -331,6 +333,9 @@ export class EconTracker {
     this.spend = [];                // 说不清去向的支出：钱花了、东西还没出现（见 noteSpend）
     this.lastBuyback = null;        // 最近一次自己买活的时刻，买活掉的钱不是花钱
     this.seenBuybacks = new Set();  // 买活事件去重，GSI 会连着几十包重复推同一条
+    this.seenIncome = new Set();   // 赏金类事件去重，见 noteIncome
+    this.undone = [];              // 认成"撤销购买"销掉的账 { at, v }，只给对账脚本看（verify_networth.mjs）
+    this.incomeNow = false;        // 这一包有没有新的赏金类事件
     this.prevBase = null;           // 上一包的"非金钱资产"（不含 spend 账），给 noteSpend 做差用
     this.tpQueue = [];              // 每个充能是不是自己买的；用掉时先扣白送的
     this.boughtTp = 0;              // 其中自己花钱买的张数（由 tpQueue 派生）
@@ -440,6 +445,23 @@ export class EconTracker {
       if (this.seenBuybacks.has(id)) continue;
       this.seenBuybacks.add(id);
       this.lastBuyback = clock;
+    }
+  }
+
+  /** 这一包有没有**新的**赏金类事件（击杀、助攻、推塔、兵营、排眼、肉山、神符……）。
+      `noteSpend` 判"撤销购买退款"时用：这一包的钱是赏金来的，就别当退款。去重同 noteBuyback */
+  noteIncome(state) {
+    this.incomeNow = false;
+    for (const e of Object.values(state.events || {})) {
+      if (!e || e.event_type !== "generic_event" || typeof e.data !== "string") continue;
+      let d;
+      try { d = JSON.parse(e.data); } catch { continue; }
+      const type = String(d.type || "");
+      if (!/KILL|DENY|BOUNTY|RUNE|COURIER|ROSHAN|AEGIS|STREAK/.test(type)) continue;
+      const id = `${type}|${d.time}|${d.playerid1}`;
+      if (this.seenIncome.has(id)) continue;
+      this.seenIncome.add(id);
+      this.incomeNow = true;
     }
   }
 
@@ -673,6 +695,7 @@ export class EconTracker {
     this.noteProxy(state.items, prices, state.player, clock);
     this.noteVariants(state.items);
     this.noteBuyback(state, clock);
+    this.noteIncome(state);
     const tpFree = died || this.noteTpGift(state.items, clock);
     this.noteTp(state.items, tpFree, clock);
     this.settleTpGift(tpUp > 0 && tpFree, clock);
@@ -761,6 +784,7 @@ export class EconTracker {
     const out = this.total(state, prices, C, slot, stash);
     this.noteSpend(out, gold, goldBefore, clock, died, state.hero,
                    ownedByName(state.items, prices, state.player));
+    out.undone = this.undone;   // 只给对账脚本看，覆盖层不读
     return out;
   }
 
@@ -807,6 +831,19 @@ export class EconTracker {
     if (got > 0) this.deliverSpend(got);
 
     if (dead) { out.networth = out.networth - ledger + this.spend.reduce((a, t) => a + t.v, 0); return; }
+
+    // **买了又撤销，退款要把这笔账销掉**（2026-10-21）。买入 10 秒内卖回是全额退款（游戏规则），
+    // 东西没出现过、钱又回来了——不销的话退回来的钱进了金钱，这笔账还挂着，同一笔钱算两遍，
+    // 而这本账没有 TTL，要等下一次买东西冲销。实测 m9054110537 12:52 花 996、12:54 退回 1004，
+    // 一路多算 1000 到 13:26。储藏处那本在途账有同样的"退款晚到"（见 update()），这本以前没有。
+    // **这一包有赏金类事件就不认**：十人复算里两次误判都是同包的推塔赏金（292 对 298）、
+    // 助攻赏金（258 对 250 的巫师帽）凑巧对上。加这个条件后八对自视角 + 十七份回放十人复算，
+    // 触发 2 次、都对，零误判
+    const gain = gold - goldBefore;
+    if (gain >= LATE_SALE_MIN && !this.incomeNow) {
+      const i = this.spend.findIndex(t => clock - t.at <= UNDO_WINDOW && Math.abs(gain - t.v) <= SELL_TOL);
+      if (i >= 0) { this.undone.push({ at: clock, v: this.spend[i].v }); this.spend.splice(i, 1); }
+    }
 
     // **"东西出现了没有"要按物品身份判，光看资产总值会漏。**
     // `got` 是资产总值的增量，同一包里**卖掉的东西**会把它压低，于是"边卖边买"
