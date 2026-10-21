@@ -44,12 +44,22 @@ function killedShow(C) {
   return typeof v === "number" && v > 0 ? v : 20;
 }
 
-/** 只被看见过一小会儿的敌方真眼，一开始最多画多实。缺键时兜默认值，同 killedShow。
-    见下面 list() 里 brief 那段和 design/wards.md「只看见一眼的真眼」 */
-function briefCap(C) {
-  const sec = C && typeof C.wardBriefSeen === "number" ? C.wardBriefSeen : 8;
-  const conf = C && typeof C.wardBriefConf === "number" ? C.wardBriefConf : 0.5;
-  return { sec, conf };
+/** "没看见插眼"的敌方真眼：一开始最多画多实、离开视野后多少秒淡到最淡。缺键时兜默认值，同 killedShow。
+    见下面 list() 里 unsure 那段和 design/wards.md「没看见插眼的真眼淡得快」 */
+function unsureFade(C) {
+  const conf = C && typeof C.wardUnsureConf === "number" ? C.wardUnsureConf : 0.5;
+  const sec = C && typeof C.wardUnsureFade === "number" && C.wardUnsureFade > 0 ? C.wardUnsureFade : 60;
+  return { conf, sec };
+}
+
+/** 第一次看见这个敌方眼时，旁边（PLACER_RADIUS 以内）有没有看得见的敌方英雄——有就多半是看着对面插下的，
+    知道它的准确年龄。minimap 里 (0,0) 的英雄条目是幽灵，不算 */
+const PLACER_RADIUS = 600;
+function placerNear(w, state, myTeam) {
+  if (myTeam === null) return true;          // 不知道哪边是自己，当可靠的算，不往淡里画
+  return objects(state).some(o => o.team !== myTeam && /hero/.test(o.unitname || "") &&
+                                  !(o.xpos === 0 && o.ypos === 0) &&
+                                  Math.hypot(o.xpos - w.x, o.ypos - w.y) <= PLACER_RADIUS);
 }
 
 /** 眼是不是插在自己英雄脚下。hero.xpos/ypos 与 minimap 用的是同一套世界坐标。 */
@@ -61,8 +71,9 @@ function nearMe(state, w) {
 }
 
 /** 这个敌方眼旁边有没有我方真视的来源：我方真眼（照射 1050，放宽到 1250），
-    或我方英雄（粉 / 宝石，1050 再加两包之间的位移，取 1450）。见 design/wards.md「死眼的尸体」。 */
-const SIGHT_FROM_SENTRY = 1250, SIGHT_FROM_HERO = 1450;
+    或我方英雄（粉 / 宝石，1050 再加两包之间的位移，取 1450），
+    或我方放在地上的效果（`npc_dota_thinker`，1000 以内）。见 design/wards.md「死眼的尸体」。 */
+const SIGHT_FROM_SENTRY = 1250, SIGHT_FROM_HERO = 1450, SIGHT_FROM_THINKER = 1000;
 function trueSightNear(w, seen, state, myTeam) {
   if (myTeam === null) return true;          // 不知道哪边是自己，宁可不判
   if (seen.some(s => s.team === myTeam && s.kind === "sentry" &&
@@ -72,6 +83,14 @@ function trueSightNear(w, seen, state, myTeam) {
   const h = state.hero;
   if (h && typeof h.xpos === "number" && typeof h.ypos === "number" &&
       Math.hypot(h.xpos - w.x, h.ypos - w.y) <= SIGHT_FROM_HERO) return true;
+  // **我方放在地上的效果也算**（2026-10-21）：能照出隐身单位的不只英雄和真眼，有些物品 / 技能是往地上放一个
+  // thinker（引擎在地上放的隐形占位单位，GSI 只给阵营和坐标，不说是哪个技能）。m9055080104 10:44：
+  // 队友宙斯远程"雷击"站在敌方真眼旁边的斯温，雷击在落点给一小会儿真视，thinker 只出现了一秒，
+  // 那个活着的敌方真眼就这样被看见——附近没有我方英雄、也没有我方真眼，
+  // 按"附近没有来源 = 尸体"丢掉，漏画了六分钟。八对录制里漏显示一共 3 个、809 秒，**全是这个原因**；
+  // 认了之后漏显示归零，幽灵多 3 个（487 秒）
+  if (objects(state).some(o => o.team === myTeam && o.unitname === "npc_dota_thinker" &&
+                               Math.hypot(o.xpos - w.x, o.ypos - w.y) <= SIGHT_FROM_THINKER)) return true;
   return objects(state).some(o => o.team === myTeam && /hero/.test(o.unitname || "") &&
                                   Math.hypot(o.xpos - w.x, o.ypos - w.y) <= SIGHT_FROM_HERO);
 }
@@ -98,7 +117,10 @@ export class WardTracker {
 
       **事件不带坐标**，只有 `playerid1`（谁排的）。所以要自己判断删哪一个：
 
-      1. `playerid1` 必须在我方槽位内。`-1`（无主）一律不认——拿不准就别动记忆。
+      1. `playerid1` 必须在我方槽位内，或者是 `-1`（无主：小兵、塔这类非英雄打掉的）。
+         -1 原先一律不认；2026-10-21 起认：自视角只收得到**我方打掉敌方眼**的那种
+         （我方眼被对面小兵打掉的那条只在回放里有），八对录制里能对上的 3 条全对，
+         照下面同样的候选规则删，幽灵少 3 个（1177 秒）、漏显示不变。
       2. 候选只取**当前仍可见**的（距上次确认 <= `wardKillConfirm`）。
          **排眼需要真视**，刚被排掉的那个此刻必然还在我们的真视里；
          几分钟前才确认过的那个不可能是它。
@@ -128,7 +150,7 @@ export class WardTracker {
       const id = `${type}|${j.time}|${j.playerid1}`;
       if (this.seenKills.has(id)) continue;
       this.seenKills.add(id);
-      if (!(j.playerid1 >= lo && j.playerid1 <= lo + 4)) continue;
+      if (!(j.playerid1 === -1 || (j.playerid1 >= lo && j.playerid1 <= lo + 4))) continue;
       const kind = type.includes("SENTRY") ? "sentry" : "obs";
       const live = [...this.enemy].filter(([, w]) =>
         w.kind === kind && clock - w.lastSeen <= this.C.wardKillConfirm);
@@ -234,8 +256,11 @@ export class WardTracker {
         // 被重置。余量内看见的仍当同一个眼：它本来就快到期了，不再被看见时按物理上界马上删掉。
         const life = w.kind === "sentry" ? this.C.wardSentryDuration : this.C.wardObserverDuration;
         const stale = was && clock - was.firstSeen > life + this.C.wardKillSuppress;
+        const fresh = !was || stale;
         this.enemy.set(w.key, { x: w.x, y: w.y, kind: w.kind, lastSeen: clock,
-                                firstSeen: (was && !stale) ? was.firstSeen : clock });
+                                firstSeen: fresh ? clock : was.firstSeen,
+                                // 第一次看见时就定下来，之后不改（见 placerNear 和 list() 的 unsure）
+                                placed: fresh ? placerNear(w, state, info.myTeam) : was.placed });
       }
     }
     this.joined = true;
@@ -300,14 +325,16 @@ export class WardTracker {
         // 用"离物理上界还剩多少"当置信度，比"多久没看见"更贴近真实剩余寿命
         const left = life - (clock - (w.firstSeen ?? w.lastSeen));
         let conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
-        // **只看见过一小会儿的真眼，一开始就画淡**（2026-10-21）。我们按"第一次看见 = 刚插"算它的寿命，
-        // 可只闪了几秒就不见的，多半是在它最后几秒才被看见（快到期的真眼像是会现形）——
-        // 五对录制里持续 ≤ 8 秒的 54 段，35 段几秒后就死了、18 段还活着。不删（会抹掉那 18 个活眼），
-        // 只把"没那么确定"画出来：封顶 wardBriefConf，之后照常随时间淡下去。
-        // 只管真眼：假眼的尸体视野是 0，进门就被挡掉了（见 update()），留下的假眼不在这个统计里
-        const brief = briefCap(this.C);
-        if (w.kind === "sentry" && w.firstSeen !== null && w.lastSeen - w.firstSeen < brief.sec) {
-          conf = Math.min(conf, brief.conf);
+        // **没看见插眼的真眼，淡得快**（2026-10-21）。我们按"第一次看见 = 刚插"算寿命，这只对看着对面插下的眼成立；
+        // 中途才发现的（到期特效、被队友排掉却没播报、本来就插了很久）其实早不止这个岁数。
+        // 八对录制里按"第一次看见时旁边有没有敌方英雄"分：有的画着时 87% 还活着（离开视野三分钟后仍有 82%），
+        // 没有的只有 14%（一分钟内 36%、一到三分钟 17%、三分钟后 1%）。所以后一种从 wardUnsureConf 开始，
+        // wardUnsureFade 秒内淡到最淡——**不删**，最淡时渲染层还留 12% 的影子，到寿命才删，不漏画。
+        // 只管真眼：假眼的尸体视野是 0，进门就被挡掉了，留下的假眼九成是真的。
+        // （原先按"看见不到 8 秒"封顶，看见时长和死活没关系，换成这个）
+        if (w.kind === "sentry" && w.placed === false) {
+          const u = unsureFade(this.C);
+          conf = Math.min(conf, u.conf * Math.max(0, 1 - (clock - w.lastSeen) / u.sec));
         }
         // visible：这一包里还看得见它。GSI 的 minimap 只推我方此刻看得见的敌方单位，
         // 所以"本包有它" = 有视野 = 原生小地图正画着它，渲染层据此不重复画（见 wardmap.js）

@@ -38,7 +38,7 @@
     items.name/charges/purchaser  networth.js（整段的其余字段——冷却、
                           可否施放、等级——一个都没人读）
     events                networth.js 与 events.js
-    minimap               **只留眼、塔、泉水**，且按类型给不同字段，见 minimap_fields
+    minimap               **只留眼、塔、泉水、英雄、thinker**，且按类型给不同字段，见 minimap_fields
 
 整段丢掉的：provider / buildings / abilities / wearables。
 它们在 cachepool.js 的 SECTIONS 里，但全项目没有任何消费者——2026-09-17 逐个 grep 过。
@@ -72,6 +72,7 @@ WARD_UNITS = ("npc_dota_observer_wards", "npc_dota_sentry_wards")
 WARD_FIELDS = ("unitname", "team", "xpos", "ypos")
 TOWER_FIELDS = ("image", "team", "xpos", "ypos")
 FOUNTAIN_FIELDS = ("unitname", "xpos", "ypos")
+HERO_FIELDS = ("unitname", "team", "xpos", "ypos")
 
 # 假的对局号：match.js 只用它判"换局了没有"，具体值无所谓，
 # 而真实 matchid 能反查到那一局和里面的人。
@@ -88,6 +89,12 @@ def minimap_fields(o):
         return FOUNTAIN_FIELDS
     if str(o.get("image", "")).startswith("minimap_tower"):
         return TOWER_FIELDS
+    # 英雄和 thinker：minimap.js 判敌方眼可不可靠要用（2026-10-21）——第一次看见真眼时旁边有没有敌方英雄
+    #（placerNear）、附近有没有我方真视来源（trueSightNear 认我方英雄和我方 thinker）。少了它们，
+    # demo 里所有敌方真眼都会被当成"没看见插眼"一分钟就淡掉，尸体判断也会变严。只要阵营和坐标，
+    # unitname 是英雄名或 npc_dota_thinker，不涉及玩家身份
+    if "hero" in str(o.get("unitname", "")) or o.get("unitname") == "npc_dota_thinker":
+        return HERO_FIELDS
     return None
 
 
