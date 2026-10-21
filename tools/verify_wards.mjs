@@ -229,7 +229,7 @@ const tally = (bs) => {
 const unowned = broadcasts.filter(b => b.pid === -1);
 const late = broadcasts.filter(b => b.ours && b.live === 0);
 console.log(`\n排眼播报（攒证据用，见 wards.md）：`);
-console.log(`  无主（-1，小兵 / 塔）：${unowned.length} 条 —— ${tally(unowned)}`);
+console.log(`  无主（-1，小兵 / 塔；2026-10-21 起按普通排眼的规则删）：${unowned.length} 条 —— ${tally(unowned)}`);
 console.log(`  我方排、来时没有 ${C.wardKillConfirm} 秒内看见过的候选：${late.length} 条 —— ${tally(late)}`);
 const ambiguous = broadcasts.filter(b => b.ours && b.live > 1);
 console.log(`  我方排、候选不止一个（先记下、过 ${C.wardKillSuppress} 秒按消失的个数判）：${ambiguous.length} 条`);
