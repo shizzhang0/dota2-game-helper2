@@ -16,6 +16,8 @@
 //   · 淡化：没视野、我们自己画着的敌方眼，幽灵和活眼各画得多实（平均 conf）——幽灵该比活眼淡
 //   · 排眼播报的两种没处理的情形：无主（-1，小兵 / 塔打掉的）、迟到（来时没有 3 秒内看见过的候选）。
 //     各自数一数回放里那几秒是不是正好死了一个敌方同类眼，攒够了再决定要不要处理（wards.md）
+//   · 有歧义的播报（来时 3 秒内看见过的候选不止一个）：逐条列出每个候选离自己英雄多远、回放里死没死，
+//     攒着看"死的总是离我们近的那个"之类的规律成不成立
 // 漏显示是危险的一侧（以为安全其实有眼），幽灵是吵的一侧——wards.md 一直按这个方向取舍。
 
 import { findRecordings, matchIdFromArgs, requirePair, runSelf, spectateTimeline, atClock, mmss,
@@ -98,8 +100,12 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
     const kind = j.type.includes("SENTRY") ? "sentry" : "obs";
     const lo = myTeam === 2 ? 0 : 5;
     const mine = [...wards.enemy.values()].filter(w => w.kind === kind);
+    const liveW = mine.filter(w => clock - w.lastSeen <= C.wardKillConfirm);
+    const h = st.hero;
+    const me = h && typeof h.xpos === "number" ? { x: h.xpos, y: h.ypos } : null;
     broadcasts.push({ clock, kind, pid: j.playerid1, ours: j.playerid1 >= lo && j.playerid1 <= lo + 4,
-                      live: mine.filter(w => clock - w.lastSeen <= C.wardKillConfirm).length,
+                      live: liveW.length,
+                      cands: liveW.map(w => ({ x: w.x, y: w.y, d: me ? Math.round(Math.hypot(w.x - me.x, w.y - me.y)) : null })),
                       held: mine.map(w => ({ x: w.x, y: w.y })) });
   }
 
@@ -225,3 +231,15 @@ const late = broadcasts.filter(b => b.ours && b.live === 0);
 console.log(`\n排眼播报（攒证据用，见 wards.md）：`);
 console.log(`  无主（-1，小兵 / 塔）：${unowned.length} 条 —— ${tally(unowned)}`);
 console.log(`  我方排、来时没有 ${C.wardKillConfirm} 秒内看见过的候选：${late.length} 条 —— ${tally(late)}`);
+const ambiguous = broadcasts.filter(b => b.ours && b.live > 1);
+console.log(`  我方排、候选不止一个（先记下、过 ${C.wardKillSuppress} 秒按消失的个数判）：${ambiguous.length} 条`);
+for (const b of ambiguous) {
+  const fate = (c) => {
+    const l = enemyLives.find(l => l.kind === b.kind && near(l, c) && l.start <= b.clock + 2 && l.end >= b.clock - GAP);
+    if (!l) return "回放里对不上";
+    if (l.end <= b.clock + 10 && l.ended) return l.end - l.start < lifeOf(l) - grace ? "**被排了**" : "到期了";
+    return `还活着（到 ${mmss(l.end)}）`;
+  };
+  console.log(`    ${mmss(b.clock)} ${kindName(b.kind)}：` +
+              b.cands.map(c => `${where(c)} 离自己英雄 ${c.d ?? "?"} ${fate(c)}`).join("；"));
+}
