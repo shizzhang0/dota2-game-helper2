@@ -36,9 +36,11 @@ const itemNames = (st) => {
 };
 // 结束后那个定格的数（main.js 在 POST_GAME 第一包定格）——用户在结算画面对照的就是它
 let ourFinal = null, truthFinal = null;
+let undone = [];                 // networth.js 认成"撤销购买"销掉的账，见文末
 await runSelf(recs.self, ({ st, info, econ }) => {
   heroName ??= st.hero?.name || null;
   if (info.gameState === "DOTA_GAMERULES_STATE_POST_GAME") ourFinal ??= econ.networth;
+  undone = econ.undone ?? undone;
   if (info.clock === null || !info.inMatch && info.gameState !== "DOTA_GAMERULES_STATE_POST_GAME") return;
   ours.set(info.clock, { nw: econ.networth, items: itemNames(st), gameState: info.gameState });
 });
@@ -129,4 +131,18 @@ for (const e of eps.slice(0, TOP)) {
   if (added.length || removed.length) {
     console.log(`      物品  +[${added.join(", ")}]  -[${removed.join(", ")}]`);
   }
+}
+
+// ── 撤销购买（2026-10-21 起采用，攒证据）──
+// networth.js 把"10 秒内钱又涨回同样数额、这一包没有赏金事件"认成买了又卖回，销掉那笔说不清的支出。
+// 逐次看销掉之后对不对：之后和官方对得上 = 销对了（不销的话会一直多算这笔）；之后少算了约这笔 = 销错了
+// （其实是还在路上 / 给队友买的东西，见 networth.md 证据清单）
+const diffAt = (c) => { for (let d = 0; d <= 3; d++) { const r = rows.find(r => r.clock === c + d); if (r) return r.d; } return null; };
+console.log(`
+撤销购买退款（认成买了又卖回、销掉那笔支出）：${undone.length} 次`);
+for (const u of undone) {
+  const after = diffAt(u.at + 5);
+  const verdict = after === null ? "对不上时刻" : after <= -u.v / 2 ? `**销错了**：之后少算约 ${-after}` :
+    Math.abs(after) <= Math.max(100, u.v / 4) ? "销对了" : "说不清";
+  console.log(`  ${mmss(u.at)} 销掉 ${u.v}：之后和官方差 ${after ?? "?"} → ${verdict}`);
 }
