@@ -44,6 +44,14 @@ function killedShow(C) {
   return typeof v === "number" && v > 0 ? v : 20;
 }
 
+/** 只被看见过一小会儿的敌方真眼，一开始最多画多实。缺键时兜默认值，同 killedShow。
+    见下面 list() 里 brief 那段和 design/wards.md「只看见一眼的真眼」 */
+function briefCap(C) {
+  const sec = C && typeof C.wardBriefSeen === "number" ? C.wardBriefSeen : 8;
+  const conf = C && typeof C.wardBriefConf === "number" ? C.wardBriefConf : 0.5;
+  return { sec, conf };
+}
+
 /** 眼是不是插在自己英雄脚下。hero.xpos/ypos 与 minimap 用的是同一套世界坐标。 */
 const PLACE_RADIUS = 1000;
 function nearMe(state, w) {
@@ -79,6 +87,7 @@ export class WardTracker {
     this.newOwnSentries = 0;   // 本包新出现的己方真眼数，净资产拿它扣眼架库存
     this.seenKills = new Set();   // 排眼事件去重（同一条会在连续几包里重复出现）
     this.dewarded = new Map();    // key -> 判定被我方排掉的 clock，见 update()
+    this.pendingKills = [];       // 候选不止一个、先记下来等着看的排眼事件，见 resolveKills()
   }
 
   /** 我方排掉敌方眼的事件 -> 把对应的记忆删掉。
@@ -93,7 +102,9 @@ export class WardTracker {
       2. 候选只取**当前仍可见**的（距上次确认 <= `wardKillConfirm`）。
          **排眼需要真视**，刚被排掉的那个此刻必然还在我们的真视里；
          几分钟前才确认过的那个不可能是它。
-      3. 恰好一个才删，**否则什么都不做**。
+      3. 恰好一个就删。不止一个的**先记下来等一会儿**（`resolveKills`，2026-10-21）：
+         接连排掉两个的时候，两个事件来时两个候选都看得见，原先两次都判成歧义、一个都不删，
+         两个各挂成七分钟的幽灵（m9053873687 里两回）。
 
       实测（自己打的那局，12 条本方排眼事件）：只按类型分只有 7 条无歧义，
       加上第 2 条过滤之后变成 **11 条**，剩下 1 条是两个眼同时都可见——那种就留着。
@@ -121,12 +132,37 @@ export class WardTracker {
       const kind = type.includes("SENTRY") ? "sentry" : "obs";
       const live = [...this.enemy].filter(([, w]) =>
         w.kind === kind && clock - w.lastSeen <= this.C.wardKillConfirm);
+      if (live.length > 1) this.pendingKills.push({ kind, at: clock, keys: live.map(([k]) => k) });
       if (live.length !== 1) continue;
       this.enemy.delete(live[0][0]);
       // **必须压制一段时间**：GSI 上报有滞后（实测约 7 秒），眼死了之后还会在
       // minimap 里留一会儿。不压制的话下一包又把它加回来，而且 firstSeen 会重置成
       // 现在——等于把一个旧幽灵换成一个**满寿命**的新幽灵，比不删还糟。
       this.dewarded.set(live[0][0], clock);
+    }
+  }
+
+  /** 等过了 `wardKillSuppress` 再看先记下的排眼事件：同类、时间挨着（前后都在这个窗口里）的几条并成一批，
+      候选合在一起，看哪些**之后再没出现过**。消失的个数**正好等于**这批事件的条数，消失的就是被排掉的；
+      多了（比如我们走开、看不见了）还是分不清，照旧不删——歧义时宁可不删。
+      窗口取 `wardKillSuppress`：被排掉的眼还会再报六七秒（尸体），过了这个窗口才算真的消失。 */
+  resolveKills(clock) {
+    const wait = this.C.wardKillSuppress;
+    for (const kind of ["sentry", "obs"]) {
+      const mine = this.pendingKills.filter(p => p.kind === kind).sort((a, b) => a.at - b.at);
+      while (mine.length && clock - mine[0].at > wait) {
+        // 从最早的一条开始，把时间挨着的连成一批；批里最后一条也过了窗口才判
+        const batch = [mine.shift()];
+        while (mine.length && mine[0].at - batch[batch.length - 1].at <= wait) batch.push(mine.shift());
+        if (clock - batch[batch.length - 1].at <= wait) { mine.unshift(...batch); break; }
+        const keys = new Set(batch.flatMap(p => p.keys));
+        const last = batch[batch.length - 1].at;
+        const gone = [...keys].filter(k => !this.enemy.has(k) || this.enemy.get(k).lastSeen <= last + wait / 2);
+        if (gone.length === batch.length) {
+          for (const k of gone) { this.enemy.delete(k); this.dewarded.set(k, clock); }
+        }
+        this.pendingKills = this.pendingKills.filter(p => !batch.includes(p));
+      }
     }
   }
 
@@ -141,6 +177,7 @@ export class WardTracker {
     // 先处理排眼事件，再刷新记忆：候选集要反映"这一包刷新之前"的状态，
     // 和验证时量的是同一个口径。
     this.noteWardKills(state, info);
+    this.resolveKills(clock);
     for (const [k, at] of [...this.dewarded]) {
       if (clock - at > this.C.wardKillSuppress) this.dewarded.delete(k);
     }
@@ -188,9 +225,15 @@ export class WardTracker {
         //
         // **但眼位是会重复使用的**，而 key 只认坐标。同一个点被重新插眼时还是同一个 key，
         // firstSeen 若停在上一个眼那里，就会把新眼提前剪掉——实测每局漏报十来秒。
-        // 判据很干净：**过了物理上界还能看见它，那它必然是新插的**，重置即可。
+        // 判据：**过了物理上界还能看见它，那它必然是新插的**，重置即可。
+        //
+        // **"过了"要留出 wardKillSuppress 的余量**（2026-10-21）。眼到寿命那一刻前后还会被看见：
+        // 两边时钟差一两秒，死了之后 GSI 还要再报几秒。不留余量的话，一个**到期的**真眼在最后几秒
+        // 被看见，就被当成新插的、firstSeen 重置成现在，换来一个挂满七分钟的幽灵。
+        // m9046032624：7:58 插、15:03 到期，我们 7:58 和 14:56~14:59 各看见一次，14:59 离第一次看见 421 秒，
+        // 被重置。余量内看见的仍当同一个眼：它本来就快到期了，不再被看见时按物理上界马上删掉。
         const life = w.kind === "sentry" ? this.C.wardSentryDuration : this.C.wardObserverDuration;
-        const stale = was && clock - was.firstSeen > life;
+        const stale = was && clock - was.firstSeen > life + this.C.wardKillSuppress;
         this.enemy.set(w.key, { x: w.x, y: w.y, kind: w.kind, lastSeen: clock,
                                 firstSeen: (was && !stale) ? was.firstSeen : clock });
       }
@@ -230,6 +273,10 @@ export class WardTracker {
       // 一直往后顺延，实测能挂到五分钟。用 firstSeen 剪枝不会漏报（见上）。
       if (clock - w.lastSeen > memory || clock - (w.firstSeen ?? w.lastSeen) > memory) {
         this.enemy.delete(key);
+        // **到期删掉的也要压制**（2026-10-21），和被排掉的一样：眼死了 GSI 还要再报六七秒（尸体），
+        // 不压制的话下一包它又被当成"第一次看见"加回来，firstSeen 是现在——又挂满一整个寿命。
+        // 两局对账（m9052676196、m9053873687）的 20 个幽灵里大半是这样来的，每个都挂七分钟左右
+        this.dewarded.set(key, clock);
       }
     }
   }
@@ -252,7 +299,16 @@ export class WardTracker {
         const life = w.kind === "sentry" ? this.C.wardSentryDuration : this.C.wardObserverDuration;
         // 用"离物理上界还剩多少"当置信度，比"多久没看见"更贴近真实剩余寿命
         const left = life - (clock - (w.firstSeen ?? w.lastSeen));
-        const conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
+        let conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
+        // **只看见过一小会儿的真眼，一开始就画淡**（2026-10-21）。我们按"第一次看见 = 刚插"算它的寿命，
+        // 可只闪了几秒就不见的，多半是在它最后几秒才被看见（快到期的真眼像是会现形）——
+        // 五对录制里持续 ≤ 8 秒的 54 段，35 段几秒后就死了、18 段还活着。不删（会抹掉那 18 个活眼），
+        // 只把"没那么确定"画出来：封顶 wardBriefConf，之后照常随时间淡下去。
+        // 只管真眼：假眼的尸体视野是 0，进门就被挡掉了（见 update()），留下的假眼不在这个统计里
+        const brief = briefCap(this.C);
+        if (w.kind === "sentry" && w.firstSeen !== null && w.lastSeen - w.firstSeen < brief.sec) {
+          conf = Math.min(conf, brief.conf);
+        }
         // visible：这一包里还看得见它。GSI 的 minimap 只推我方此刻看得见的敌方单位，
         // 所以"本包有它" = 有视野 = 原生小地图正画着它，渲染层据此不重复画（见 wardmap.js）
         return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)),
