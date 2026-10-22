@@ -218,7 +218,7 @@ function appearedValue(now, prev) {
 
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
-  let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false;
+  let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false, looseWards = 0;
   const stashItems = [];   // 储藏处逐件 { key, cost }，给"同一包里卖掉一部分"用，见 soldPart
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
@@ -232,12 +232,12 @@ function itemValues(items, prices, player) {
     // 散装的眼要单独记：眼架合成的那一刻，它们的价值要平移进眼架。
     // **装备栏和储藏处分开数**，两处少掉的含义完全不同，见 noteDispenser。
     if (name === "ward_sentry" || name === "ward_observer") {
-      if (k.startsWith("stash")) wardsStash += cost; else wards += cost;
+      if (k.startsWith("stash")) wardsStash += cost; else { wards += cost; looseWards++; }
     }
     if (k.startsWith("stash")) { stash += cost; stashItems.push({ key: `${name}|${it.charges ?? ""}`, cost }); }
     else slot += cost;
   }
-  return { slot, stash, wards, wardsStash, dispenser, stashItems };
+  return { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems };
 }
 
 /**
@@ -322,6 +322,7 @@ export class EconTracker {
     this.dispFromStash = 0;         // 眼架估值里有多少是"从储藏处平移来的"，可能要退回
     this.wardsMovedFromStash = 0;   // 这一包平移了多少，在途那边要把它从 lost 里扣掉
     this.prevDispenser = false;
+    this.prevLooseWards = 0;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.prevTp = null;             // 传送槽充能数
     this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
@@ -563,8 +564,18 @@ export class EconTracker {
    * 幅度不超过架子里的存货，且眼架一空就归零、不会跨局累积。
    * 假眼不用管，它本来就不要钱。
    */
-  noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock, paid, assetUp, died) {
+  noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock, paid, assetUp, died, looseWards = 0) {
     this.wardsMovedFromStash = 0;
+    // **眼架用完一种眼会变回散装的眼**（2026-10-22）：真眼用完剩"假眼"，假眼用完剩"真眼×N"。
+    // 这一包架子没了、装备栏同时多出一摞散装眼——是变形，不是被信使拿走：剩下的眼现在按散装物品算进 slot，
+    // 架子的估值要立刻清掉。原先只走下面的宽限期，散装眼和架子估值重复计 20 秒
+    //（m9055080104 16:12 插掉假眼、变成真眼×4，多 200）。
+    // 十七份回放十人复算触发 281 次：196 次帮忙、2 次帮倒忙（都是变形后几秒内又买眼架 / 插眼又捡回，
+    // 而复算那边不知道插眼），平均|差| 28.25 → 25.35；八对自视角两局变好、六局不变。
+    if (!dispenser && this.prevDispenser && looseWards > this.prevLooseWards) {
+      this.dispenserValue = 0;
+      this.dispFromStash = 0;
+    }
     if (!dispenser) {
       // 架子会短暂消失：被信使拿走的十几秒里 GSI 完全看不见它（实测一次 10 秒）。
       // 立刻清零就把刚合成的价值丢了，所以给一段宽限；真的用完了，
@@ -643,6 +654,7 @@ export class EconTracker {
     this.prevWards = wards;
     this.prevWardsStash = wardsStash;
     this.prevDispenser = dispenser;
+    this.prevLooseWards = looseWards;
   }
 
   /** 记下见过哪件升级物品——神杖和祝福可能共用 buff 名，靠这个区分 4200 还是 5800 */
@@ -675,7 +687,7 @@ export class EconTracker {
     if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
       this.reset();
     }
-    const { slot, stash, wards, wardsStash, dispenser, stashItems } = itemValues(state.items, prices, state.player);
+    const { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems } = itemValues(state.items, prices, state.player);
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     const died = this.noteDeaths(state.player);
@@ -691,7 +703,7 @@ export class EconTracker {
     this.noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock,
                        goldBefore === null ? 0 : goldBefore - gold,
                        (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
-                       died);
+                       died, looseWards);
     this.noteProxy(state.items, prices, state.player, clock);
     this.noteVariants(state.items);
     this.noteBuyback(state, clock);
