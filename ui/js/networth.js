@@ -321,6 +321,7 @@ export class EconTracker {
     this.prevWardsStash = 0;        // 同上，储藏处那一份（口径不同，见 noteDispenser）
     this.dispFromStash = 0;         // 眼架估值里有多少是"从储藏处平移来的"，可能要退回
     this.wardsMovedFromStash = 0;   // 这一包平移了多少，在途那边要把它从 lost 里扣掉
+    this.wardsMovedFromSlot = 0;    // 同上，装备栏那一份：在途那边要把它加回 gained
     this.prevDispenser = false;
     this.prevLooseWards = 0;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
@@ -566,6 +567,7 @@ export class EconTracker {
    */
   noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock, paid, assetUp, died, looseWards = 0) {
     this.wardsMovedFromStash = 0;
+    this.wardsMovedFromSlot = 0;
     // **眼架用完一种眼会变回散装的眼**（2026-10-22）：真眼用完剩"假眼"，假眼用完剩"真眼×N"。
     // 这一包架子没了、装备栏同时多出一摞散装眼——是变形，不是被信使拿走：剩下的眼现在按散装物品算进 slot，
     // 架子的估值要立刻清掉。原先只走下面的宽限期，散装眼和架子估值重复计 20 秒
@@ -613,6 +615,15 @@ export class EconTracker {
       this.dispenserValue += fromSlot + fromStash;
       this.dispFromStash += fromStash;
       this.wardsMovedFromStash = fromStash;
+      this.wardsMovedFromSlot = fromSlot;
+      // **平移进架子的眼不是"资产少了"**（2026-10-22）。`assetUp` 是装备栏 + 储藏处的增量，
+      // 散装眼并进架子那一包它会少掉这部分，下面"付的钱 − 看得见的增加"就把并进去的眼
+      // 又当成新买的真眼加了一遍：m9054076480 13:00 储藏处一个真眼并进新眼架、同包再买一个，
+      // 付 128 = 粉 80 + 真眼 50，认成了两个真眼，多 50 一直挂到架子变形。
+      // 在途那边同理（`wardsMovedFromSlot`）：8:26 三个真眼并进架子的同一包信使送到 1000 的活力之球，
+      // 装备栏只净增 850，在途账冲不干净，剩 150 和架子里的 150 重复计到下一次到货。
+      // 二十六份回放录制十人复算触发 134 次：15 次帮忙、0 次帮倒忙、其余不变；十一对自视角三局变好、八局不变
+      const up = assetUp + fromSlot + fromStash;
       const sentry = prices.ward_sentry?.cost ?? 50;
       // **买真眼进架子只能靠金币认出来。** 原先读 `CHAT_MESSAGE_ITEM_PURCHASE`，
       // 而**买眼根本不发这个事件**——实测一整局 `id=42/43/218` 一条都没有，
@@ -631,7 +642,7 @@ export class EconTracker {
       // **这条挡板在其中测不出效果**——它是按机制加的，不是按数据加的。
       // 一次可以买不止一个。实测认到两个（100 金）三局改善、一局退 1.4、两局不变；
       // 放到三个一分不涨——买第三个的时候架子早满了。
-      if (!died && assetUp < sentry / 2) {
+      if (!died && up < sentry / 2) {
         for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
           if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
         }
@@ -644,7 +655,7 @@ export class EconTracker {
         // 沿用上面的 ±SENTRY_TOL 和 SENTRY_MAX_BUY，没有另调参数。
         // 十一份观战录制逐次审查：触发 11 次，8 次帮忙（分布在 7 份录制）、3 次帮倒忙，
         // 那 3 次都是后面"眼架送到身上、和散装真眼合并"那步本来就多算，不是认错了眼。
-        const spare = paid - assetUp;
+        const spare = paid - up;
         for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
           if (Math.abs(spare - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
         }
@@ -732,7 +743,7 @@ export class EconTracker {
     if (this.prevStash !== null) {
       // 减掉刚平移进眼架的那部分：储藏处少的是它，不是信使取走的（见 noteDispenser）
       const lost = this.prevStash - stash - this.wardsMovedFromStash;
-      const gained = slot - this.prevSlot;      // 装备栏增加的价值
+      const gained = slot - this.prevSlot + this.wardsMovedFromSlot;   // 装备栏增加的价值（并进眼架的眼不算少，见 noteDispenser）
       const back = stash - this.prevStash;      // 储藏处变多了多少
       const paid = this.prevGold - gold;        // 这一包花了多少
       const dGold = gold - this.prevGold;
