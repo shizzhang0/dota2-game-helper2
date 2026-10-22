@@ -174,9 +174,12 @@ for (const [l, m] of longM.sort((a, b) => b[1].sec - a[1].sec).slice(0, TOP)) {
 }
 
 // ── 被排的叉 ──
-// 回放里我方眼"提前没了" = 消失时离寿命还差 wardKilledGrace 秒以上（同 minimap.js 判被排的口径）
+// 回放里我方眼"提前没了" = 在回放里报的时长比寿命短 grace 秒以上。
+// **回放里报的时长含尸体**（眼死后还报几秒，自然到期也一样）：11 局 290 个到寿命的眼，时长全在寿命 +1 ~ +10 秒；
+// 被排的最长一个是寿命 −7 秒。所以门槛放在寿命 −3（2026-10-22）。原先是 wardKilledGrace + 3 = 寿命 −8，
+// 没算尸体——小精灵那局 8:45 被排的假眼报了 352 秒（寿命 −8），叉画对了却被判成"自然到期"
 const ownLives = lives.filter(l => l.team === myTeam);
-const grace = C.wardKilledGrace + 3;      // 回放 2 倍速时包稀，多给 3 秒
+const grace = 3;
 const lifeOf = (l) => l.kind === "sentry" ? C.wardSentryDuration : C.wardObserverDuration;
 const killedEarly = ownLives.filter(l => l.ended && l.end - l.start < lifeOf(l) - grace);
 let right = 0; const wrong = [];
