@@ -8,7 +8,7 @@ Runes, buybacks, glyph, wards — what Dota 2 knows but never shows, on its own 
 
 [![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
 
-**[Download for Windows](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-setup.exe)** · **[▶ Try it in your browser](https://shizzhang0.github.io/dota2-game-helper2/)**
+**[▶ Try it in your browser](https://shizzhang0.github.io/dota2-game-helper2/)** — that's the real overlay running on the page
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -23,8 +23,7 @@ All of it is **already in the data the game sends you**; it just isn't drawn. Th
 No extra window.
 
 Built on Dota 2's official GSI interface: no memory reading, no game file changes, no
-simulated input ([why this is safe](#why-this-is-safe)). The browser demo above runs the
-real overlay.
+simulated input ([why this is safe](#why-this-is-safe)).
 
 ![The game with the overlay](docs/images/overlay.jpg)
 

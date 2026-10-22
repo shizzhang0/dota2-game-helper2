@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
 
-**[下载 Windows 安装版](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-setup.exe)** · **[▶ 在浏览器里试试](https://shizzhang0.github.io/dota2-game-helper2/)**
+**[▶ 在浏览器里试试](https://shizzhang0.github.io/dota2-game-helper2/)** — 页面上跑的就是真覆盖层
 
 [English](README.md) · **简体中文**
 
@@ -18,7 +18,7 @@
 
 这些信息其实**都在游戏推给你的数据里**，只是没画出来。这个程序把它们画出来，而且**就画在游戏自己的界面上**：买活挂在各人头像底下，眼位画在小地图上，不另开窗口。
 
-基于 Dota 2 官方的 GSI 接口：不读内存、不改游戏文件、不模拟输入（[为什么这是安全的](#为什么这是安全的)）。上面那个浏览器演示里跑的就是真覆盖层。
+基于 Dota 2 官方的 GSI 接口：不读内存、不改游戏文件、不模拟输入（[为什么这是安全的](#为什么这是安全的)）。
 
 ![实际游戏画面](docs/images/overlay-zh.jpg)
 
