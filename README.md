@@ -64,7 +64,7 @@ with a single exe, but it doesn't get one-click updates. Older versions are on
 A row of small rings below the game clock. **The ring is the progress bar**: nearly empty
 means nearly up, and the whole ring lights up for the last 10 seconds.
 
-<p align="center"><img src="docs/images/timers.jpg" width="330" alt="Timers"></p>
+<img src="docs/images/timers.jpg" width="330" alt="Timers">
 
 | Timer | When |
 |---|---|
@@ -81,7 +81,7 @@ Turbo is detected automatically.
 All ten players' buyback cooldowns, each under that player's portrait: a small pile of coins
 plus the seconds left, shown only while on cooldown.
 
-<p align="center"><img src="docs/images/topbar.jpg" alt="Buyback"></p>
+<img src="docs/images/topbar.jpg" alt="Buyback">
 
 The game announces an enemy buyback once and then it's gone. **A teammate's buyback cooldown
 isn't shown anywhere**; the gold bar under the portrait only says whether they can buy back now.
@@ -90,7 +90,7 @@ isn't shown anywhere**; the gold bar under the portrait only says whether they c
 
 A strip on top of the minimap frame.
 
-<p align="center"><img src="docs/images/econ.jpg" width="400" alt="Net worth and enemy glyph"></p>
+<img src="docs/images/econ.jpg" width="400" alt="Net worth and enemy glyph">
 
 - **Net worth**, with GPM and XPM beside it. Net worth = items + stash + ward dispenser +
   items in transit on the courier + gold
@@ -108,7 +108,7 @@ A strip on top of the minimap frame.
 
 Three things the native minimap doesn't show, drawn straight onto it.
 
-<p align="center"><img src="docs/images/minimap.jpg" width="370" alt="Wards"></p>
+<img src="docs/images/minimap.jpg" width="370" alt="Wards">
 
 - **Enemy wards that left vision.** A **magenta** eye shaped like the game's: with a pupil
   = observer, hollow lens = sentry. The native minimap only shows a ward while true sight is
@@ -145,7 +145,7 @@ Left-click the tray icon, right-click → Settings, or press `Ctrl+Alt+F10`. Lau
 program again while it's running opens it too — only one copy ever runs. The whole overlay
 shows while the card is open, so you can check against the game that everything lines up.
 
-<p align="center"><img src="docs/images/card.png" width="362" alt="The settings card"></p>
+<img src="docs/images/card.png" width="362" alt="The settings card">
 
 | Setting | What it does |
 |---|---|

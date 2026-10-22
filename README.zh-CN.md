@@ -50,7 +50,7 @@
 
 一排小圆挂在计时牌正下方，**圆环就是进度条**：环快走完就是快刷了，最后 10 秒整圈会亮起来。
 
-<p align="center"><img src="docs/images/timers.jpg" width="330" alt="倒计时"></p>
+<img src="docs/images/timers.jpg" width="330" alt="倒计时">
 
 | 倒计时 | 什么时候刷 |
 |---|---|
@@ -66,7 +66,7 @@
 
 十个人的买活冷却挂在各自头像底下，一小堆金币加剩余秒数，冷却中才出现。
 
-<p align="center"><img src="docs/images/topbar.jpg" alt="买活"></p>
+<img src="docs/images/topbar.jpg" alt="买活">
 
 敌人买活游戏只播报一下就没了；**队友的买活冷却原生界面根本不显示**，头像下那道金条只说"现在能不能买"。
 
@@ -74,7 +74,7 @@
 
 贴在小地图外框上面的一栏。
 
-<p align="center"><img src="docs/images/econ.jpg" width="400" alt="净资产与敌方塔防"></p>
+<img src="docs/images/econ.jpg" width="400" alt="净资产与敌方塔防">
 
 - **净资产**，旁边是 GPM、XPM。净资产 = 装备 + 储藏处 + 眼架 + 信使在途 + 金钱
 - **敌方塔防**是右边底色偏暖的那一格，表示是敌人的。冷却中圆心写剩余秒数，好了就整圈点亮、光晕加深。丢掉首座 T1、首座 T2、首座近战兵营时塔防会刷新，这些都算进去了——显示的是敌方**现在到底有没有塔防**，不只是上一次什么时候用的
@@ -86,7 +86,7 @@
 
 下面三样原生小地图不显示，直接补在它上面。
 
-<p align="center"><img src="docs/images/minimap.jpg" width="370" alt="眼位"></p>
+<img src="docs/images/minimap.jpg" width="370" alt="眼位">
 
 - **离开视野的敌方眼。** **品红**的眼睛，形状和游戏一样：带瞳孔的是假眼，空心柠檬形是真眼。原生小地图只在真视照着时显示，一离开就没了；这里会接着显示，越久没再看到越淡，到寿命自动消失
 - **我方眼被排。** 原地一个**绿色的叉**，45 秒内淡出。原生界面里眼直接没了，分不出是到期还是被排
@@ -113,7 +113,7 @@
 
 左键单击通知区图标、右键 →「设置」，或按 `Ctrl+Alt+F10`。程序已经开着时再运行一次也会打开它——同一时间只会有一个在跑。卡片打开时覆盖层会整个显示出来，可以对着游戏看位置准不准。
 
-<p align="center"><img src="docs/images/card-zh.png" width="362" alt="设置卡片"></p>
+<img src="docs/images/card-zh.png" width="362" alt="设置卡片">
 
 | 设置项 | 作用 |
 |---|---|
