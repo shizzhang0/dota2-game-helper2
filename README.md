@@ -4,23 +4,23 @@
 
 # dota2-game-helper2
 
-**Runes, buybacks, glyph, wards — what Dota 2 knows but never shows, on its own HUD**
-
-**English** · [简体中文](README.zh-CN.md)
-
-**[▶ Try it in your browser](https://shizzhang0.github.io/dota2-game-helper2/)** — that's the real overlay running on the page
+Runes, buybacks, glyph, wards — what Dota 2 knows but never shows, on its own HUD
 
 [![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
 
+**[▶ Try it in your browser](https://shizzhang0.github.io/dota2-game-helper2/)** — that's the real overlay running on the page
+
+**English** · [简体中文](README.zh-CN.md)
+
 </div>
 
-**When the bounty runes, lotus and Wisdom Shrines come up, how long until the enemy glyph is
+When the bounty runes, lotus and Wisdom Shrines come up, how long until the enemy glyph is
 back, everyone's buyback cooldown — teammates included — and enemy wards that have left
-vision: Dota 2 shows none of it. You are expected to keep it in your head.**
+vision: Dota 2 shows none of it. You are expected to keep it in your head.
 
-All of it is **already in the data the game sends you**; it just isn't drawn. This draws
-it — **right on the game's own HUD**: buyback under each player's portrait, wards on the
-minimap. No extra window.
+All of it is **already in the data the game sends you**; it just isn't drawn. This draws it
+**right on the game's own HUD**: buyback under each player's portrait, wards on the minimap.
+No extra window.
 
 Built on Dota 2's official GSI interface: no memory reading, no game file changes, no
 simulated input ([why this is safe](#why-this-is-safe)).
@@ -32,24 +32,27 @@ net worth and enemy glyph just above the minimap, enemy wards on the minimap. Ga
 
 ## Up and running in three minutes
 
-Windows 10 / 11.
+Windows 10 / 11. Works in ranked, unranked and Turbo matches.
 
 1. Download the **[installer](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-setup.exe)** and run it
-   (current user only, no admin rights needed). There's also a
-   [portable zip](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-portable.zip) with a single exe, but
-   it doesn't get one-click updates. Older versions are on [Releases](https://github.com/shizzhang0/dota2-game-helper2/releases)
+   (current user only, no admin rights needed)
 2. Add `-gamestateintegration` to Dota 2's launch options
 3. Run the game in **borderless window** mode
 4. Start it. It lives in the notification area and sets up the GSI config on first run
 5. Get into a match — it's there
 
 Nothing to position: it lines itself up with the game's HUD and follows resolution changes.
-To turn items on or off: **left-click the tray icon**, or right-click → Settings.
 
+There's also a [portable zip](https://github.com/shizzhang0/dota2-game-helper2/releases/latest/download/dota2-game-helper2-portable.zip)
+with a single exe, but it doesn't get one-click updates. Older versions are on
+[Releases](https://github.com/shizzhang0/dota2-game-helper2/releases).
+
+> [!NOTE]
 > **"Windows protected your PC"?** The program isn't code-signed (a certificate costs a few hundred
 > dollars a year), so SmartScreen stops it the first time. Click **More info → Run anyway**.
 > The source is all public. In-app updates afterwards don't show it.
 
+> [!TIP]
 > **Never shows up?** Check steps 2 and 3 first — no external overlay can draw over
 > exclusive fullscreen; that's an OS limitation. Then look at the logs in
 > `%APPDATA%\dev.dota2helper2.app\logs\`.
@@ -58,95 +61,102 @@ To turn items on or off: **left-click the tray icon**, or right-click → Settin
 
 ### Timers
 
-![Timers](docs/images/timers.jpg)
+A row of small rings below the game clock. **The ring is the progress bar**: nearly empty
+means nearly up, and the whole ring lights up for the last 10 seconds.
 
-| | Normal | Turbo |
-|---|---|---|
-| Mid rune | Water runes at 2:00 / 4:00; power runes every 2 min from 6:00 (the first bounty runes spawn in the river at 0:00) | Same |
-| Bounty runes | Every 4 min | Same |
-| Wisdom Shrine | Every 7 min from 7:00 | Same |
-| Lotus | Every 3 min from 3:00 | **Every 90s from 1:30** |
-| Stacking | Neutrals spawn on the minute; counts you down to it | Same |
+<img src="docs/images/timers.jpg" width="330" alt="Timers">
 
-Turbo is detected automatically. A row of small rings sits below the game clock, and
-**the ring is the progress bar**: nearly empty means nearly up, and the whole ring lights up
-for the last 10 seconds.
+| Timer | When |
+|---|---|
+| Mid rune | Water runes at 2:00 and 4:00, then a power rune every 2 min from 6:00 |
+| Bounty runes | Every 4 min (the first ones spawn in the river at 0:00) |
+| Wisdom Shrine | Every 7 min from 7:00 |
+| Lotus | Every 3 min from 3:00 · **Turbo: every 90 s from 1:30** |
+| Stacking | Neutrals spawn on the minute; counts you down to it |
+
+Turbo is detected automatically.
 
 ### Buyback
 
-![Buyback](docs/images/topbar.jpg)
+All ten players' buyback cooldowns, each under that player's portrait: a small pile of coins
+plus the seconds left, shown only while on cooldown.
 
-All ten players' buyback cooldowns, each under that player's portrait — a small pile of coins
-plus the seconds left, shown only while on cooldown. The game announces an enemy buyback once
-and then it's gone; **a teammate's buyback cooldown isn't shown anywhere** (the gold bar under
-the portrait only says whether they can buy back now).
+<img src="docs/images/topbar.jpg" alt="Buyback">
+
+The game announces an enemy buyback once and then it's gone. **A teammate's buyback cooldown
+isn't shown anywhere**; the gold bar under the portrait only says whether they can buy back now.
 
 ### Net worth and enemy glyph
 
-![Net worth and enemy glyph](docs/images/econ.jpg)
-
 A strip on top of the minimap frame.
 
-**Net worth**, with GPM and XPM beside it. Net worth = items + stash + ward dispenser + items in
-transit on the courier + gold.
+<img src="docs/images/econ.jpg" width="400" alt="Net worth and enemy glyph">
 
-**Enemy glyph**: the warm-tinted cell on the right, so it reads as the enemy's. The seconds left
-sit in the centre while on cooldown; when it's ready the ring fills, the tower lights up and the
-glow gets stronger. Losing the first T1, the first T2 or the first melee barracks refreshes it,
-and that's all accounted for — it shows whether the enemy **has a glyph right now**, not just
-when they last used one.
+- **Net worth**, with GPM and XPM beside it. Net worth = items + stash + ward dispenser +
+  items in transit on the courier + gold
+- **Enemy glyph** is the warm-tinted cell on the right, so it reads as the enemy's. The seconds
+  left sit in the centre while on cooldown; when it's ready the ring fills, the tower lights up
+  and the glow gets stronger. Losing the first T1, the first T2 or the first melee barracks
+  refreshes it, and that's all accounted for — it shows whether the enemy **has a glyph right
+  now**, not just when they last used one
 
+> [!NOTE]
 > Net worth is an **approximation**: GSI only sends your own inventory, so items on the
 > ground or held by a teammate can't be counted.
 
 ### Wards
 
-![Wards](docs/images/minimap.jpg)
+Three things the native minimap doesn't show, drawn straight onto it.
 
-Three things the native minimap doesn't show, drawn straight onto it:
+<img src="docs/images/minimap.jpg" width="370" alt="Wards">
 
-| | Looks like | The native minimap |
-|---|---|---|
-| Enemy ward | a **magenta** eye shaped like the game's: with a pupil = observer, hollow lens = sentry | Only shows it while true sight is on it; here it **stays after it leaves vision**, fading the longer it goes unseen and disappearing at the end of its lifetime |
-| Your ward dewarded | a **green cross** on the spot, fading out over 45s | The ward just vanishes — expired or killed, you can't tell |
-| Your ward expiring | the seconds left above the ward for its last 60s, amber for the last 10 | Doesn't show how long is left |
+- **Enemy wards that left vision.** A **magenta** eye shaped like the game's: with a pupil
+  = observer, hollow lens = sentry. The native minimap only shows a ward while true sight is
+  on it; here it stays, fading the longer it goes unseen, and disappears at the end of its lifetime
+- **Your ward dewarded.** A **green cross** on the spot, fading out over 45 s. Natively the
+  ward just vanishes — expired or killed, you can't tell
+- **Your ward expiring.** The seconds left above the ward for its last 60 s, amber for the
+  last 10. Natively there's no countdown
 
 Whether your minimap is on the left or right and whether it's extra large is **read from
 Dota's own settings** — nothing to line up by hand.
 
-## Hide it for a moment
+## Using it
+
+| Shortcut | What it does |
+|---|---|
+| Left-click the tray icon, or `Ctrl+Alt+F10` | Open or close the settings card |
+| `Ctrl+Alt+F11` | Hide the overlay; press again to bring it back |
+
+### Showing and hiding
 
 It stays up throughout a match and disappears by itself back in the main menu, or when you
 switch to another program — Alt+Tab back into Dota and it's there again.
 
-If it's in your way, press **`Ctrl+Alt+F11`** to hide it and again to bring it back — no need
-to leave the game. It shows up again by itself at the start of the next match.
+If it's in your way, press `Ctrl+Alt+F11` — no need to leave the game. It shows up again by
+itself at the start of the next match.
 
-## What's supported
+It stays hidden while spectating or watching replays: GSI sends everyone's data then, which
+would make net worth and buyback wrong.
 
-| Item | Status |
-|---|---|
-| Game modes | Ranked / unranked / Turbo |
-| Spectating · replays | Hidden (GSI sends everyone's data then, which would make net worth and buyback wrong) |
-| UI languages | English · 简体中文 |
+### Settings
 
-## Settings
-
-**Left-click the tray icon** (or right-click → Settings, or press `Ctrl+Alt+F10`) to open
-the settings card. Launching the program again while it's running opens it too — only one copy ever runs. The whole overlay shows while it's open, so you can check against the
-game that everything lines up.
+Left-click the tray icon, right-click → Settings, or press `Ctrl+Alt+F10`. Launching the
+program again while it's running opens it too — only one copy ever runs. The whole overlay
+shows while the card is open, so you can check against the game that everything lines up.
 
 <img src="docs/images/card.png" width="362" alt="The settings card">
 
 | Setting | What it does |
 |---|---|
 | **Display** | A toggle for each of the nine items; the icons double as the legend. **Have Dota Plus?** It has its own rune timers — turn off our five timers (mid rune, bounty, wisdom, lotus, stack) here |
+| **Language** | English or 简体中文 |
 | **Minimap** | "Auto" by default, followed by what it read from Dota's settings; pick it by hand if that's wrong |
 | **Log level · Open data folder** | For bug reports |
 | **Version** | **NEW** appears next to it when there's an update |
 
 Changes apply immediately. Clicks outside the card still reach the game, and the card can
-be dragged out of the way by its title bar. To close it: press Done, or `Ctrl+Alt+F10` again.
+be dragged out of the way by its title bar. To close it, press Done or `Ctrl+Alt+F10` again.
 
 Settings and logs live in `%APPDATA%\dev.dota2helper2.app\`.
 
@@ -206,13 +216,11 @@ fed straight to the replay server.
 Dev tools, the release process and the design behind each feature are in
 [docs/design/](docs/design/) (Chinese only).
 
-## Licence
-
-[MIT](LICENSE)
-
-Not affiliated with Valve. Dota 2 is a trademark of Valve Corporation.
-
 ## Credits
 
 - [nocamles/dota2_amount_plugins](https://github.com/nocamles/dota2_amount_plugins) — the GSI cache-pool and net-worth approach
 - The predecessor [dota2-game-helper](https://github.com/shizzhang0/dota2-game-helper) (archived)
+
+## Licence
+
+[MIT](LICENSE). Not affiliated with Valve. Dota 2 is a trademark of Valve Corporation.
