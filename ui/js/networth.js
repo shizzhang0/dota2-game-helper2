@@ -322,6 +322,7 @@ export class EconTracker {
     this.dispFromStash = 0;         // 眼架估值里有多少是"从储藏处平移来的"，可能要退回
     this.wardsMovedFromStash = 0;   // 这一包平移了多少，在途那边要把它从 lost 里扣掉
     this.wardsMovedFromSlot = 0;    // 同上，装备栏那一份：在途那边要把它加回 gained
+    this.pendingSentries = [];      // 看不见眼架时买的真眼，等眼架出现再并进去：{ v, at }
     this.prevDispenser = false;
     this.prevLooseWards = 0;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
@@ -577,6 +578,34 @@ export class EconTracker {
     if (!dispenser && this.prevDispenser && looseWards > this.prevLooseWards) {
       this.dispenserValue = 0;
       this.dispFromStash = 0;
+    }
+    // **看不见眼架时买的真眼**（2026-10-24）。眼架在信使身上时再买真眼，眼直接进了架子，GSI 里哪儿都看不见；
+    // 下面"买眼靠金币认"要求手上有架子，于是这笔钱丢了，等架子送到时估值是 0。
+    // m9054076480 远古冰魄 6:06 付 100 什么都没多、6:13 架子送到估值 0，15:22 又一次，各少 100。
+    // 做法：这时掉了约 50 的整数倍、看得见的东西没多，先记成待定，**不算进净资产**；
+    // 之后架子出现、且估值是 0，才补进去。没出现就 `TRANSIT_TTL` 后作废；
+    // 期间没花钱却多出了看得见的东西（晚到的物品，比如付钱几秒后才进储藏处的树枝），就拿它抵掉待定的。
+    // 十人复算二十六份回放录制里"架子一出现估值就是 0、当时就少算"有 74 次（19 局 51 人）。
+    // 逐次审查：帮忙 30 次、帮倒忙 4 次，平均|差| 28.74 → 28.60；帮倒忙最大的那次是旧版另一处多算 100
+    // 正好抵消了少算的 100。十二对自视角两局变好（m9054076480 平均|差| 30 → 22、终局 −50 → 0）、十局不变。
+    // 试过"记下就立刻算进净资产"：帮忙 71、帮倒忙 132——看不见眼架时掉 50 的整数倍，多半不是买眼
+    const sentryCost = prices.ward_sentry?.cost ?? 50;
+    this.pendingSentries = this.pendingSentries.filter(t => clock === null || clock - t.at < TRANSIT_TTL);
+    let got = Math.max(0, assetUp - Math.max(0, paid));
+    while (got > 0 && this.pendingSentries.length) {
+      const t = this.pendingSentries[0], d = Math.min(t.v, got);
+      t.v -= d; got -= d;
+      if (t.v <= 0) this.pendingSentries.shift();
+    }
+    if (dispenser) {
+      if (!this.prevDispenser && this.dispenserValue === 0) {
+        this.dispenserValue += this.pendingSentries.reduce((a, t) => a + t.v, 0);
+      }
+      this.pendingSentries = [];
+    } else if (!died && assetUp < sentryCost / 2) {
+      for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
+        if (Math.abs(paid - k * sentryCost) <= SENTRY_TOL) { this.pendingSentries.push({ v: k * sentryCost, at: clock }); break; }
+      }
     }
     if (!dispenser) {
       // 架子会短暂消失：被信使拿走的十几秒里 GSI 完全看不见它（实测一次 10 秒）。
