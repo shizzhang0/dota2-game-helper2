@@ -321,7 +321,7 @@ export class EconTracker {
     this.prevWardsStash = 0;        // 同上，储藏处那一份（口径不同，见 noteDispenser）
     this.dispFromStash = 0;         // 眼架估值里有多少是"从储藏处平移来的"，可能要退回
     this.wardsMovedFromStash = 0;   // 这一包平移了多少，在途那边要把它从 lost 里扣掉
-    this.wardsMovedFromSlot = 0;    // 同上，装备栏那一份：在途那边要把它加回 gained
+    this.wardsMovedFromSlot = 0;    // 同上，装备栏那一份：在途那边要把它加回 gained（架子变形时为负）
     this.pendingSentries = [];      // 看不见眼架时买的真眼，等眼架出现再并进去：{ v, at }
     this.prevDispenser = false;
     this.prevLooseWards = 0;
@@ -576,6 +576,14 @@ export class EconTracker {
     // 十七份回放十人复算触发 281 次：196 次帮忙、2 次帮倒忙（都是变形后几秒内又买眼架 / 插眼又捡回，
     // 而复算那边不知道插眼），平均|差| 28.25 → 25.35；八对自视角两局变好、六局不变。
     if (!dispenser && this.prevDispenser && looseWards > this.prevLooseWards) {
+      // **变出来的散装眼不是到货**（2026-10-27）。装备栏多出这摞眼，在途那边会当成信使送到了东西、冲掉一笔在途账，
+      // 可它们的钱一直记在架子估值里、刚被上面清掉：m9062972353 莱恩 18:41 架子变回真眼×3，同包在途里挂着风之杖配件，
+      // 被冲掉 150，少算 150 直到 18:52 配件真到。**只排除架子估值那么多**：估值是 0 说明钱记在别处——
+      // 储藏处买的眼被信使取走时记进了在途账、在信使上合成架子，变形出来的眼就正是那笔在途账到货。
+      // 先试过全部排除：十人复算帮忙 14、帮倒忙 16；按估值封顶后帮忙 13、帮倒忙 2，平均|差| 28.40 → 28.36，
+      // 那 2 次都是在途账里本来挂着的零头被旧版碰巧冲掉。十七对自视角：莱恩变好、半人马变差（同样是 60 的零头
+      // 碰巧被冲掉，现在要等它 90 秒超时）、其余十五局不变
+      this.wardsMovedFromSlot = -Math.min(this.dispenserValue, Math.max(0, wards - this.prevWards));
       this.dispenserValue = 0;
       this.dispFromStash = 0;
     }
