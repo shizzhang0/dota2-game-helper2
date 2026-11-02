@@ -19,12 +19,16 @@ const topArg = process.argv.indexOf("--top");
 const TOP = topArg > 0 ? Number(process.argv[topArg + 1]) || 10 : 10;
 /** 差多少算一段"偏差"。100 是一件最便宜的成品物品的量级，再小的多半是买卖时序差一包 */
 const EPISODE_MIN = 100;
+/** 单点尖峰前后都回到这个差额以内时，只标成采样错位候选，不从原始指标里删掉 */
+const RECOVERED_MAX = 50;
+/** 2 倍速回放包可能隔约 3 秒；在两侧最近采样 4 秒内恢复时仍可标注 */
+const RECOVERY_WINDOW = 4;
 
 const recs = findRecordings(matchId);
 requirePair(matchId, recs);
 
 // ── 自己打的：跑一遍真实管线，每个时钟留最后一包的结果 ──
-const ours = new Map();          // clock -> { nw, items }
+const ours = new Map();          // clock -> { nw, gold, assets, items }
 let heroName = null;
 const itemNames = (st) => {
   const out = [];
@@ -42,13 +46,15 @@ await runSelf(recs.self, ({ st, info, econ }) => {
   if (info.gameState === "DOTA_GAMERULES_STATE_POST_GAME") ourFinal ??= econ.networth;
   undone = econ.undone ?? undone;
   if (info.clock === null || !info.inMatch && info.gameState !== "DOTA_GAMERULES_STATE_POST_GAME") return;
-  ours.set(info.clock, { nw: econ.networth, items: itemNames(st), gameState: info.gameState });
+  const gold = st.player?.gold ?? 0;
+  ours.set(info.clock, { nw: econ.networth, gold, assets: econ.networth - gold,
+                         items: itemNames(st), gameState: info.gameState });
 });
 if (!heroName) { console.log("自己那份录制里找不到英雄名"); process.exit(1); }
 
 // ── 回放：找到同一个英雄，取官方净资产 ──
 let who = null;
-const truth = new Map();         // clock -> net_worth（每个时钟取最后一包）
+const truth = new Map();         // clock -> { nw, gold }（每个时钟取最后一包）
 for (const { clock, pkt } of spectateTimeline(recs.spectate)) {
   if (!who) {
     for (const [team, players] of Object.entries(pkt.hero || {})) {
@@ -57,8 +63,11 @@ for (const { clock, pkt } of spectateTimeline(recs.spectate)) {
       }
     }
   }
-  const nw = who && pkt.player?.[who.team]?.[who.slot]?.net_worth;
-  if (typeof nw === "number" && pkt.map?.game_state === "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS") truth.set(clock, nw);
+  const p = who && pkt.player?.[who.team]?.[who.slot];
+  const nw = p?.net_worth;
+  if (typeof nw === "number" && pkt.map?.game_state === "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS") {
+    truth.set(clock, { nw, gold: p.gold ?? 0 });
+  }
   if (typeof nw === "number" && pkt.map?.game_state === "DOTA_GAMERULES_STATE_POST_GAME") truthFinal ??= nw;
 }
 if (!who) { console.log(`回放里找不到 ${heroName}`); process.exit(1); }
@@ -67,13 +76,15 @@ console.log(`英雄 ${heroName.replace("npc_dota_hero_", "")}（回放里是 ${w
 // ── 对齐：以回放的时钟为准（回放 2 倍速时包更稀），取我们在同一秒或之前 2 秒内的最后一个值 ──
 const ourClocks = [...ours.keys()].sort((a, b) => a - b);
 function ourAt(c) {
-  for (let d = 0; d <= 2; d++) if (ours.has(c - d)) return ours.get(c - d);
+  for (let d = 0; d <= 2; d++) if (ours.has(c - d)) return { ...ours.get(c - d), selfClock: c - d };
   return null;
 }
 const rows = [];
 for (const [c, t] of [...truth].sort((a, b) => a[0] - b[0])) {
   const o = ourAt(c);
-  if (o) rows.push({ clock: c, ours: o.nw, truth: t, d: o.nw - t, items: o.items });
+  if (o) rows.push({ clock: c, selfClock: o.selfClock, ours: o.nw, truth: t.nw,
+                     d: o.nw - t.nw, ourGold: o.gold, truthGold: t.gold,
+                     ourAssets: o.assets, truthAssets: t.nw - t.gold, items: o.items });
 }
 if (!rows.length) { console.log("两份录制的时钟对不上（是同一局吗？）"); process.exit(1); }
 
@@ -88,6 +99,21 @@ console.log(`  完全一致     ${pct(r => r.d === 0)}`);
 console.log(`  差 50 以内   ${pct(r => Math.abs(r.d) <= 50)}`);
 console.log(`  差 100 以内  ${pct(r => Math.abs(r.d) <= 100)}`);
 console.log(`  平均 |差|    ${mean.toFixed(0)}    中位 ${sorted[n >> 1]}    最大 ${sorted[n - 1]}`);
+// 这些仍是原始对账行，只额外识别"单点很高、前后两侧都恢复"的采样错位候选。
+const isolatedSpikes = new Set();
+for (let i = 1; i < rows.length - 1; i++) {
+  const r = rows[i], before = rows[i - 1], after = rows[i + 1];
+  if (Math.abs(r.d) >= EPISODE_MIN
+      && r.clock - before.clock <= RECOVERY_WINDOW && after.clock - r.clock <= RECOVERY_WINDOW
+      && Math.abs(before.d) <= RECOVERED_MAX && Math.abs(after.d) <= RECOVERED_MAX) {
+    isolatedSpikes.add(r.clock);
+  }
+}
+const stableAbs = rows.filter(r => !isolatedSpikes.has(r.clock)).map(r => Math.abs(r.d));
+const stableSorted = [...stableAbs].sort((a, b) => a - b);
+const stableMean = stableAbs.reduce((a, b) => a + b, 0) / (stableAbs.length || 1);
+console.log(`  单点尖峰候选 ${isolatedSpikes.size} 个（|差| ≥ ${EPISODE_MIN}，前后 ${RECOVERY_WINDOW} 秒内最近采样均 ≤ ${RECOVERED_MAX}）`);
+console.log(`  排除候选后的参考平均 |差| ${stableMean.toFixed(0)}，最大 ${stableSorted.at(-1) ?? 0}（仅作诊断，原始指标保留）`);
 // **终局看结束后的定格，不看"对局中最后一包"**：后者和结束那一刻之间还有一两秒被动收入，
 // 两边按整秒对齐时会差几块（m9045983491 报过 +2，而结算画面上两边一分不差）
 const sign = (d) => `${d >= 0 ? "+" : ""}${d}`;
@@ -104,9 +130,12 @@ for (const r of rows) {
   const e = eps.at(-1);
   if (e && r.clock - e.end <= 5 && Math.sign(r.d) === Math.sign(e.peak)) {
     e.end = r.clock; e.sum += Math.abs(r.d); e.n++;
-    if (Math.abs(r.d) > Math.abs(e.peak)) e.peak = r.d;
   } else {
-    eps.push({ start: r.clock, end: r.clock, peak: r.d, sum: Math.abs(r.d), n: 1 });
+    eps.push({ start: r.clock, end: r.clock, peak: r.d, peakAt: r.clock, sum: Math.abs(r.d), n: 1 });
+  }
+  if (Math.abs(r.d) > Math.abs(eps.at(-1).peak)) {
+    eps.at(-1).peak = r.d;
+    eps.at(-1).peakAt = r.clock;
   }
 }
 for (const e of eps) e.score = (e.end - e.start + 1) * (e.sum / e.n);
@@ -128,6 +157,15 @@ for (const e of eps.slice(0, TOP)) {
   const { added, removed } = diffItems(itemsAt(e.start - 15), itemsAt(e.start + 5));
   console.log(`  ${mmss(e.start)} ~ ${mmss(e.end)}  ${String(dur).padStart(4)} 秒  ` +
               `${e.peak > 0 ? "多" : "少"} ${Math.abs(e.peak)}（平均 ${Math.round(e.sum / e.n)}）`);
+  const peak = rows.find(r => r.clock === e.peakAt);
+  if (peak) {
+    console.log(`      拆分（尖峰 ${mmss(peak.clock)}；自视角取 ${mmss(peak.selfClock)}）：` +
+                `金币差 ${sign(peak.ourGold - peak.truthGold)}，物品等资产差 ${sign(peak.ourAssets - peak.truthAssets)}`);
+    if (dur === 1 && isolatedSpikes.has(peak.clock)) {
+      const i = rows.indexOf(peak), before = rows[i - 1], after = rows[i + 1];
+      console.log(`      前后采样：${mmss(before.clock)} 差 ${sign(before.d)}；${mmss(after.clock)} 差 ${sign(after.d)} → 前后采样恢复，疑似时序错位`);
+    }
+  }
   if (added.length || removed.length) {
     console.log(`      物品  +[${added.join(", ")}]  -[${removed.join(", ")}]`);
   }
@@ -146,3 +184,4 @@ for (const u of undone) {
     Math.abs(after) <= Math.max(100, u.v / 4) ? "销对了" : "说不清";
   console.log(`  ${mmss(u.at)} 销掉 ${u.v}：之后和官方差 ${after ?? "?"} → ${verdict}`);
 }
+
