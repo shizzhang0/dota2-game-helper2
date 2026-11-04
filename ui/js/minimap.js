@@ -107,6 +107,7 @@ export class WardTracker {
     this.seenKills = new Set();   // 排眼事件去重（同一条会在连续几包里重复出现）
     this.dewarded = new Map();    // key -> 判定被我方排掉的 clock，见 update()
     this.pendingKills = [];       // 候选不止一个、先记下来等着看的排眼事件，见 resolveKills()
+    this.claimed = new Map();     // 被一条无歧义的排眼事件删掉的眼 -> 何时，见 resolveKills()
   }
 
   /** 我方排掉敌方眼的事件 -> 把对应的记忆删掉。
@@ -157,6 +158,7 @@ export class WardTracker {
       if (live.length > 1) this.pendingKills.push({ kind, at: clock, keys: live.map(([k]) => k) });
       if (live.length !== 1) continue;
       this.enemy.delete(live[0][0]);
+      this.claimed.set(live[0][0], clock);
       // **必须压制一段时间**：GSI 上报有滞后（实测约 7 秒），眼死了之后还会在
       // minimap 里留一会儿。不压制的话下一包又把它加回来，而且 firstSeen 会重置成
       // 现在——等于把一个旧幽灵换成一个**满寿命**的新幽灵，比不删还糟。
@@ -177,7 +179,13 @@ export class WardTracker {
         const batch = [mine.shift()];
         while (mine.length && mine[0].at - batch[batch.length - 1].at <= wait) batch.push(mine.shift());
         if (clock - batch[batch.length - 1].at <= wait) { mine.unshift(...batch); break; }
-        const keys = new Set(batch.flatMap(p => p.keys));
+        // **已经被别的无歧义事件认领删掉的候选不算**（2026-11-04）。m9073005136 9:05 一条事件对上两个真眼、先记下；
+        // 9:09 第二条事件来时只剩其中一个可见，当场删了它。9:21 判这一批时两个都"消失了"，一条事件对两个，
+        // 个数对不上、一个都没删，剩下那个挂成 399 秒的幽灵。扣掉被认领的，就是一条事件对一个。
+        // 只认这一批时间附近的认领：眼按坐标认，以后同一个点再插的新眼不该受影响。
+        // 二十一对自视角：两局幽灵变少（m9073005136 494 → 95 秒、m9053873687 1859 → 1664 秒），漏显示、叉都不变
+        const taken = (k) => this.claimed.has(k) && this.claimed.get(k) >= batch[0].at - wait;
+        const keys = new Set(batch.flatMap(p => p.keys).filter(k => !taken(k)));
         const last = batch[batch.length - 1].at;
         const gone = [...keys].filter(k => !this.enemy.has(k) || this.enemy.get(k).lastSeen <= last + wait / 2);
         if (gone.length === batch.length) {
