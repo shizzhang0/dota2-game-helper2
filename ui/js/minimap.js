@@ -74,6 +74,8 @@ function nearMe(state, w) {
     或我方英雄（粉 / 宝石，1050 再加两包之间的位移，取 1450），
     或我方放在地上的效果（`npc_dota_thinker`，1000 以内）。见 design/wards.md「死眼的尸体」。 */
 const SIGHT_FROM_SENTRY = 1250, SIGHT_FROM_HERO = 1450, SIGHT_FROM_THINKER = 1000;
+// 真眼刚插下时的地面视野半径，和多久之后判（见 update() 里"插眼的瞬时视野"）
+const FRESH_SENTRY_SIGHT = 150, FRESH_SENTRY_SECS = 10;
 function trueSightNear(w, seen, state, myTeam) {
   if (myTeam === null) return true;          // 不知道哪边是自己，宁可不判
   if (seen.some(s => s.team === myTeam && s.kind === "sentry" &&
@@ -108,6 +110,7 @@ export class WardTracker {
     this.dewarded = new Map();    // key -> 判定被我方排掉的 clock，见 update()
     this.pendingKills = [];       // 候选不止一个、先记下来等着看的排眼事件，见 resolveKills()
     this.claimed = new Map();     // 被一条无歧义的排眼事件删掉的眼 -> 何时，见 resolveKills()
+    this.freshSentries = [];      // 我方刚插下的真眼 {x, y, at}，见 update() 里"插眼的瞬时视野"
   }
 
   /** 我方排掉敌方眼的事件 -> 把对应的记忆删掉。
@@ -227,6 +230,7 @@ export class WardTracker {
           // 取 1000。
           // 见 design/networth.md 的眼架一节。
           if (this.joined && w.kind === "sentry" && nearMe(state, w)) this.newOwnSentries++;
+          if (this.joined && w.kind === "sentry") this.freshSentries.push({ x: w.x, y: w.y, at: clock });
         }
       } else {
         // 刚判定被我方排掉的，压制期内不再加回来（GSI 滞后，见 noteWardKills）
@@ -272,6 +276,23 @@ export class WardTracker {
       }
     }
     this.joined = true;
+
+    // **插眼的瞬时视野**（2026-11-06）。真眼刚插下有 12 秒、半径 150 的地面视野，加上它自己的真视——
+    // 这 12 秒里 150 以内要是有敌方眼，**一定看得见**。所以插下后这段时间里一次都没出现的、记着的敌方眼，
+    // 就是已经没了。和下面"在真视里消失不算没了"不矛盾：那条缺的是视野，这里视野是插眼本身给的。
+    // m9077055291（潮汐）：敌方假眼 13:02 到期时我方那片没有视野，我们按寿命画到 17:32；13:27 我方在它旁边
+    // 17 处插了真眼、它没出现——现在 13:37 就删。十三对自视角：删 2 次都对（另一次 m9052676196 30:58），
+    // 反过来插眼时 150 以内的活眼 2 个都在 12 秒里被看见；漏显示、叉不变，幽灵 −252 秒。
+    // 等 10 秒再判：12 秒的视野扣掉 GSI 的上报延迟
+    for (const f of this.freshSentries) {
+      if (clock - f.at < FRESH_SENTRY_SECS) continue;
+      for (const [key, w] of [...this.enemy]) {
+        if (w.lastSeen >= f.at || Math.hypot(w.x - f.x, w.y - f.y) > FRESH_SENTRY_SIGHT) continue;
+        this.enemy.delete(key);
+        this.dewarded.set(key, clock);
+      }
+    }
+    this.freshSentries = this.freshSentries.filter(f => clock - f.at < FRESH_SENTRY_SECS);
 
     // 我方眼消失：倒计时还没走完就是被排
     for (const [key, w] of [...this.own]) {
