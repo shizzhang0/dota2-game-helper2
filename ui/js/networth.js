@@ -88,6 +88,19 @@ function soldPart(gone, dGold) {
 }
 
 /** prev 里有、now 里没有的那几件（按名字+充能配对，重复的逐个抵） */
+/** 同 vanished，但返回物品本身 { key, cost }（在途账要知道路上是什么东西，见 picked） */
+const isWard = (key) => /^ward_(sentry|observer)\|/.test(key);
+function vanishedItems(prev, now) {
+  const left = new Map();
+  for (const x of now) left.set(x.key, (left.get(x.key) || 0) + 1);
+  const out = [];
+  for (const x of prev) {
+    const n = left.get(x.key) || 0;
+    if (n > 0) left.set(x.key, n - 1); else out.push(x);
+  }
+  return out;
+}
+
 function vanished(prev, now) {
   const left = new Map();
   for (const x of now) left.set(x.key, (left.get(x.key) || 0) + 1);
@@ -326,6 +339,7 @@ export class EconTracker {
     this.prevDispenser = false;
     this.prevLooseWards = 0;
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
+    this.picked = [];               // 被信使从储藏处取走的东西 { key, cost, at }：在途账只记金额，这里记是什么
     this.prevTp = null;             // 传送槽充能数
     this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
     this.prevShard = false;         // 上一包有没有魔晶，用来冲销吃掉时留下的在途账
@@ -748,10 +762,25 @@ export class EconTracker {
     const tpNow = tpCharges(state.items);
     const tpUp = (tpNow - (this.prevTpSlot ?? tpNow)) * (prices.tpscroll?.cost ?? 100);
     this.prevTpSlot = tpNow;
+    const hadDispenser = this.prevDispenser;
     this.noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock,
                        goldBefore === null ? 0 : goldBefore - gold,
                        (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
                        died, looseWards);
+    // **眼的钱还记在在途账上，就转进眼架**（2026-11-07）。储藏处的眼被信使取走记了在途，在信使身上和假眼合成眼架，
+    // 送到时架子估值是 0、钱还在在途账里——之后插真眼扣不到（插眼只扣架子估值），在途 90 秒过期时又整笔丢掉。
+    // m9078609155（司夜）9:37 两个真眼被取走、9:47 架子送到估值 0，9:52 插眼后多 90 挂到在途过期。
+    // 架子出现、估值为 0 时，把在途里被取走的眼（`picked`）那部分转进估值。十四局回放十人复算触发 21 次：
+    // 帮忙 13、帮倒忙 1；十四对自视角三局变好（m9029221681 ≤100 87.1% → 97.7%）、其余不变
+    if (dispenser && !hadDispenser && this.dispenserValue === 0 && clock !== null) {
+      const ws = this.picked.filter(p => isWard(p.key) && clock - p.at < TRANSIT_TTL);
+      const v = Math.min(ws.reduce((a, p) => a + p.cost, 0), this.transit.reduce((a, t) => a + t.v, 0));
+      if (v > 0) {
+        this.deliver(v);
+        this.dispenserValue += v;
+        this.picked = this.picked.filter(p => !ws.includes(p));
+      }
+    }
     this.noteProxy(state.items, prices, state.player, clock);
     this.noteVariants(state.items);
     this.noteBuyback(state, clock);
@@ -806,6 +835,14 @@ export class EconTracker {
         const sold = soldPart(vanished(this.prevStashItems || [], stashItems), dGold);
         const v = lost - sold - Math.max(0, gained);
         if (v > 0) this.transit.push({ v, at: clock, n: this.pkt });
+        if (v > 0) {
+          // 刚平移进眼架的眼不是被取走的（见 noteDispenser 的 wardsMovedFromStash）
+          let moved = this.wardsMovedFromStash;
+          for (const x of vanishedItems(this.prevStashItems || [], stashItems)) {
+            if (moved > 0 && isWard(x.key)) { moved -= x.cost; continue; }
+            this.picked.push({ key: x.key, cost: x.cost, at: clock });
+          }
+        }
       } else if (gained > 0) {
         this.deliver(gained);                   // 装备栏变多 = 在途的东西到货了
       } else if (back > 0 && paid < back / 2) {
@@ -817,9 +854,22 @@ export class EconTracker {
         //
         // `paid < back / 2` 是为了把**买进储藏处**排除掉：那是新东西，
         // 不是在途的那件回来了，冲销它会把真的在途账抹掉。
-        this.deliver(back);
+        //
+        // **只冲销"正是之前被取走的那件"**（2026-11-07）。光靠 `paid < back / 2` 挡不住同一包有进账的购买：
+        // 十四局回放十人复算里这条触发 188 次，只有 33 次是真闪回来，155 次是新买的东西，其中 19 次冲掉了
+        // 别的在途账（m9078609155 司夜 22:26 买风之杖配件、同包进了赏金，冲掉 225，接着又一次，少算 900）。
+        // 现在按物品名对：新出现在储藏处的东西，在 `picked` 里（被信使取走过）才冲销它那份。
+        // 逐次审查：触发 155 次，帮忙 16、帮倒忙 3——那 3 次都是旧版误冲恰好抵掉了别处已有的误差
+        let ret = 0;
+        for (const x of vanishedItems(stashItems, this.prevStashItems || [])) {   // 这一包储藏处新出现的
+          const i = this.picked.findIndex(p => p.key === x.key);
+          if (i < 0) continue;
+          ret += x.cost; this.picked.splice(i, 1);
+        }
+        if (ret > 0) this.deliver(Math.min(back, ret));
       }
       this.transit = this.transit.filter(t => clock - t.at < TRANSIT_TTL);
+      this.picked = this.picked.filter(p => clock - p.at < TRANSIT_TTL);
       // **信使把 TP 送进了传送槽，要销掉它在储藏处消失时记的那笔在途账。**
       // 传送槽不算进 `slot`，上面"装备栏变多 = 到货"那条管不到它；而 noteTp 又会把这张
       // 当成自购的记上 100——同一张 TP 记了两遍，直到在途账超时。常见的形状是传送途中
