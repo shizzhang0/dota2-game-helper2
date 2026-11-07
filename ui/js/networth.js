@@ -231,7 +231,7 @@ function appearedValue(now, prev) {
 
 function itemValues(items, prices, player) {
   const mine = mySlot(player);
-  let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false, looseWards = 0;
+  let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false, looseWards = 0, dispenserOnHero = false;
   const stashItems = [];   // 储藏处逐件 { key, cost }，给"同一包里卖掉一部分"用，见 soldPart
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
@@ -240,7 +240,7 @@ function itemValues(items, prices, player) {
     const name = (it.name || "").replace(/^item_/, "");
     // 眼架的价值等于里面装的眼，而 GSI 只给 charges:1，从不说装了什么。
     // 所以它不走物品价，由 EconTracker 单独跟踪，见 dispenserValue。
-    if (name === "ward_dispenser") { dispenser = true; continue; }
+    if (name === "ward_dispenser") { dispenser = true; if (!k.startsWith("stash")) dispenserOnHero = true; continue; }
     const cost = itemCost(it, prices);
     // 散装的眼要单独记：眼架合成的那一刻，它们的价值要平移进眼架。
     // **装备栏和储藏处分开数**，两处少掉的含义完全不同，见 noteDispenser。
@@ -250,7 +250,7 @@ function itemValues(items, prices, player) {
     if (k.startsWith("stash")) { stash += cost; stashItems.push({ key: `${name}|${it.charges ?? ""}`, cost }); }
     else slot += cost;
   }
-  return { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems };
+  return { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero };
 }
 
 /**
@@ -338,6 +338,7 @@ export class EconTracker {
     this.pendingSentries = [];      // 看不见眼架时买的真眼，等眼架出现再并进去：{ v, at }
     this.prevDispenser = false;
     this.prevLooseWards = 0;
+    this.dispLastInStash = false;   // 眼架最后一次看见时是不是只在储藏处（从那儿消失 = 被信使拿走）
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.picked = [];               // 被信使从储藏处取走的东西 { key, cost, at }：在途账只记金额，这里记是什么
     this.prevTp = null;             // 传送槽充能数
@@ -634,7 +635,12 @@ export class EconTracker {
       // 立刻清零就把刚合成的价值丢了，所以给一段宽限；真的用完了，
       // 上面的插眼扣减本来也已经把它扣到 0。
       if (this.dispenserGone === null) this.dispenserGone = clock;
-      if (clock !== null && clock - this.dispenserGone > DISPENSER_GRACE) {
+      // **从储藏处消失的架子是被信使拿走了**（2026-11-08）：架子在储藏处里用不掉，只能被取走（或从储藏处卖掉，很少见）。
+      // 信使来回常常超过 20 秒，宽限一到就把估值清掉，送到时成了 0。m9080007195（天涯墨客）25:07 在储藏处买架子、
+      // 25:08 被取走、25:29 清零，少 100 直到 26:14 用完。从储藏处消失的按在途账的期限等。
+      // 十四局回放十人复算触发 1 次、帮忙；十五对自视角只有这局变了（≤50 92.2% → 93.3%）
+      const grace = this.dispLastInStash ? TRANSIT_TTL : DISPENSER_GRACE;
+      if (clock !== null && clock - this.dispenserGone > grace) {
         this.dispenserValue = 0;
         this.dispFromStash = 0;
       }
@@ -749,7 +755,8 @@ export class EconTracker {
     if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
       this.reset();
     }
-    const { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems } = itemValues(state.items, prices, state.player);
+    const { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero } = itemValues(state.items, prices, state.player);
+    if (dispenser) this.dispLastInStash = !dispenserOnHero;
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
     const died = this.noteDeaths(state.player);
