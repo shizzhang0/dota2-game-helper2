@@ -190,7 +190,15 @@ export class WardTracker {
         const taken = (k) => this.claimed.has(k) && this.claimed.get(k) >= batch[0].at - wait;
         const keys = new Set(batch.flatMap(p => p.keys).filter(k => !taken(k)));
         const last = batch[batch.length - 1].at;
-        const gone = [...keys].filter(k => !this.enemy.has(k) || this.enemy.get(k).lastSeen <= last + wait / 2);
+        // **"消失"按判定时往回看，对不上而又有候选刚被看见就再等等**（2026-11-12）。原先是"最后一条事件后 wait/2
+        // 内再没出现"，被排的眼的尸体晚几秒闪一下就算没消失：m9085530914（宙斯）18:12/18:22/18:23 三条事件、
+        // 三个真眼都被排了，其中一个 18:23 被排、18:30~18:31 尸体又闪了一下，比 18:30.5 晚半秒，于是三条对两个、
+        // 一个都没删，挂成三个幽灵共 916 秒。现在判定时 wait/2 内没再看见才算消失；个数对不上、又有候选刚被看见，
+        // 就推迟（最多到最后一条事件后 2×wait）等它稳定。只在对不上时推迟：一个活眼一直看得见时不该拖着别的删除。
+        // 十六对自视角：只有这局变了（幽灵 954 → 38 秒），漏显示、叉都不变
+        const gone = [...keys].filter(k => !this.enemy.has(k) || clock - this.enemy.get(k).lastSeen >= wait / 2);
+        const recent = [...keys].some(k => this.enemy.has(k) && clock - this.enemy.get(k).lastSeen < wait / 2);
+        if (gone.length !== batch.length && recent && clock - last <= wait * 2) { mine.unshift(...batch); break; }
         if (gone.length === batch.length) {
           for (const k of gone) { this.enemy.delete(k); this.dewarded.set(k, clock); }
         }
