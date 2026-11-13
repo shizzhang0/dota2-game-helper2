@@ -761,7 +761,8 @@ export class EconTracker {
     const { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero, slotItems } = itemValues(state.items, prices, state.player);
     // 在途账的期限走常数表（courierTransitSecs，分模式），缺省 TRANSIT_TTL。快速模式试过 120 / 150：
     // 十人复算帮忙 4、帮倒忙 18——在途账里难免有记错的陈账，期限越长挂得越久，真送 90 秒以上的反而少见。
-    // 正常模式信使更慢，可能要长一些，但还没有正常模式的录制，先同样填 90（2026-11-13）
+    // 正常模式 130（2026-11-14，算出来的，还没有正常模式录制验证）：快速模式信使固定 1100，横穿大半张地图（约 15000）
+    // 约 14 秒，90 秒里其余约 76 秒是排队、取货、英雄跑位，和速度无关；正常模式基础 290，同样距离约 52 秒，76 + 52 ≈ 130
     this.ttl = C.courierTransitSecs ?? TRANSIT_TTL;
     if (dispenser) this.dispLastInStash = !dispenserOnHero;
     const gold = (state.player || {}).gold ?? 0;
