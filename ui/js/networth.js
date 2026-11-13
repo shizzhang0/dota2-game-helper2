@@ -233,6 +233,7 @@ function itemValues(items, prices, player) {
   const mine = mySlot(player);
   let slot = 0, stash = 0, wards = 0, wardsStash = 0, dispenser = false, looseWards = 0, dispenserOnHero = false;
   const stashItems = [];   // 储藏处逐件 { key, cost }，给"同一包里卖掉一部分"用，见 soldPart
+  const slotItems = [];    // 装备栏逐件 { key, cost }，到货时按物品名对在途账，见 matchArrivals
   for (const [k, it] of Object.entries(items || {})) {
     if (!it || typeof it !== "object") continue;
     if (k.startsWith("neutral") || k.startsWith("preserved_neutral") || k.startsWith("teleport")) continue;
@@ -248,9 +249,9 @@ function itemValues(items, prices, player) {
       if (k.startsWith("stash")) wardsStash += cost; else { wards += cost; looseWards++; }
     }
     if (k.startsWith("stash")) { stash += cost; stashItems.push({ key: `${name}|${it.charges ?? ""}`, cost }); }
-    else slot += cost;
+    else { slot += cost; slotItems.push({ key: `${name}|${it.charges ?? ""}`, cost }); }
   }
-  return { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero };
+  return { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero, slotItems };
 }
 
 /**
@@ -341,6 +342,8 @@ export class EconTracker {
     this.dispLastInStash = false;   // 眼架最后一次看见时是不是只在储藏处（从那儿消失 = 被信使拿走）
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.picked = [];               // 被信使从储藏处取走的东西 { key, cost, at }：在途账只记金额，这里记是什么
+    this.prevSlotItems = null;      // 上一包装备栏逐件，到货按名字对（matchArrivals）
+    this.ttl = TRANSIT_TTL;         // 在途账期限，update() 里按模式从常数表取
     this.prevTp = null;             // 传送槽充能数
     this.prevDeaths = null;         // 上一包的阵亡数，用来认出"系统白送的那张"
     this.prevShard = false;         // 上一包有没有魔晶，用来冲销吃掉时留下的在途账
@@ -613,7 +616,7 @@ export class EconTracker {
     // 正好抵消了少算的 100。十二对自视角两局变好（m9054076480 平均|差| 30 → 22、终局 −50 → 0）、十局不变。
     // 试过"记下就立刻算进净资产"：帮忙 71、帮倒忙 132——看不见眼架时掉 50 的整数倍，多半不是买眼
     const sentryCost = prices.ward_sentry?.cost ?? 50;
-    this.pendingSentries = this.pendingSentries.filter(t => clock === null || clock - t.at < TRANSIT_TTL);
+    this.pendingSentries = this.pendingSentries.filter(t => clock === null || clock - t.at < this.ttl);
     let got = Math.max(0, assetUp - Math.max(0, paid));
     while (got > 0 && this.pendingSentries.length) {
       const t = this.pendingSentries[0], d = Math.min(t.v, got);
@@ -639,7 +642,7 @@ export class EconTracker {
       // 信使来回常常超过 20 秒，宽限一到就把估值清掉，送到时成了 0。m9080007195（天涯墨客）25:07 在储藏处买架子、
       // 25:08 被取走、25:29 清零，少 100 直到 26:14 用完。从储藏处消失的按在途账的期限等。
       // 十四局回放十人复算触发 1 次、帮忙；十五对自视角只有这局变了（≤50 92.2% → 93.3%）
-      const grace = this.dispLastInStash ? TRANSIT_TTL : DISPENSER_GRACE;
+      const grace = this.dispLastInStash ? this.ttl : DISPENSER_GRACE;
       if (clock !== null && clock - this.dispenserGone > grace) {
         this.dispenserValue = 0;
         this.dispFromStash = 0;
@@ -755,7 +758,12 @@ export class EconTracker {
     if (clock !== null && clock >= 0 && this.lastClock !== null && clock < this.lastClock - 5) {
       this.reset();
     }
-    const { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero } = itemValues(state.items, prices, state.player);
+    const { slot, stash, wards, wardsStash, dispenser, looseWards, stashItems, dispenserOnHero, slotItems } = itemValues(state.items, prices, state.player);
+    // 在途账的期限走常数表（courierTransitSecs，分模式），缺省 TRANSIT_TTL。快速模式试过 120 / 150：
+    // 十人复算帮忙 4、帮倒忙 18——在途账里难免有记错的陈账，期限越长挂得越久，真送 90 秒以上的反而少见。
+    // 正常模式 130（2026-11-14，算出来的，还没有正常模式录制验证）：快速模式信使固定 1100，横穿大半张地图（约 15000）
+    // 约 14 秒，90 秒里其余约 76 秒是排队、取货、英雄跑位，和速度无关；正常模式基础 290，同样距离约 52 秒，76 + 52 ≈ 130
+    this.ttl = C.courierTransitSecs ?? TRANSIT_TTL;
     if (dispenser) this.dispLastInStash = !dispenserOnHero;
     const gold = (state.player || {}).gold ?? 0;
     const goldBefore = this.prevGold;   // 下面会把 prevGold 覆盖掉，noteSpend 要的是这个
@@ -780,7 +788,7 @@ export class EconTracker {
     // 架子出现、估值为 0 时，把在途里被取走的眼（`picked`）那部分转进估值。十四局回放十人复算触发 21 次：
     // 帮忙 13、帮倒忙 1；十四对自视角三局变好（m9029221681 ≤100 87.1% → 97.7%）、其余不变
     if (dispenser && !hadDispenser && this.dispenserValue === 0 && clock !== null) {
-      const ws = this.picked.filter(p => isWard(p.key) && clock - p.at < TRANSIT_TTL);
+      const ws = this.picked.filter(p => isWard(p.key) && clock - p.at < this.ttl);
       const v = Math.min(ws.reduce((a, p) => a + p.cost, 0), this.transit.reduce((a, t) => a + t.v, 0));
       if (v > 0) {
         this.deliver(v);
@@ -806,6 +814,7 @@ export class EconTracker {
       this.prevSlot = slot;
       this.prevStash = stash;
       this.prevStashItems = stashItems;
+      this.prevSlotItems = slotItems;
       this.prevGold = gold;
       this.lastClock = clock;
       return this.total(state, prices, C, slot, stash);
@@ -816,7 +825,14 @@ export class EconTracker {
     if (this.prevStash !== null) {
       // 减掉刚平移进眼架的那部分：储藏处少的是它，不是信使取走的（见 noteDispenser）
       const lost = this.prevStash - stash - this.wardsMovedFromStash;
-      const gained = slot - this.prevSlot + this.wardsMovedFromSlot;   // 装备栏增加的价值（并进眼架的眼不算少，见 noteDispenser）
+      // **到货按物品名对**（2026-11-13）：每一包先认"在途里的那件到了"、销它那份，剩下的增量才按金额销。
+      // 原先装备栏多了就按金额一锅端，不管到的是什么：m9088350659（撼地者）20:45 能量球和两个真眼一起被取走，
+      // 能量球进了在途、真眼记成待定；20:54 真眼送到，又被当成到货冲掉能量球 100，少 100 挂到 22:18。
+      // 另一个漏洞也一起堵上：到货那一包储藏处恰好也少了东西时，走的是下面"记账"那支，到货完全不销账，留成陈账。
+      // 十四局回放十人复算：在途账出现分歧 23 次，帮忙 19、帮倒忙 4，平均|差| 34.96 → 33.90；
+      // 十七对自视角三局变好（撼地者平均|差| 19 → 13、宙斯 13 → 9）、幽鬼 22 → 24（一笔大药陈账以前被碰巧冲掉一半）、其余不变
+      const arr = this.matchArrivals(slotItems);
+      const gained = slot - this.prevSlot + this.wardsMovedFromSlot - arr.matched;   // 装备栏增加的价值（并进眼架的眼不算少，见 noteDispenser）
       const back = stash - this.prevStash;      // 储藏处变多了多少
       const paid = this.prevGold - gold;        // 这一包花了多少
       const dGold = gold - this.prevGold;
@@ -851,7 +867,8 @@ export class EconTracker {
           }
         }
       } else if (gained > 0) {
-        this.deliver(gained);                   // 装备栏变多 = 在途的东西到货了
+        const v = Math.min(gained, arr.unmatched);       // 装备栏变多 = 在途的东西到货了（按名字对上的已经销过）
+        if (v > 0) this.deliver(v);
       } else if (back > 0 && paid < back / 2) {
         // **东西回到储藏处了，也要冲销。** GSI 里储藏处的物品会闪——同一件东西
         // 隔几包消失一次再出现。每次消失都记一笔在途，而它回来时若只看装备栏
@@ -875,8 +892,8 @@ export class EconTracker {
         }
         if (ret > 0) this.deliver(Math.min(back, ret));
       }
-      this.transit = this.transit.filter(t => clock - t.at < TRANSIT_TTL);
-      this.picked = this.picked.filter(p => clock - p.at < TRANSIT_TTL);
+      this.transit = this.transit.filter(t => clock - t.at < this.ttl);
+      this.picked = this.picked.filter(p => clock - p.at < this.ttl);
       // **信使把 TP 送进了传送槽，要销掉它在储藏处消失时记的那笔在途账。**
       // 传送槽不算进 `slot`，上面"装备栏变多 = 到货"那条管不到它；而 noteTp 又会把这张
       // 当成自购的记上 100——同一张 TP 记了两遍，直到在途账超时。常见的形状是传送途中
@@ -895,6 +912,7 @@ export class EconTracker {
     this.prevSlot = slot;
     this.prevStash = stash;
     this.prevStashItems = stashItems;
+    this.prevSlotItems = slotItems;
     this.prevGold = gold;
     this.noteBuffs(state.hero, prices, C, spare);
     this.noteShard(state.hero, prices, C);
@@ -1080,7 +1098,7 @@ export class EconTracker {
     // 当场掉 899，而宝石还在队友包里。跟着它一起不算，否则终值凭空多 900。
     if (clock === null || gameState === "DOTA_GAMERULES_STATE_POST_GAME") return 0;
     const cost = prices.gem?.cost ?? 900;
-    return this.proxy.reduce((a, t) => a + (t.now || clock - t.at >= TRANSIT_TTL ? cost : 0), 0);
+    return this.proxy.reduce((a, t) => a + (t.now || clock - t.at >= this.ttl ? cost : 0), 0);
   }
 
   total(state, prices, C, slot, stash) {
@@ -1102,6 +1120,34 @@ export class EconTracker {
       nw += this.buffPrice(b, prices, C, buffs);
     }
     return { networth: nw, gpm: p.gpm ?? 0, xpm: p.xpm ?? 0 };
+  }
+
+  /**
+   * 到货按物品名对：装备栏这一包每种东西多出来多少，名字在 `picked`（被信使取走过）里的就是在途的那件到了，
+   * 当场销它那份，返回 { matched, unmatched }。unmatched 是对不上名字的非眼增量（组装：配件在信使身上、
+   * 到手合成了大件，名字对不上，只能按金额）；眼对不上名字一律不算到货（待定的真眼、眼架变出来的眼都不在在途账里）。
+   */
+  matchArrivals(slotItems) {
+    const byName = (list) => {
+      const m = new Map();
+      for (const x of list || []) { const n = x.key.split("|")[0]; m.set(n, (m.get(n) || 0) + x.cost); }
+      return m;
+    };
+    const now = byName(slotItems), before = byName(this.prevSlotItems);
+    let matched = 0, unmatched = 0;
+    for (const [name, v] of now) {
+      const d = v - (before.get(name) || 0);
+      if (d <= 0) continue;
+      let take = 0;
+      for (let i = 0; i < this.picked.length && take < d;) {
+        if (this.picked[i].key.split("|")[0] === name) { take += this.picked[i].cost; this.picked.splice(i, 1); }
+        else i++;
+      }
+      matched += Math.min(d, take);
+      if (d > take && name !== "ward_sentry" && name !== "ward_observer") unmatched += d - take;
+    }
+    if (matched > 0) this.deliver(matched);
+    return { matched, unmatched };
   }
 
   deliver(value) {

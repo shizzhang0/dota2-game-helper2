@@ -24,5 +24,6 @@
   "wardKillConfirm": 3,
   "wardKillSuppress": 15,
   "wardUnsureConf": 0.5,
-  "wardUnsureFade": 60
+  "wardUnsureFade": 60,
+  "courierTransitSecs": 130
 }
