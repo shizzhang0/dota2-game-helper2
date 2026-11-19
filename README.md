@@ -6,7 +6,7 @@
 
 Runes, buybacks, glyph, wards — what Dota 2 knows but never shows, on its own HUD
 
-[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.41f](https://img.shields.io/badge/Dota%202-7.41f-C24A34.svg)
+[![CI](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml/badge.svg)](https://github.com/shizzhang0/dota2-game-helper2/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg) ![Dota 2: 7.42](https://img.shields.io/badge/Dota%202-7.42-C24A34.svg)
 
 **[▶ Try it in your browser](https://shizzhang0.github.io/dota2-game-helper2/)** — that's the real overlay running on the page
 
