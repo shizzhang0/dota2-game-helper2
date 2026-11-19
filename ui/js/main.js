@@ -167,7 +167,7 @@ setInterval(() => {
     visible: editMode || (info.inMatch && !stale && !hidden && dotaFront),
     editMode,
     timers: C ? computeTimers(info.clock, C) : [],
-    glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0 },
+    glyph: tracker ? tracker.enemyGlyph(info) : { ready: true, remaining: 0, charges: 2, progress: 1 },
     buybacks: tracker ? tracker.buybacks(info) : [],
     myTeam: info.myTeam,
     econ: e,

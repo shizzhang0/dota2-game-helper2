@@ -75,19 +75,22 @@ export class EventTracker {
     const every = this.C.glyphRecharge ?? 360;
     // 没有 clock 就没有"还剩多久"可言（待机、换局那一瞬）。按 ready 显示，
     // 和没有 tracker 时的占位一致。
-    if (info.clock === null) return { ready: true, remaining: 0, total: every, charges: 0 };
+    const max = this.C.glyphCharges ?? 2;
+    if (info.clock === null) return { ready: true, remaining: 0, total: every, charges: max, progress: 1 };
     const enemy = info.myTeam === 2 ? 3 : 2;
     const { charges, next, lastUse } = this.glyphState(enemy, info.clock);
     const gap = this.C.glyphUseCooldown ?? 0;
     // **total 是"当前这段等待有多长"，渲染层用它算环的进度。**
     // 没次数时等的是充能：开局那次是 glyphFirstReady（270），之后是 glyphRecharge（360）；
     // 有次数但刚用过，等的是两次之间那 7 秒。
+    // progress = 下一次充能补到哪（0~1），存满了是 1。渲染层在"可用但没存满"时拿它画环。
+    const progress = next === null ? 1 : Math.max(0, Math.min(1, 1 - (next - info.clock) / every));
     if (charges === 0) {
       const total = next === this.firstReadyAt() ? (this.C.glyphFirstReady ?? every) : every;
-      return { ready: false, remaining: Math.max(1, Math.ceil(next - info.clock)), total, charges };
+      return { ready: false, remaining: Math.max(1, Math.ceil(next - info.clock)), total, charges, progress };
     }
     const rem = lastUse === null ? 0 : Math.max(0, Math.ceil(lastUse + gap - info.clock));
-    return { ready: rem === 0, remaining: rem, total: gap || 1, charges };
+    return { ready: rem === 0, remaining: rem, total: gap || 1, charges, progress };
   }
   // **十个人都给，包括自己和队友**（2026-10-08 起）。原生界面里队友的买活冷却
   // 哪儿都看不到——记分板没有、顶栏也没有（用户实测）；自己的只在死了以后的按钮上有。
