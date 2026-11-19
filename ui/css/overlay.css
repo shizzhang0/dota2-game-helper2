@@ -299,7 +299,7 @@ html, body {
 .mb-ring { position: relative; width: 34px; height: 34px; }
 .mb-ring svg.ring { width: 34px; height: 34px; display: block; overflow: visible;
                     filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)); }
-.mb-glyph .ring-fg { stroke-width: 5; }
+.mb-glyph .ring-fg { stroke-width: 5; stroke-linecap: butt; }
 .mb-glyph-ico {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
@@ -320,9 +320,24 @@ html, body {
   text-shadow: 0 0 3px #000, 0 1px 2px #000;
 }
 .mb-glyph-ico span:empty { display: none; }
-/* ready：环满、塔点亮并填实、环加粗——"敌方此刻有塔防"是威胁态，要最显眼 */
+/* ready：塔点亮并填实、光晕加深——"敌方此刻有塔防"是威胁态，要最显眼。
+   **环不再加粗、改平头，和倒计时那排一致**（2026-11-19）：原先可用时加粗到 7、圆头，7.42 之前可用时环永远是满圈，
+   没毛病；充能制之后剩 1 次时环画第 2 次的进度，刚开始补只有一小段，粗 7 加圆头就是 12 点钟一个鼓包——
+   和倒计时 2026-10-15 去掉加粗是同一个原因。对比过"粗 7 平头"，用户觉得一律 5 更整齐 */
 .mb-glyph[data-ready="1"] svg.ico { opacity: 1; fill: currentColor; fill-opacity: .3; }
-.mb-glyph[data-ready="1"] .ring-fg { stroke-width: 7; }
+/* 7.42 充能制：右边两根竖条 = 可用次数（下面那根先亮）。格子右边本来空着约 7px，
+   环往左让 2px（.mb-glyph 的 padding-right）就放得下，格子不用加宽（2026-11-19，用户挑的） */
+.mb-glyph { padding-right: 4px; }
+.mb-glyph-pips {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.mb-glyph-pips i {
+  display: block; width: 3px; height: 7px; border-radius: 1.5px;
+  background: rgba(255, 255, 255, .16);
+}
+.mb-glyph[data-charges="2"] .mb-glyph-pips i,
+.mb-glyph[data-charges="1"] .mb-glyph-pips i:last-child { background: #ff6b6b; }
 
 /* ── 眼位：贴在原生小地图上 ─────────────────────────────
    位置和大小由 wardmap.js 按 Dota 的小地图算（left/top/width/height 直接写），

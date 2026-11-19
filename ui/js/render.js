@@ -50,6 +50,7 @@ const INNER = {
         </svg>
         <div class="mb-glyph-ico">${icon("glyph")}<span></span></div>
       </div>
+      <div class="mb-glyph-pips" aria-hidden="true"><i></i><i></i></div>
     </div>`,
 };
 
@@ -145,13 +146,18 @@ export function render(m) {
     if (prev[id + ".o"] !== "0") { prev[id + ".o"] = "0"; c.fg.style.strokeDashoffset = "0"; }
   }
 
-  // 敌方塔防：剩下多少冷却环就有多长（逆时针退回 12 点）；可用时环是满的、塔点亮、光晕加深——
-  // "敌方此刻有塔防"是威胁态，要最显眼。冷却中在圆心写剩余时间（和游戏里技能冷却一样），
-  // 倒计时那排不写数字，但塔防要算"还剩几秒能强推"，用户要精确值（2026-10-09）
-  const gm = m.glyph || { ready: true, remaining: 0, total: 360 };
+  // 敌方塔防：冷却中剩下多少冷却环就有多长（逆时针退回 12 点），圆心写剩余时间（和游戏里技能冷却一样），
+  // 倒计时那排不写数字，但塔防要算"还剩几秒能强推"，用户要精确值（2026-10-09）。
+  // 可用时塔点亮、光晕加深——"敌方此刻有塔防"是威胁态，要最显眼。
+  // 7.42 充能制（2026-11-19）：右边两根竖条是可用次数；可用但没存满时，环画的是**第 2 次补到哪**
+  // （从 12 点顺时针长满），存满了才是整圈。用户在几种画法里挑的这个（和 Dota 自己的充能技能一样）
+  const gm = m.glyph || { ready: true, remaining: 0, total: 360, charges: 2, progress: 1 };
   if (prev["g.r"] !== gm.ready) { prev["g.r"] = gm.ready; els.glyph.dataset.ready = gm.ready ? "1" : "0"; }
+  const gch = String(gm.charges ?? 2);
+  if (prev["g.c"] !== gch) { prev["g.c"] = gch; els.glyph.dataset.charges = gch; }
   set(els.gnum, "g.t", gm.ready ? "" : fmt(gm.remaining));
-  const gfrac = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 360)));
+  const gfrac = gm.ready ? Math.max(0, Math.min(1, gm.progress ?? 1))
+                         : Math.max(0, Math.min(1, gm.remaining / (gm.total || 360)));
   const goff = (CIRC * (1 - gfrac)).toFixed(1);
   if (prev["g.o"] !== goff) { prev["g.o"] = goff; els.cells.glyph.fg.style.strokeDashoffset = goff; }
 
