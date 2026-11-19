@@ -11,16 +11,14 @@ export function loadTowers() {
 }
 
 export class EventTracker {
-  constructor(C, towers) { this.C = C; this.towers = towers; this.reset(); }
+  constructor(C) { this.C = C; this.reset(); }
   reset() {
     this.seen = new Set();
-    // readyAt = null 表示"还没用过也没刷新过"——这时按当前常数算**开局那次冷却**。
-    // **不能在这里把初值写成具体数字**：模式（普通/快速）要到 clock >= 60 才判得出来，
-    // 而两种模式的开局可用时刻不同（快速 3:30、普通 3:00）。写死就不会跟着改。
-    this.glyph = { 2: { readyAt: null, milestones: new Set() },
-                   3: { readyAt: null, milestones: new Set() } };
+    // 7.42 起塔防是充能制，每队只记"什么时候开过"，剩几次、多久补下一次都在 glyphState 里现算。
+    // **不在这里存具体时刻**：模式（普通/快速）要到 clock >= 60 才判得出来，
+    // 两种模式的开局可用时刻不同（快速 3:30、普通 3:00），存死了就不会跟着改。
+    this.glyph = { 2: [], 3: [] };
     this.buyback = {};          // slot -> usedAtClock
-    this.reconstructed = false;
     this.lastClock = null;
   }
   update(packet, state, info) {
@@ -36,74 +34,60 @@ export class EventTracker {
       this.seen.add(key);
       this.handle(j, now);
     }
-    if (!this.reconstructed && info.inMatch && now !== null && now > 60 && state.minimap) {
-      this.reconstruct(state.minimap); this.reconstructed = true;
-    }
   }
   handle(j, now) {
     if (now === null) return;
     switch (j.type) {
-      case "CHAT_MESSAGE_GLYPH_USED": {
-        const g = this.glyph[j.playerid1];
-        if (g) g.readyAt = now + this.C.glyphCooldown;
-        break;
-      }
-      case "CHAT_MESSAGE_TOWER_KILL":
-      case "CHAT_MESSAGE_TOWER_DENY": {
-        const loser = j.type === "CHAT_MESSAGE_TOWER_DENY" ? j.value : 5 - j.value;
-        // **只认 T1 和 T2，T3 不刷新**（2026-09-17 改）。原先把 T3 也算进来，
-        // 按 5 份录像重做归因后去掉了——理由和证据见 design/timers.md。
-        if (j.value3 >= 1 && j.value3 <= 2) this.milestone(loser, "t" + j.value3, now);
-        break;
-      }
-      case "CHAT_MESSAGE_BARRACKS_KILL":
-        if (j.value2 === 155) this.milestone(5 - j.value, "melee", now);
+      case "CHAT_MESSAGE_GLYPH_USED":
+        this.glyph[j.playerid1]?.push(now);
         break;
       case "CHAT_MESSAGE_BUYBACK":
         this.buyback[j.playerid1] = now;
         break;
     }
   }
-  milestone(team, key, now) {
-    const g = this.glyph[team];
-    if (g && !g.milestones.has(key)) { g.milestones.add(key); g.readyAt = now; }
-  }
-  // 中途启动：已消失的塔 = 里程碑已消耗（只标记消耗，不置 ready）
-  reconstruct(minimap) {
-    const alive = [];
-    for (const o of Object.values(minimap)) {
-      if (o && typeof o === "object" && String(o.image || "").startsWith("minimap_tower"))
-        alive.push(o);
-    }
-    const tol = this.towers.tolerance;
-    for (const t of this.towers.towers) {
-      // 只有 T1/T2 是刷新里程碑，T3/T4 不是——重建时也就没必要标记
-      if (t.tier > 2) continue;
-      const found = alive.some(o => o.team === t.team &&
-        Math.abs(o.xpos - t.x) <= tol && Math.abs(o.ypos - t.y) <= tol);
-      if (!found) this.glyph[t.team].milestones.add("t" + t.tier);
-    }
-  }
-  /** 开局那次冷却结束的时刻（clock）。冷却从**开局倒计时开始**那一刻起算，
-      所以可用时刻 = -倒计时长度 + 冷却长度：快速 3:30、普通 3:00。 */
+  /** 开局第一次充能到账的时刻（clock）。充能从**开局倒计时开始**那一刻起算，
+      所以 = -倒计时长度 + glyphFirstReady：快速 3:30、普通 3:00。 */
   firstReadyAt() {
     return -(this.C.pregameLength ?? 0) + (this.C.glyphFirstReady ?? 0);
   }
+  /** 某队此刻的塔防：可用次数、下一次充能到账时刻、上次使用时刻。
+      7.42：开局 0 次，最多存 glyphCharges 次，不满时每 glyphRecharge 秒补一次（满了就停表，
+      用掉一次才重新开始走）；两次使用之间隔 glyphUseCooldown 秒；推塔不再刷新。 */
+  glyphState(team, now) {
+    const max = this.C.glyphCharges ?? 2, every = this.C.glyphRecharge ?? 360;
+    let charges = 0, next = this.firstReadyAt(), lastUse = null;
+    const advance = (t) => {
+      while (next !== null && next <= t) { charges++; next = charges < max ? next + every : null; }
+    };
+    for (const at of this.glyph[team] || []) {
+      if (at > now) break;
+      advance(at);
+      if (next === null) next = at + every;   // 满的时候用掉一次，充能表从这一刻重新走
+      // 算出来 0 次却开了 = 我们漏了什么（中途启动之类），按开之前刚好有一次处理，不扣成负数
+      charges = Math.max(0, charges - 1);
+      lastUse = at;
+    }
+    advance(now);
+    return { charges, next, lastUse };
+  }
   enemyGlyph(info) {
+    const every = this.C.glyphRecharge ?? 360;
     // 没有 clock 就没有"还剩多久"可言（待机、换局那一瞬）。按 ready 显示，
     // 和没有 tracker 时的占位一致。
-    if (info.clock === null) return { ready: true, remaining: 0, total: this.C.glyphCooldown };
+    if (info.clock === null) return { ready: true, remaining: 0, total: every, charges: 0 };
     const enemy = info.myTeam === 2 ? 3 : 2;
-    const g = this.glyph[enemy];
-    const at = g.readyAt ?? this.firstReadyAt();
-    const rem = Math.max(0, Math.ceil(at - info.clock));
-    // **total 是"当前这次冷却有多长"，渲染层用它算环的进度。**
-    // 开局那次不是 300 而是 glyphFirstReady（270）——写死 300 会把开局的环画错，
-    // 而且常数就不该出现在渲染层里。
-    const total = g.readyAt === null
-      ? (this.C.glyphFirstReady ?? this.C.glyphCooldown)
-      : this.C.glyphCooldown;
-    return { ready: rem === 0, remaining: rem, total };
+    const { charges, next, lastUse } = this.glyphState(enemy, info.clock);
+    const gap = this.C.glyphUseCooldown ?? 0;
+    // **total 是"当前这段等待有多长"，渲染层用它算环的进度。**
+    // 没次数时等的是充能：开局那次是 glyphFirstReady（270），之后是 glyphRecharge（360）；
+    // 有次数但刚用过，等的是两次之间那 7 秒。
+    if (charges === 0) {
+      const total = next === this.firstReadyAt() ? (this.C.glyphFirstReady ?? every) : every;
+      return { ready: false, remaining: Math.max(1, Math.ceil(next - info.clock)), total, charges };
+    }
+    const rem = lastUse === null ? 0 : Math.max(0, Math.ceil(lastUse + gap - info.clock));
+    return { ready: rem === 0, remaining: rem, total: gap || 1, charges };
   }
   // **十个人都给，包括自己和队友**（2026-10-08 起）。原生界面里队友的买活冷却
   // 哪儿都看不到——记分板没有、顶栏也没有（用户实测）；自己的只在死了以后的按钮上有。

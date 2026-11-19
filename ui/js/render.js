@@ -148,10 +148,10 @@ export function render(m) {
   // 敌方塔防：剩下多少冷却环就有多长（逆时针退回 12 点）；可用时环是满的、塔点亮、光晕加深——
   // "敌方此刻有塔防"是威胁态，要最显眼。冷却中在圆心写剩余时间（和游戏里技能冷却一样），
   // 倒计时那排不写数字，但塔防要算"还剩几秒能强推"，用户要精确值（2026-10-09）
-  const gm = m.glyph || { ready: true, remaining: 0, total: 300 };
+  const gm = m.glyph || { ready: true, remaining: 0, total: 360 };
   if (prev["g.r"] !== gm.ready) { prev["g.r"] = gm.ready; els.glyph.dataset.ready = gm.ready ? "1" : "0"; }
   set(els.gnum, "g.t", gm.ready ? "" : fmt(gm.remaining));
-  const gfrac = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 300)));
+  const gfrac = gm.ready ? 1 : Math.max(0, Math.min(1, gm.remaining / (gm.total || 360)));
   const goff = (CIRC * (1 - gfrac)).toFixed(1);
   if (prev["g.o"] !== goff) { prev["g.o"] = goff; els.cells.glyph.fg.style.strokeDashoffset = goff; }
 

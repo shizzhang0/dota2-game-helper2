@@ -109,7 +109,7 @@ async function onPacket(pkt) {
   // 不重取的话刚重置的净资产和新建的眼位会拿上一局的装备、眼位初始化
   if (info.newMatch) { pool.reset(); st = pool.update(pkt); readDotaHud(); hidden = false; }
   C = await loadConstants(info.modeOrDefault);
-  if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
+  if (!tracker || info.newMatch) tracker = new EventTracker(C);
   tracker.C = C;                       // 模式判定完成后热切常数
   tracker.update(pkt, st, info);
   if (!wards || info.newMatch) wards = new WardTracker(C);
