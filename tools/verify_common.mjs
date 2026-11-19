@@ -101,7 +101,7 @@ export async function runSelf(recordings, onFrame) {
       const info = match.update(st);
       if (info.newMatch) { pool.reset(); st = pool.update(pkt); }
       const C = await loadConstants(info.modeOrDefault);
-      if (!tracker || info.newMatch) tracker = new EventTracker(C, towers);
+      if (!tracker || info.newMatch) tracker = new EventTracker(C);
       tracker.C = C; tracker.update(pkt, st, info);
       if (!wards || info.newMatch) wards = new WardTracker(C);
       wards.C = C; wards.update(st, info);
