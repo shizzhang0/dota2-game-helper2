@@ -18,6 +18,8 @@
 //     各自数一数回放里那几秒是不是正好死了一个敌方同类眼，攒够了再决定要不要处理（wards.md）
 //   · 有歧义的播报（来时 3 秒内看见过的候选不止一个）：逐条列出每个候选离自己英雄多远、回放里死没死，
 //     攒着看"死的总是离我们近的那个"之类的规律成不成立
+//   · 按离开视野多久分桶（2026-11-20）：没视野、我们画着的敌方眼，分 假眼 / 真眼看见插眼 / 真眼没看见插眼，
+//     各有多少秒是活的、多少秒是幽灵。攒着决定"没看见插眼的真眼干脆不画"值不值（wards.md）
 // 漏显示是危险的一侧（以为安全其实有眼），幽灵是吵的一侧——wards.md 一直按这个方向取舍。
 
 import { findRecordings, matchIdFromArgs, requirePair, runSelf, spectateTimeline, atClock, mmss,
@@ -76,6 +78,11 @@ const ownDiff = [];              // 我方眼倒计时：我们 - 真实
 const crosses = new Map();       // 我们画的叉：`x|y|at` -> { x, y, kind, at }
 let posErr = 0, frames = 0;
 const confGhost = [], confAlive = [];   // 没视野、我们画着的敌方眼的 conf
+/** 离开视野多久的分桶边界（秒） */
+const AWAY = [15, 60, 180];
+const AWAY_GROUPS = ["假眼", "真眼，看见插眼", "真眼，没看见插眼"];
+const awayStat = new Map(AWAY_GROUPS.map(g => [g, [...AWAY, Infinity].map(() => ({ alive: 0, ghost: 0 }))]));
+const unsureSegs = new Map();           // 没看见插眼的真眼：key -> { x, y, alive, ghost, from, to }
 const broadcasts = [];                  // 排眼播报：{ clock, kind, pid, ours, live, held }
 const seenBroadcast = new Set();
 
@@ -123,6 +130,19 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
     const g = ghosts.get(key) || { kind: d.kind, x: d.x, y: d.y, sec: 0, from: clock, to: clock, conf: d.conf };
     g.sec += dt; g.to = clock; g.conf = d.conf;
     ghosts.set(key, g);
+  }
+  // 按离开视野多久分桶。list() 里没有 placed / lastSeen，直接看跟踪器记着的；活不活同上面幽灵的口径
+  for (const [key, w] of wards.enemy) {
+    if (w.lastSeen === clock) continue;
+    const alive = truthEnemy.some(x => x.kind === w.kind && near(x, w));
+    const group = w.kind !== "sentry" ? AWAY_GROUPS[0] : w.placed === false ? AWAY_GROUPS[2] : AWAY_GROUPS[1];
+    const away = clock - w.lastSeen;
+    const b = AWAY.findIndex(hi => away < hi);
+    awayStat.get(group)[b < 0 ? AWAY.length : b][alive ? "alive" : "ghost"] += dt;
+    if (group !== AWAY_GROUPS[2]) continue;
+    const s = unsureSegs.get(key) || { x: w.x, y: w.y, alive: 0, ghost: 0, from: clock, to: clock };
+    s[alive ? "alive" : "ghost"] += dt; s.to = clock;
+    unsureSegs.set(key, s);
   }
   // 漏显示：回放里此刻活着的敌方眼，自己这边在它插下之后见过，却不在我们的列表里
   for (const w of truthEnemy) {
@@ -213,6 +233,20 @@ console.log(`\n画的位置和真眼的最大距离：${posErr.toFixed(0)}（世
 const avg = (xs) => xs.length ? (sum(xs) / xs.length).toFixed(2) : "-";
 console.log(`\n没视野、我们画着的敌方眼，平均实心程度（1 = 实心，0 = 最淡）：` +
             `幽灵 ${avg(confGhost)}（${confGhost.length} 个采样），活眼 ${avg(confAlive)}（${confAlive.length} 个采样）`);
+
+// ── 按离开视野多久分桶 ──
+// "活着"和幽灵一个口径：回放里 SAME 以内有敌方同类眼。旧幽灵旁边新插了一个也算活着（标记碰巧指对了地方），看逐个那几行分辨
+console.log(`
+没视野、我们画着的敌方眼，按离开视野多久分（活着 / 幽灵，秒；攒证据用，见 wards.md）：`);
+const awayLabel = (i) => i === 0 ? `<${AWAY[0]}s` : i === AWAY.length ? `≥${AWAY[i - 1]}s` : `${AWAY[i - 1]}~${AWAY[i]}s`;
+for (const [g, bs] of awayStat) {
+  const cell = (c) => `${Math.round(c.alive)} / ${Math.round(c.ghost)}`;
+  const all = { alive: sum(bs.map(c => c.alive)), ghost: sum(bs.map(c => c.ghost)) };
+  console.log(`  ${g}：` + bs.map((c, i) => `${awayLabel(i)} ${cell(c)}`).join("，") + `；合计 ${cell(all)}`);
+}
+for (const s of [...unsureSegs.values()].sort((a, b) => b.ghost - a.ghost).slice(0, TOP)) {
+  console.log(`    没看见插眼的真眼 ${where(s)}  ${mmss(s.from)} ~ ${mmss(s.to)}  活着 ${Math.round(s.alive)} 秒，幽灵 ${Math.round(s.ghost)} 秒`);
+}
 
 // ── 排眼播报里还没处理的两种 ──
 // 对得上 = 回放里播报前 3 秒到后 10 秒之间，正好死了一个提前没了的敌方同类眼，而且我们那时记着它
