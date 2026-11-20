@@ -94,10 +94,11 @@ A strip on top of the minimap frame.
 
 - **Net worth**, with GPM and XPM beside it. Net worth = items + stash + ward dispenser +
   items in transit on the courier + gold
-- **Enemy glyph** is the warm-tinted cell on the right, so it reads as the enemy's. The seconds
-  left sit in the centre while on cooldown; when it's ready the ring fills, the tower lights up
-  and the glow gets stronger. Losing the first T1, the first T2 or the first melee barracks
-  refreshes it, and that's all accounted for — it shows whether the enemy **has a glyph right
+- **Enemy glyph** is the warm-tinted cell on the right, so it reads as the enemy's. Since 7.42
+  the glyph has charges: up to two, one more every 6 minutes, and losing buildings no longer
+  refreshes it. The two bars on the right are the charges left. Seconds in the centre mean the
+  enemy can't glyph right now; the tower lit with no number means they can, and the ring then
+  shows how far the second charge has come — it shows whether the enemy **has a glyph right
   now**, not just when they last used one
 
 > [!NOTE]
