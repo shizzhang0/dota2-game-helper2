@@ -218,6 +218,10 @@ def build_prices(items_txt, ids_txt):
         charges = field("ItemInitialCharges")
         if charges and int(charges) > 0:
             e["charges"] = int(charges)
+        # 商店库存上限（真眼 8、假眼 4……）：一次最多买这么多，净资产认"一包买了几个真眼"时用
+        stock = field("ItemStockMax")
+        if stock and int(stock) > 0:
+            e["stockMax"] = int(stock)
         prices[name[len("item_"):]] = e
     return prices
 

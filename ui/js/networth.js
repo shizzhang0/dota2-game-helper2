@@ -30,7 +30,7 @@ const TP_GIFT_WINDOW = 3;
 
 /** 认"买真眼进架子"时允许的金币偏差。同一包里的被动收入约 +2，取 8 够宽也够紧。 */
 const SENTRY_TOL = 8;
-const SENTRY_MAX_BUY = 2;   // 一包里最多认几个真眼，见 noteDispenser
+const SENTRY_MAX_BUY = 2;   // 一包里最多认几个真眼（眼架刚出现那一包例外，按库存上限），见 noteDispenser
 
 /** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
 const SPEND_MIN = 150;
@@ -685,6 +685,16 @@ export class EconTracker {
       // 二十六份回放录制十人复算触发 134 次：15 次帮忙、0 次帮倒忙、其余不变；十一对自视角三局变好、八局不变
       const up = assetUp + fromSlot + fromStash;
       const sentry = prices.ward_sentry?.cost ?? 50;
+      // **眼架刚出现的那一包，按真眼的库存上限认**（2026-11-20）。一次买好几个真眼，散装的眼和新买的当场并成架子，
+      // 物品栏里只看见一个架子冒出来：m9096778683（冰女）17:54 四个散装真眼 + 新买 3 个、m9097847064（剧毒）20:24
+      // 凭空买 4 个，上限 2 都整笔漏掉（150 / 200），一直少到架子插完。架子刚出现 = 这一包刚买了眼或刚合成，
+      // 付掉的钱是 50 的整数倍、看得见的东西又没多，就是真眼；一次最多只能买到库存上限（items.txt 的 ItemStockMax，
+      // 7.42 真眼 8），所以上限取它，不按某个人的买眼习惯定。其余时候仍是 SENTRY_MAX_BUY。
+      // 五局回放十人复算（只看触发后 2 分钟）触发 7 次全帮忙，认出 3 个的 6 次（多是普通模式里别的玩家）、4 个的 1 次；
+      // 三对自视角：冰女平均|差| 61 → 46、剧毒 40 → 21 且终局 −150 → 0、斯拉达不变。所有时候都放宽多一次帮倒忙
+      //（普通模式开局 0:51），不采用。**十人复算拉长到 15 分钟不能用来评估这一类**：复算那边插眼数永远传 0，
+      // 架子估值只加不减，多认进去的眼永远扣不掉，窗口越长越显得帮倒忙（2026-11-20 第一次评估就是被它误导的）
+      const maxBuy = this.prevDispenser ? SENTRY_MAX_BUY : (prices.ward_sentry?.stockMax ?? SENTRY_MAX_BUY);
       // **买真眼进架子只能靠金币认出来。** 原先读 `CHAT_MESSAGE_ITEM_PURCHASE`，
       // 而**买眼根本不发这个事件**——实测一整局 `id=42/43/218` 一条都没有，
       // 那条路是死代码。于是估值只能从"合成那一刻的散装眼平移"拿到一次，
@@ -703,7 +713,7 @@ export class EconTracker {
       // 一次可以买不止一个。实测认到两个（100 金）三局改善、一局退 1.4、两局不变；
       // 放到三个一分不涨——买第三个的时候架子早满了。
       if (!died && up < sentry / 2) {
-        for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
+        for (let k = maxBuy; k >= 1; k--) {
           if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
         }
       } else if (!died) {
@@ -716,7 +726,7 @@ export class EconTracker {
         // 十一份观战录制逐次审查：触发 11 次，8 次帮忙（分布在 7 份录制）、3 次帮倒忙，
         // 那 3 次都是后面"眼架送到身上、和散装真眼合并"那步本来就多算，不是认错了眼。
         const spare = paid - up;
-        for (let k = SENTRY_MAX_BUY; k >= 1; k--) {
+        for (let k = maxBuy; k >= 1; k--) {
           if (Math.abs(spare - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
         }
       }
