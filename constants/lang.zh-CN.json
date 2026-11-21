@@ -41,6 +41,7 @@
   "show.wardmap": "眼位",
   "legend.enemyObs": "敌方假眼",
   "legend.enemySentry": "敌方真眼",
+  "legend.enemySentryUnsure": "真眼，不知何时插的",
   "legend.killed": "刚被排掉",
   "tray.edit": "设置",
   "tray.quit": "退出",
