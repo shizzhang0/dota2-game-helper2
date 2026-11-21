@@ -32,6 +32,11 @@ const TP_GIFT_WINDOW = 3;
 const SENTRY_TOL = 8;
 const SENTRY_MAX_BUY = 2;   // 一包里最多认几个真眼（眼架刚出现那一包例外，按库存上限），见 noteDispenser
 
+/** 信使交货：自己的信使离英雄最近时不超过这么远、下一包开始远离，就算这一趟交完了（见 noteCourier） */
+const COURIER_HANDOFF = 1500;
+/** 交货之后再等几秒才结账——东西有时晚一包才出现在物品栏 */
+const COURIER_SETTLE = 2;
+
 /** 一笔"说不清去向的支出"至少要这么多才记账。低于这个数分不清是买东西还是取样噪声。 */
 const SPEND_MIN = 150;
 
@@ -342,6 +347,9 @@ export class EconTracker {
     this.dispLastInStash = false;   // 眼架最后一次看见时是不是只在储藏处（从那儿消失 = 被信使拿走）
     this.prevGold = null;           // 上一包的金钱，用来把"卖出"和"被信使取走"分开
     this.picked = [];               // 被信使从储藏处取走的东西 { key, cost, at }：在途账只记金额，这里记是什么
+    this.courierD = null;           // 自己的信使离英雄多远（上一包），见 noteCourier
+    this.courierCloser = false;     // 上一包是不是在靠近
+    this.handoffAt = null;          // 判定交货的时刻，等 COURIER_SETTLE 秒后结账
     this.prevSlotItems = null;      // 上一包装备栏逐件，到货按名字对（matchArrivals）
     this.ttl = TRANSIT_TTL;         // 在途账期限，update() 里按模式从常数表取
     this.prevTp = null;             // 传送槽充能数
@@ -714,7 +722,7 @@ export class EconTracker {
       // 放到三个一分不涨——买第三个的时候架子早满了。
       if (!died && up < sentry / 2) {
         for (let k = maxBuy; k >= 1; k--) {
-          if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
+          if (Math.abs(paid - k * sentry) <= SENTRY_TOL) { this.addSentries(k * sentry, clock); break; }
         }
       } else if (!died) {
         // **同一包里买眼又买了别的**（2026-10-04 补）。上面那条要求"装备/储藏处没多东西"，
@@ -727,7 +735,7 @@ export class EconTracker {
         // 那 3 次都是后面"眼架送到身上、和散装真眼合并"那步本来就多算，不是认错了眼。
         const spare = paid - up;
         for (let k = maxBuy; k >= 1; k--) {
-          if (Math.abs(spare - k * sentry) <= SENTRY_TOL) { this.dispenserValue += k * sentry; break; }
+          if (Math.abs(spare - k * sentry) <= SENTRY_TOL) { this.addSentries(k * sentry, clock); break; }
         }
       }
       this.dispenserValue = Math.max(0, this.dispenserValue - placedSentries * sentry);
@@ -788,6 +796,10 @@ export class EconTracker {
     const tpUp = (tpNow - (this.prevTpSlot ?? tpNow)) * (prices.tpscroll?.cost ?? 100);
     this.prevTpSlot = tpNow;
     const hadDispenser = this.prevDispenser;
+    // 这一包信使从储藏处取走了东西：买下的东西可能同一秒就被取走、一帧都没在储藏处出现过（见 addSentries）。
+    // 只认眼以外的东西少了：储藏处里的散装眼当场并成眼架，长得也是"储藏处少了东西"，那不是信使来过
+    this.stashPickedNow = this.prevStash !== null && stash < this.prevStash
+      && vanishedItems(this.prevStashItems || [], stashItems).some(x => !isWard(x.key));
     this.noteDispenser(prices, wards, wardsStash, dispenser, placedSentries, clock,
                        goldBefore === null ? 0 : goldBefore - gold,
                        (slot - (this.prevSlot ?? slot)) + (stash - (this.prevStash ?? stash)) + tpUp,
@@ -873,7 +885,7 @@ export class EconTracker {
           let moved = this.wardsMovedFromStash;
           for (const x of vanishedItems(this.prevStashItems || [], stashItems)) {
             if (moved > 0 && isWard(x.key)) { moved -= x.cost; continue; }
-            this.picked.push({ key: x.key, cost: x.cost, at: clock });
+            this.picked.push({ key: x.key, cost: x.cost, at: clock, n: this.pkt });
           }
         }
       } else if (gained > 0) {
@@ -894,16 +906,19 @@ export class EconTracker {
         // 别的在途账（m9078609155 司夜 22:26 买风之杖配件、同包进了赏金，冲掉 225，接着又一次，少算 900）。
         // 现在按物品名对：新出现在储藏处的东西，在 `picked` 里（被信使取走过）才冲销它那份。
         // 逐次审查：触发 155 次，帮忙 16、帮倒忙 3——那 3 次都是旧版误冲恰好抵掉了别处已有的误差
-        let ret = 0;
+        let ret = 0; const from = [];
         for (const x of vanishedItems(stashItems, this.prevStashItems || [])) {   // 这一包储藏处新出现的
           const i = this.picked.findIndex(p => p.key === x.key);
           if (i < 0) continue;
-          ret += x.cost; this.picked.splice(i, 1);
+          ret += x.cost; from.push({ n: this.picked[i].n, v: x.cost }); this.picked.splice(i, 1);
         }
-        if (ret > 0) this.deliver(Math.min(back, ret));
+        if (ret > 0) this.deliver(Math.min(back, ret), from);
       }
+      // 挂起的"真眼还是被立刻取走的东西"到期也没被认领：按真眼算进眼架（见 addSentries）
+      for (const t of this.transit) if (t.ambig && clock - t.at >= this.ttl) this.dispenserValue += t.v;
       this.transit = this.transit.filter(t => clock - t.at < this.ttl);
       this.picked = this.picked.filter(p => clock - p.at < this.ttl);
+      this.noteCourier(state, prices, clock);
       // **信使把 TP 送进了传送槽，要销掉它在储藏处消失时记的那笔在途账。**
       // 传送槽不算进 `slot`，上面"装备栏变多 = 到货"那条管不到它；而 noteTp 又会把这张
       // 当成自购的记上 100——同一张 TP 记了两遍，直到在途账超时。常见的形状是传送途中
@@ -1145,23 +1160,87 @@ export class EconTracker {
     };
     const now = byName(slotItems), before = byName(this.prevSlotItems);
     let matched = 0, unmatched = 0;
+    const from = [];       // 认领到的那几件是哪几笔在途账记下的，deliver 先从它们扣
     for (const [name, v] of now) {
       const d = v - (before.get(name) || 0);
       if (d <= 0) continue;
       let take = 0;
       for (let i = 0; i < this.picked.length && take < d;) {
-        if (this.picked[i].key.split("|")[0] === name) { take += this.picked[i].cost; this.picked.splice(i, 1); }
+        if (this.picked[i].key.split("|")[0] === name) {
+          take += this.picked[i].cost; from.push({ n: this.picked[i].n, v: this.picked[i].cost }); this.picked.splice(i, 1);
+        }
         else i++;
       }
       matched += Math.min(d, take);
       if (d > take && name !== "ward_sentry" && name !== "ward_observer") unmatched += d - take;
     }
-    if (matched > 0) this.deliver(matched);
+    if (matched > 0) this.deliver(matched, from);
     return { matched, unmatched };
   }
 
-  deliver(value) {
+  /** 拿着眼架时付了 50 的整数倍、看得见的东西没多——原先一律当成真眼进了架子。可**同一包里信使正从储藏处取走东西**时，
+      这笔钱也可能是买了别的东西、同一秒就被取走（一帧都没在储藏处出现过）。这时先挂进在途账（`ambig`）：
+      送来的是 TP 之类，TP 到货那段会把它当在途销掉；信使交完货也没被认领，或者到期，才按真眼算进架子。 */
+  addSentries(v, clock) {
+    if (this.stashPickedNow) {
+      // n 给 -1：不能和同一包被取走的东西撞号，否则那件到货时会先从这笔扣（deliver 按 n 认领）
+      this.transit.push({ v, at: clock, n: -1, ambig: true });
+      return;
+    }
+    this.dispenserValue += v;
+  }
+
+  /** 自己的信使交完货了，这一趟带来、却没在物品栏里出现的消耗品是到手就用掉了，从在途账划掉（2026-11-22）。
+      药膏、净化药水送到身上不到一秒就被喝掉，GSI 每秒一包，物品栏里一帧都没有它，在途账只能挂到期限：
+      m9099623530（撼地者）1:54、2:51 各取走一瓶药膏，信使 2:00 / 3:02 贴到身边（856 / 640）后掉头，药膏始终没出现。
+      判据：自己的信使离英雄最近时在 COURIER_HANDOFF 以内、下一包开始远离 = 这一趟交完了；再等 COURIER_SETTLE 秒，
+      这之前被取走、还没按名字认领到的消耗品（眼和 TP 不算，它们另有去处）就划掉。也顺带清掉合成时被吃掉的配件
+      （树枝和魔棒卷轴一起送来、到手就成了魔棒，"树枝"永远不会出现）。
+      回放里认不出信使是谁的，十人复算评估不了，只能看自视角：九对里触发 5 次全在撼地者和拉比克 m9099796496，
+      撼地者平均|差| 23 → 7、拉比克 23 → 20，其余七局一模一样。认不出自己的信使（死了之类）就不触发，和原来一样等期限 */
+  noteCourier(state, prices, clock) {
+    const team = state.player?.team_name === "dire" ? 3 : 2;
+    const h = state.hero;
+    // 自己的信使在小地图上的图标和队友的不一样（队友的是 minimap_plaincircle）
+    const c = Object.values(state.minimap || {}).find(o => o && o.unitname === "npc_dota_courier"
+                                                       && o.team === team && o.image !== "minimap_plaincircle");
+    if (!c || typeof h?.xpos !== "number" || h.alive === false) { this.courierD = null; this.courierCloser = false; return; }
+    const d = Math.hypot(c.xpos - h.xpos, c.ypos - h.ypos);
+    const prev = this.courierD;
+    if (prev !== null && d > prev && this.courierCloser && prev <= COURIER_HANDOFF && this.handoffAt === null) this.handoffAt = clock;
+    this.courierCloser = prev !== null && d < prev;
+    this.courierD = d;
+    if (this.handoffAt === null || clock - this.handoffAt < COURIER_SETTLE) return;
+    const at = this.handoffAt;
+    this.handoffAt = null;
+    // 挂起的那几笔这一趟没被认领（没送来 TP 之类）：钱是进了眼架的真眼
+    for (const t of this.transit) if (t.ambig && t.at < at) { this.dispenserValue += t.v; t.v = 0; }
+    for (let i = 0; i < this.picked.length;) {
+      const p = this.picked[i], name = p.key.split("|")[0];
+      if (p.at < at && prices[name]?.consumable && !/^ward_|^tpscroll$/.test(name)) {
+        const t = this.transit.find(t => t.n === p.n && t.v > 0);
+        if (t) t.v = Math.max(0, t.v - p.cost);
+        this.picked.splice(i, 1);
+      } else i++;
+    }
+    this.transit = this.transit.filter(t => t.v > 0);
+  }
+
+  /** 销掉在途账。`from` 是按物品名认领到的那几件各自属于哪一笔（picked 记的 n），**先从那几笔扣，剩下的才从最早的扣**。
+      （2026-11-22）原先一律从最早的扣：被立刻用掉、自视角看不见到货的药膏留在最早那笔里，后来别的东西到货时
+      扣掉的正是这笔药膏，零头挪到新记的那笔上，陈账就这样一路续命。m9099623530（撼地者）两瓶药膏 1:54 被取走、
+      到手就喝掉，那 200 本该 90 秒过期，5:06 秘法鞋卷轴到货扣的是它、5:38 真眼到货又扣一次，多 200 挂到 6:25。
+      十一局回放十人复算触发 3 次、全帮忙，平均|差| 15.73 → 15.49；九对自视角撼地者 43 → 23、其余八局一模一样 */
+  deliver(value, from = []) {
+    for (const f of from) {
+      const t = this.transit.find(t => t.n === f.n && t.v > 0);
+      if (!t) continue;
+      const d = Math.min(t.v, f.v, value);
+      t.v -= d; value -= d;
+      if (value <= 0) break;
+    }
     for (const t of this.transit) {
+      if (value <= 0) break;
       const d = Math.min(t.v, value);
       t.v -= d; value -= d;
       if (value <= 0) break;
