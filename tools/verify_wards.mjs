@@ -13,7 +13,7 @@
 //   · 被排的叉：我们画的叉，回放里那个我方眼是不是真在到期前没了；以及该画没画的
 //   · 我方眼倒计时：我们显示的剩余秒数 vs 回放里那个眼真实的剩余寿命
 // 另外两项是给以后攒证据的（2026-10-21）：
-//   · 淡化：没视野、我们自己画着的敌方眼，幽灵和活眼各画得多实（平均 conf）——幽灵该比活眼淡
+//   · 没视野、我们画着的敌方眼按离开视野多久分桶，各多少秒活、多少秒幽灵（没看见插眼的真眼单列——渲染层给它压问号）
 //   · 排眼播报的两种没处理的情形：无主（-1，小兵 / 塔打掉的）、迟到（来时没有 3 秒内看见过的候选）。
 //     各自数一数回放里那几秒是不是正好死了一个敌方同类眼，攒够了再决定要不要处理（wards.md）
 //   · 有歧义的播报（来时 3 秒内看见过的候选不止一个）：逐条列出每个候选离自己英雄多远、回放里死没死，
@@ -72,12 +72,11 @@ const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) <= SAME;
 // ── 自己打的：跑真实管线，逐包和回放同一时刻比 ──
 let myTeam = null, C = null, prevClock = null;
 const seenEnemy = [];            // 自己视角里看见过的敌方眼：{ kind, x, y, at }
-const ghosts = new Map();        // 我们画着、回放里没有：key -> { kind, x, y, sec, from, to, conf }
+const ghosts = new Map();        // 我们画着、回放里没有：key -> { kind, x, y, sec, from, to, unsure }
 const misses = new Map();        // 回放里有、见过、没画：life -> { sec, from, to }
 const ownDiff = [];              // 我方眼倒计时：我们 - 真实
 const crosses = new Map();       // 我们画的叉：`x|y|at` -> { x, y, kind, at }
 let posErr = 0, frames = 0;
-const confGhost = [], confAlive = [];   // 没视野、我们画着的敌方眼的 conf
 /** 离开视野多久的分桶边界（秒） */
 const AWAY = [15, 60, 180];
 const AWAY_GROUPS = ["假眼", "真眼，看见插眼", "真眼，没看见插眼"];
@@ -124,11 +123,10 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   // 幽灵
   for (const d of list.enemy) {
     const m = truthEnemy.filter(w => w.kind === d.kind && near(w, d));
-    if (!d.visible) (m.length ? confAlive : confGhost).push(d.conf);
     if (m.length) { posErr = Math.max(posErr, Math.min(...m.map(w => Math.hypot(w.x - d.x, w.y - d.y)))); continue; }
     const key = `${d.kind}|${d.x}|${d.y}`;
-    const g = ghosts.get(key) || { kind: d.kind, x: d.x, y: d.y, sec: 0, from: clock, to: clock, conf: d.conf };
-    g.sec += dt; g.to = clock; g.conf = d.conf;
+    const g = ghosts.get(key) || { kind: d.kind, x: d.x, y: d.y, sec: 0, from: clock, to: clock, unsure: d.unsure };
+    g.sec += dt; g.to = clock; g.unsure = d.unsure;
     ghosts.set(key, g);
   }
   // 按离开视野多久分桶。list() 里没有 placed / lastSeen，直接看跟踪器记着的；活不活同上面幽灵的口径
@@ -158,9 +156,12 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   // 我方眼倒计时
   for (const o of list.own) {
     if (o.remaining === null) continue;
-    const life = lives.find(l => l.team === myTeam && l.kind === o.kind && near(l, o)
-                                 && l.start <= clock + 3 && l.end >= clock - GAP);
-    if (!life) continue;
+    // **取位置最近的那一个**（2026-11-22）。原先取第一个"够近"的：两个我方眼挨着插时（m9098020185 远古冰魄
+    // 30:57 和 33:08 两个真眼相距 80），后插的那个配到了先插的寿命上，报出"倒计时差 131 秒"，其实程序是对的
+    const cands = lives.filter(l => l.team === myTeam && l.kind === o.kind && near(l, o)
+                                    && l.start <= clock + 3 && l.end >= clock - GAP);
+    if (!cands.length) continue;
+    const life = cands.reduce((a, b) => Math.hypot(a.x - o.x, a.y - o.y) <= Math.hypot(b.x - o.x, b.y - o.y) ? a : b);
     const dur = o.kind === "sentry" ? C.wardSentryDuration : C.wardObserverDuration;
     ownDiff.push(o.remaining - (life.start + dur - clock));
   }
@@ -181,7 +182,7 @@ console.log(`幽灵（画着、实际已经没了）：${longG.length} 个，合
             `；另有 ${gs.length - longG.length} 个短于 ${SHORT} 秒（两边上报差一两包）`);
 for (const g of longG.sort((a, b) => b.sec - a.sec).slice(0, TOP)) {
   console.log(`  ${kindName(g.kind)} ${where(g)}  ${mmss(g.from)} ~ ${mmss(g.to)}  挂了 ${Math.round(g.sec)} 秒` +
-              `，最后的淡化程度 ${g.conf.toFixed(2)}（1 = 实心，0 = 最淡）`);
+              (g.unsure ? "（画的是问号：没看见插眼）" : ""));
 }
 
 // ── 漏显示 ──
@@ -228,11 +229,6 @@ if (ownDiff.length) {
   console.log("\n我方眼倒计时：没有可比的采样");
 }
 console.log(`\n画的位置和真眼的最大距离：${posErr.toFixed(0)}（世界坐标，地图是 ±8400）`);
-
-// ── 淡化 ──
-const avg = (xs) => xs.length ? (sum(xs) / xs.length).toFixed(2) : "-";
-console.log(`\n没视野、我们画着的敌方眼，平均实心程度（1 = 实心，0 = 最淡）：` +
-            `幽灵 ${avg(confGhost)}（${confGhost.length} 个采样），活眼 ${avg(confAlive)}（${confAlive.length} 个采样）`);
 
 // ── 按离开视野多久分桶 ──
 // "活着"和幽灵一个口径：回放里 SAME 以内有敌方同类眼。旧幽灵旁边新插了一个也算活着（标记碰巧指对了地方），看逐个那几行分辨

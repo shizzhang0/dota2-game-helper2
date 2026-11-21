@@ -44,16 +44,10 @@ function killedShow(C) {
   return typeof v === "number" && v > 0 ? v : 20;
 }
 
-/** "没看见插眼"的敌方真眼：一开始最多画多实、离开视野后多少秒淡到最淡。缺键时兜默认值，同 killedShow。
-    见下面 list() 里 unsure 那段和 design/wards.md「没看见插眼的真眼淡得快」 */
-function unsureFade(C) {
-  const conf = C && typeof C.wardUnsureConf === "number" ? C.wardUnsureConf : 0.5;
-  const sec = C && typeof C.wardUnsureFade === "number" && C.wardUnsureFade > 0 ? C.wardUnsureFade : 60;
-  return { conf, sec };
-}
-
 /** 第一次看见这个敌方眼时，旁边（PLACER_RADIUS 以内）有没有看得见的敌方英雄——有就多半是看着对面插下的，
     知道它的准确年龄。minimap 里 (0,0) 的英雄条目是幽灵，不算 */
+/** 排眼的人离被排的眼最远信到多远（见 noteWardKills 第 3 条；实测最远 1372） */
+const KILLER_REACH = 1500;
 const PLACER_RADIUS = 600;
 function placerNear(w, state, myTeam) {
   if (myTeam === null) return true;          // 不知道哪边是自己，当可靠的算，不往淡里画
@@ -111,6 +105,46 @@ export class WardTracker {
     this.pendingKills = [];       // 候选不止一个、先记下来等着看的排眼事件，见 resolveKills()
     this.claimed = new Map();     // 被一条无歧义的排眼事件删掉的眼 -> 何时，见 resolveKills()
     this.freshSentries = [];      // 我方刚插下的真眼 {x, y, at}，见 update() 里"插眼的瞬时视野"
+    this.allyVotes = new Map();   // "队内槽位|英雄名" -> 票数：几号玩家是哪个英雄，见 noteAllies()
+  }
+
+  /** **几号玩家是哪个英雄**（2026-11-22）。排眼播报只给玩家编号（playerid1），小地图的英雄条目只给英雄名，
+      自视角里没有现成的对应。但小地图条目按编号（o151、o152……）排，我方五个英雄的顺序就是槽位顺序、只是整体
+      可能错开几位；自己的图标是 minimap_herocircle_self、自己的槽位是 player.team_slot，拿它把错位对齐。
+      有人阵亡复活后条目会重编号、顺序乱一阵（逐包只有 60%~85% 排对），所以从开局起每包投一票、取票最多的：
+      九对 7.42 成对录制全部推对，从 -0:59 起整局没翻过。(0,0) 的条目是幽灵（多是这局根本没有的英雄），不算 */
+  noteAllies(state, info) {
+    const ts = state.player?.team_slot;
+    if (typeof ts !== "number" || info.myTeam === null) return;
+    const heroes = Object.entries(state.minimap || {})
+      .filter(([, o]) => o && o.team === info.myTeam && /^npc_dota_hero_/.test(String(o.unitname))
+                         && /herocircle/.test(String(o.image)) && !(o.xpos === 0 && o.ypos === 0))
+      .sort((a, b) => +a[0].replace(/\D/g, "") - +b[0].replace(/\D/g, ""));
+    const uniq = [];
+    for (const [, o] of heroes) if (!uniq.some(u => u.unitname === o.unitname)) uniq.push(o);
+    const si = uniq.findIndex(o => o.image === "minimap_herocircle_self");
+    if (uniq.length !== 5 || si < 0) return;
+    uniq.forEach((o, i) => {
+      const k = `${(i - si + ts + 5) % 5}|${o.unitname}`;
+      this.allyVotes.set(k, (this.allyVotes.get(k) || 0) + 1);
+    });
+  }
+
+  /** 排眼的那个人此刻在哪（活着、位置可信才给），给不出就 null。见 noteWardKills 第 3 条 */
+  killerPos(state, info, pid) {
+    const lo = info.myTeam === 2 ? 0 : 5;
+    if (!(pid >= lo && pid <= lo + 4)) return null;
+    let name = null, best = 0;
+    for (const [k, v] of this.allyVotes) {
+      const [slot, n] = k.split("|");
+      if (+slot === pid - lo && v > best) { name = n; best = v; }
+    }
+    if (!name) return null;
+    const o = Object.entries(state.minimap || {})
+      .filter(([, o]) => o && o.unitname === name && o.team === info.myTeam && /herocircle/.test(String(o.image)))
+      .sort((a, b) => +a[0].replace(/\D/g, "") - +b[0].replace(/\D/g, ""))[0]?.[1];
+    if (!o || !(o.visionrange > 0) || (o.xpos === 0 && o.ypos === 0)) return null;   // 阵亡时视野半径是 0
+    return { x: o.xpos, y: o.ypos };
   }
 
   /** 我方排掉敌方眼的事件 -> 把对应的记忆删掉。
@@ -128,7 +162,8 @@ export class WardTracker {
       2. 候选只取**当前仍可见**的（距上次确认 <= `wardKillConfirm`）。
          **排眼需要真视**，刚被排掉的那个此刻必然还在我们的真视里；
          几分钟前才确认过的那个不可能是它。
-      3. 恰好一个就删。不止一个的**先记下来等一会儿**（`resolveKills`，2026-10-21）：
+      3. 恰好一个就删。不止一个的，**删离排眼的人最近的那个**（2026-11-22，见 noteAllies / killerPos）；
+         排眼的人阵亡了、位置不知道、或者最近的也远过 KILLER_REACH，才**先记下来等一会儿**（`resolveKills`，2026-10-21）：
          接连排掉两个的时候，两个事件来时两个候选都看得见，原先两次都判成歧义、一个都不删，
          两个各挂成七分钟的幽灵（m9053873687 里两回）。
 
@@ -138,8 +173,11 @@ export class WardTracker {
       > **歧义时宁可不删。** 留幽灵最多让你多绕一次路；删错会把**活着的**眼从地图上
       > 抹掉，而你会以为那儿安全。这和敌方眼淡化那次是同一个取舍方向。
 
-      > backlog 原先设想的是"按排眼者位置就近删"。**那条行不通**：minimap 的英雄
-      > 图标没有玩家槽位，自视角也拿不到队友的英雄，`playerid1` 根本落不到地图上。
+      > backlog 原先设想的是"按排眼者位置就近删"，2026-09 判成行不通："minimap 的英雄
+      > 图标没有玩家槽位，自视角也拿不到队友的英雄，`playerid1` 根本落不到地图上"。
+      > **2026-11-22 推翻了**：小地图里我方英雄带英雄名和坐标，槽位可以从条目顺序推出来（noteAllies）。
+      > 九对成对录制里候选不止一个的 10 条，按"离排眼的人最近"删全对，幽灵 17 个 1651 秒 → 7 个 1135 秒、漏显示不变。
+      > 下面原先那几句是当时的判断：
       > 而且实测"离我方英雄最近"在能定真值的样本上全错——后来发现真值本身就定不了
       > （自视角下"之后没再出现"只说明离开视野）。 */
   noteWardKills(state, info) {
@@ -158,14 +196,27 @@ export class WardTracker {
       const kind = type.includes("SENTRY") ? "sentry" : "obs";
       const live = [...this.enemy].filter(([, w]) =>
         w.kind === kind && clock - w.lastSeen <= this.C.wardKillConfirm);
-      if (live.length > 1) this.pendingKills.push({ kind, at: clock, keys: live.map(([k]) => k) });
-      if (live.length !== 1) continue;
-      this.enemy.delete(live[0][0]);
-      this.claimed.set(live[0][0], clock);
+      // **候选不止一个时，删离排眼的人最近的那个**（2026-11-22）。排眼要贴近，被排的眼离排眼的人
+      // 中位 411、九成在 689 以内、最远见过 1372（九对成对录制 67 条）；超出 KILLER_REACH 就不信，照旧等着看
+      let pick = live.length === 1 ? live[0] : null;
+      if (live.length > 1) {
+        const kp = this.killerPos(state, info, j.playerid1);
+        if (kp) {
+          const d = ([, w]) => Math.hypot(w.x - kp.x, w.y - kp.y);
+          const near = live.reduce((a, b) => d(a) <= d(b) ? a : b);
+          if (d(near) <= KILLER_REACH) pick = near;
+        }
+      }
+      if (!pick) {
+        if (live.length > 1) this.pendingKills.push({ kind, at: clock, keys: live.map(([k]) => k) });
+        continue;
+      }
+      this.enemy.delete(pick[0]);
+      this.claimed.set(pick[0], clock);
       // **必须压制一段时间**：GSI 上报有滞后（实测约 7 秒），眼死了之后还会在
       // minimap 里留一会儿。不压制的话下一包又把它加回来，而且 firstSeen 会重置成
       // 现在——等于把一个旧幽灵换成一个**满寿命**的新幽灵，比不删还糟。
-      this.dewarded.set(live[0][0], clock);
+      this.dewarded.set(pick[0], clock);
     }
   }
 
@@ -217,6 +268,7 @@ export class WardTracker {
 
     // 先处理排眼事件，再刷新记忆：候选集要反映"这一包刷新之前"的状态，
     // 和验证时量的是同一个口径。
+    this.noteAllies(state, info);
     this.noteWardKills(state, info);
     this.resolveKills(clock);
     for (const [k, at] of [...this.dewarded]) {
@@ -354,36 +406,21 @@ export class WardTracker {
     return {
       own: [...this.own.values()].map(w => ({ x: w.x, y: w.y, kind: w.kind,
                                               remaining: this.remaining(w, clock) })),
-      // conf：这条线索有多新。1 = 此刻真视里确认着，0 = 已经放到寿命上限、马上要删。
-      // 敌方眼的插放时刻无从得知，能诚实表达的只有"多久没看见了"——渲染层据此淡化。
-      // 见本文件对应的 design/wards.md「敌方眼按多久没看见淡化」。
-      enemy: [...this.enemy.values()].map(w => {
-        const life = w.kind === "sentry" ? this.C.wardSentryDuration : this.C.wardObserverDuration;
-        // 用"离物理上界还剩多少"当置信度，比"多久没看见"更贴近真实剩余寿命
-        const left = life - (clock - (w.firstSeen ?? w.lastSeen));
-        let conf = life > 0 ? Math.min(left / life, 1 - (clock - w.lastSeen) / life) : 1;
-        // **没看见插眼的真眼，淡得快**（2026-10-21）。我们按"第一次看见 = 刚插"算寿命，这只对看着对面插下的眼成立；
-        // 中途才发现的（到期特效、被队友排掉却没播报、本来就插了很久）其实早不止这个岁数。
-        // 八对录制里按"第一次看见时旁边有没有敌方英雄"分：有的画着时 87% 还活着（离开视野三分钟后仍有 82%），
-        // 没有的只有 14%（一分钟内 36%、一到三分钟 17%、三分钟后 1%）。所以后一种从 wardUnsureConf 开始，
-        // wardUnsureFade 秒内淡到最淡——**不删**，最淡时渲染层还留 12% 的影子，到寿命才删，不漏画。
-        // 只管真眼：假眼的尸体视野是 0，进门就被挡掉了，留下的假眼九成是真的。
-        // （原先按"看见不到 8 秒"封顶，看见时长和死活没关系，换成这个）
-        if (w.kind === "sentry" && w.placed === false) {
-          const u = unsureFade(this.C);
-          conf = Math.min(conf, u.conf * Math.max(0, 1 - (clock - w.lastSeen) / u.sec));
-        }
+      // **敌方眼不再淡化，一律实心**（2026-11-21，用户定：实战里淡化很不明显）。画不画、什么时候删都不变，
+      // 只是不再给"这条线索有多新"。
+      // unsure：没看见插眼的真眼（placed === false）——我们按"第一次看见 = 刚插"算寿命，可它中途才被发现，
+      // 真实岁数不知道。五对 7.42 成对录制里没视野时画着的这类真眼 58% 的时间是活的，幽灵也全出在这一类
+      //（假眼和看见插眼的真眼合计 2513 秒、幽灵 0），所以不删，渲染层换个图形（眼上压问号）表示"不确定"。
+      // 见 design/wards.md「敌方眼不再淡化，没看见插眼的真眼画问号」。
+      enemy: [...this.enemy.values()].map(w => ({
+        x: w.x, y: w.y, kind: w.kind,
+        unsure: w.kind === "sentry" && w.placed === false,
         // visible：这一包里还看得见它。GSI 的 minimap 只推我方此刻看得见的敌方单位，
         // 所以"本包有它" = 有视野 = 原生小地图正画着它，渲染层据此不重复画（见 wardmap.js）
-        return { x: w.x, y: w.y, kind: w.kind, conf: Math.max(0, Math.min(1, conf)),
-                 visible: w.lastSeen === clock };
-      }),
-      // 叉也带 conf，和敌方眼一个路子：**刚排的扎眼、快过期的几乎看不见**。
-      // 这样时长放到 20 秒也不糊——新旧一眼能分开，而不是一片同样实的叉。
-      killed: this.killed.map(k => ({
-        ...k,
-        conf: Math.max(0, Math.min(1, 1 - (clock - k.at) / killedShow(this.C))),
+        visible: w.lastSeen === clock,
       })),
+      // 叉在 wardKilledShow 秒内一直实心，到点消失（2026-11-21 起不再淡出，同敌方眼）
+      killed: this.killed.map(k => ({ ...k })),
     };
   }
 }

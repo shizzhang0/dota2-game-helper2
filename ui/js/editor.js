@@ -38,6 +38,7 @@ function showIcon(k) {
 const LEGEND = [
   [wardIcon("observer", 5, 5, 1.9), "enemyObs"],
   [wardIcon("sentry", 5, 5, 1.9),   "enemySentry"],
+  [wardIcon("sentry", 5, 5, 1.9, "", true), "enemySentryUnsure"],
   // 被排的是叉不是点——图例必须跟着地图的形状走，否则这张卡片就骗人了
   [crossIcon(5, 5, 2.8),            "killed"],
 ];
