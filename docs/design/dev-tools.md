@@ -195,7 +195,10 @@ import { EconTracker } from ".../ui/js/networth.js";
 
 1. 自己打的时候开着「记录对局数据」——这份是覆盖层当时的输入
 2. 赛后在 Dota 客户端下载这一局的回放，开着录制**从头 2 倍速**看完（可以最小化）——回放里 GSI 推十个人的数据、
-   官方净资产、双方所有的眼
+   官方净资产、双方所有的眼。不用自己看：下载好后跑 `python tools/watch_replays.py`，选几场，
+   它调另一个项目 dota2-highlight-recorder 的 `d2hr watch` 在游戏里从头 2 倍速放完、比赛结束后 15 秒换下一场，
+   全部放完退出游戏（覆盖层要先开着）。d2hr 从 PATH 找：在那边 `cargo install --path crates/d2hr` 装一次，
+   d2hr 改了要再装
 
 然后：
 
