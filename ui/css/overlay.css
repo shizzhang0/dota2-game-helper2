@@ -370,10 +370,11 @@ html, body {
 .wm-eye-ball  { fill: #000; stroke: #000; stroke-width: .5; stroke-linejoin: round; }
 .wm-eye-pupil { fill: var(--w); }
 .wm-eye-lid   { fill: none; stroke: var(--w); stroke-width: .7; stroke-linecap: round; }
-/* 没看见插眼的敌方真眼：眼上压一个品红问号（见 wardmap.js 的 wardIcon）。字体写死 Arial，
-   WebView2 在 Windows 上一定有它，不至于回退到别的字体把问号压变形 */
-.wm-eye-q { fill: var(--w); font: 700 5.4px Arial, sans-serif; text-anchor: middle;
-            paint-order: stroke; stroke: #000; stroke-width: 1.1; stroke-linejoin: round; }
+/* 不知何时插的敌方眼：外面一圈品红虚线 + 黑边（见 wardmap.js 的 wardIcon）。黑边和虚线同一套间隔，
+   空隙处透出底下的地图，读起来才是"虚线"而不是一圈实线 */
+.wm-ring, .wm-ring-under { fill: none; stroke-dasharray: .9 .7; }
+.wm-ring-under { stroke: #000; stroke-width: 1; }
+.wm-ring       { stroke: var(--w); stroke-width: .45; }
 /* 我方眼刚被排掉：绿色的叉 + 黑描边，和原生小地图上我方眼同色同描边（见 wardmap.js 的 crossIcon） */
 .wm-kill path { fill: none; stroke-linecap: round; }
 .wm-kill-under { stroke: #000; stroke-width: 1.7; }
