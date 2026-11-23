@@ -20,6 +20,9 @@
 //     攒着看"死的总是离我们近的那个"之类的规律成不成立
 //   · 按离开视野多久分桶（2026-11-20）：没视野、我们画着的敌方眼，分 假眼 / 真眼看见插眼 / 真眼没看见插眼，
 //     各有多少秒是活的、多少秒是幽灵。攒着决定"没看见插眼的真眼干脆不画"值不值（wards.md）
+//   · 我方插下真眼时旁边没冒出来的敌方眼（2026-11-23）：我方新真眼 1600 以内、当时我们画着但没视野的敌方眼，
+//     之后 12 秒里冒没冒出来，回放里当时活没活。按 1050（真眼照射半径）内外、假眼 / 真眼分开数。
+//     攒着决定"真眼照了没冒出来就删"能不能放宽到 1050——风险是高地上的眼（低处看不到，照不出来却活着）
 // 漏显示是危险的一侧（以为安全其实有眼），幽灵是吵的一侧——wards.md 一直按这个方向取舍。
 
 import { findRecordings, matchIdFromArgs, requirePair, runSelf, spectateTimeline, atClock, mmss,
@@ -82,6 +85,10 @@ const AWAY = [15, 60, 180];
 const AWAY_GROUPS = ["假眼", "真眼，看见插眼", "真眼，没看见插眼"];
 const awayStat = new Map(AWAY_GROUPS.map(g => [g, [...AWAY, Infinity].map(() => ({ alive: 0, ghost: 0 }))]));
 const unsureSegs = new Map();           // 没看见插眼的真眼：key -> { x, y, alive, ghost, from, to }
+/** 我方新真眼旁边看的范围、跟多少秒。1050 = item_ward_sentry true_sight_range */
+const PROBE = 1600, PROBE_SIGHT = 1050, PROBE_SECS = 12;
+const probes = [];                      // { ek, kind, at, d, alive, appeared, removedAt }
+const ownSeenKeys = new Set();
 const broadcasts = [];                  // 排眼播报：{ clock, kind, pid, ours, live, held }
 const seenBroadcast = new Set();
 
@@ -119,6 +126,26 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   if (!t) return;
   frames++;
   const truthEnemy = t.wards.filter(w => w.team === enemyTeam);
+
+  // 我方新插的真眼：旁边没视野的敌方眼记下来，之后 PROBE_SECS 秒看它冒没冒出来、程序删没删
+  for (const [k, o] of wards.own) {
+    if (ownSeenKeys.has(k)) continue;
+    ownSeenKeys.add(k);
+    if (o.kind !== "sentry" || o.firstSeen !== clock) continue;     // 程序开之前就插着的不算
+    for (const [ek, e] of wards.enemy) {
+      if (e.lastSeen === clock) continue;
+      const d = Math.hypot(e.x - o.x, e.y - o.y);
+      if (d > PROBE) continue;
+      probes.push({ ek, kind: e.kind, x: e.x, y: e.y, at: clock, d: Math.round(d), away: clock - e.lastSeen,
+                    alive: truthEnemy.some(x => x.kind === e.kind && near(x, e)), appeared: false, removedAt: null });
+    }
+  }
+  for (const p of probes) {
+    if (clock <= p.at || clock - p.at > PROBE_SECS) continue;
+    const e = wards.enemy.get(p.ek);
+    if (e && e.lastSeen === clock) p.appeared = true;
+    if (!e && p.removedAt === null) p.removedAt = clock;
+  }
 
   // 幽灵
   for (const d of list.enemy) {
@@ -275,4 +302,23 @@ for (const b of ambiguous) {
   };
   console.log(`    ${mmss(b.clock)} ${kindName(b.kind)}：` +
               b.cands.map(c => `${where(c)} 离自己英雄 ${c.d ?? "?"} ${fate(c)}`).join("；"));
+}
+
+// ── 我方插下真眼时旁边没冒出来的敌方眼 ──
+// 活没活看插下那一刻的回放（和幽灵同一个口径）。程序现在只在 150 以内、10 秒没冒出来时删（FRESH_SENTRY_SIGHT）
+console.log(`
+我方插下真眼时，${PROBE} 以内画着、没视野的敌方眼（之后 ${PROBE_SECS} 秒；攒证据用，见 wards.md）：`);
+if (!probes.length) console.log("  无");
+for (const kind of ["obs", "sentry"]) {
+  for (const [lo, hi, label] of [[0, PROBE_SIGHT, `≤${PROBE_SIGHT}`], [PROBE_SIGHT, PROBE, `${PROBE_SIGHT}~${PROBE}`]]) {
+    const ps = probes.filter(p => p.kind === kind && (lo === 0 || p.d > lo) && p.d <= hi);
+    if (!ps.length) continue;
+    const n = (f) => ps.filter(f).length;
+    console.log(`  ${kindName(kind)} ${label}：${ps.length} 次。没冒出来 ${n(p => !p.appeared)}（活 ${n(p => !p.appeared && p.alive)}、死 ${n(p => !p.appeared && !p.alive)}），` +
+                `冒出来 ${n(p => p.appeared)}（活 ${n(p => p.appeared && p.alive)}、死 ${n(p => p.appeared && !p.alive)}）`);
+  }
+}
+for (const p of probes.filter(p => !p.appeared).sort((a, b) => a.at - b.at).slice(0, TOP * 2)) {
+  console.log(`    ${mmss(p.at)} ${kindName(p.kind)} ${where(p)} 离新真眼 ${p.d}，离开视野 ${Math.round(p.away)} 秒，没冒出来，` +
+              `回放里${p.alive ? "**活着**" : "已经没了"}` + (p.removedAt !== null ? `；程序 ${mmss(p.removedAt)} 删了` : "；程序没删"));
 }
