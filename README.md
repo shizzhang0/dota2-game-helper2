@@ -113,7 +113,7 @@ Three things the native minimap doesn't show, drawn straight onto it.
 
 - **Enemy wards that left vision.** A **magenta** eye shaped like the game's: with a pupil
   = observer, hollow lens = sentry. The native minimap only shows a ward while true sight is
-  on it; here it stays until the end of its lifetime. A sentry with a **question mark** on it
+  on it; here it stays until the end of its lifetime. A ward with a **dashed ring** around it
   was found rather than seen being placed — its age is unknown, so it may already be gone
 - **Your ward dewarded.** A **green cross** on the spot for 45 s. Natively the
   ward just vanishes — expired or killed, you can't tell

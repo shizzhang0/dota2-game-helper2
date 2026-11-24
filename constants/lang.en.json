@@ -41,7 +41,7 @@
   "show.wardmap": "Wards",
   "legend.enemyObs": "Enemy observer",
   "legend.enemySentry": "Enemy sentry",
-  "legend.enemySentryUnsure": "Sentry, age unknown",
+  "legend.enemyUnsure": "Ward, age unknown",
   "legend.killed": "Just dewarded",
   "tray.edit": "Settings",
   "tray.quit": "Quit",

@@ -13,12 +13,12 @@
 //   · 被排的叉：我们画的叉，回放里那个我方眼是不是真在到期前没了；以及该画没画的
 //   · 我方眼倒计时：我们显示的剩余秒数 vs 回放里那个眼真实的剩余寿命
 // 另外两项是给以后攒证据的（2026-10-21）：
-//   · 没视野、我们画着的敌方眼按离开视野多久分桶，各多少秒活、多少秒幽灵（没看见插眼的真眼单列——渲染层给它压问号）
+//   · 没视野、我们画着的敌方眼按离开视野多久分桶，各多少秒活、多少秒幽灵（没看见插眼的单列——渲染层给它套虚线圈）
 //   · 排眼播报的两种没处理的情形：无主（-1，小兵 / 塔打掉的）、迟到（来时没有 3 秒内看见过的候选）。
 //     各自数一数回放里那几秒是不是正好死了一个敌方同类眼，攒够了再决定要不要处理（wards.md）
 //   · 有歧义的播报（来时 3 秒内看见过的候选不止一个）：逐条列出每个候选离自己英雄多远、回放里死没死，
 //     攒着看"死的总是离我们近的那个"之类的规律成不成立
-//   · 按离开视野多久分桶（2026-11-20）：没视野、我们画着的敌方眼，分 假眼 / 真眼看见插眼 / 真眼没看见插眼，
+//   · 按离开视野多久分桶（2026-11-20）：没视野、我们画着的敌方眼，分 假眼 / 真眼 × 看见 / 没看见插眼（11-23 起假眼也分），
 //     各有多少秒是活的、多少秒是幽灵。攒着决定"没看见插眼的真眼干脆不画"值不值（wards.md）
 //   · 我方插下真眼时旁边没冒出来的敌方眼（2026-11-23）：我方新真眼 1600 以内、当时我们画着但没视野的敌方眼，
 //     之后 12 秒里冒没冒出来，回放里当时活没活。按 1050（真眼照射半径）内外、假眼 / 真眼分开数。
@@ -82,9 +82,9 @@ const crosses = new Map();       // 我们画的叉：`x|y|at` -> { x, y, kind, 
 let posErr = 0, frames = 0;
 /** 离开视野多久的分桶边界（秒） */
 const AWAY = [15, 60, 180];
-const AWAY_GROUPS = ["假眼", "真眼，看见插眼", "真眼，没看见插眼"];
+const AWAY_GROUPS = ["假眼，看见插眼", "假眼，没看见插眼", "真眼，看见插眼", "真眼，没看见插眼"];
 const awayStat = new Map(AWAY_GROUPS.map(g => [g, [...AWAY, Infinity].map(() => ({ alive: 0, ghost: 0 }))]));
-const unsureSegs = new Map();           // 没看见插眼的真眼：key -> { x, y, alive, ghost, from, to }
+const unsureSegs = new Map();           // 没看见插眼的：key -> { kind, x, y, alive, ghost, from, to }
 /** 我方新真眼旁边看的范围、跟多少秒。1050 = item_ward_sentry true_sight_range */
 const PROBE = 1600, PROBE_SIGHT = 1050, PROBE_SECS = 12;
 const probes = [];                      // { ek, kind, at, d, alive, appeared, removedAt }
@@ -160,12 +160,12 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
   for (const [key, w] of wards.enemy) {
     if (w.lastSeen === clock) continue;
     const alive = truthEnemy.some(x => x.kind === w.kind && near(x, w));
-    const group = w.kind !== "sentry" ? AWAY_GROUPS[0] : w.placed === false ? AWAY_GROUPS[2] : AWAY_GROUPS[1];
+    const group = AWAY_GROUPS[(w.kind === "sentry" ? 2 : 0) + (w.placed === false ? 1 : 0)];
     const away = clock - w.lastSeen;
     const b = AWAY.findIndex(hi => away < hi);
     awayStat.get(group)[b < 0 ? AWAY.length : b][alive ? "alive" : "ghost"] += dt;
-    if (group !== AWAY_GROUPS[2]) continue;
-    const s = unsureSegs.get(key) || { x: w.x, y: w.y, alive: 0, ghost: 0, from: clock, to: clock };
+    if (w.placed !== false) continue;
+    const s = unsureSegs.get(key) || { kind: w.kind, x: w.x, y: w.y, alive: 0, ghost: 0, from: clock, to: clock };
     s[alive ? "alive" : "ghost"] += dt; s.to = clock;
     unsureSegs.set(key, s);
   }
@@ -209,7 +209,7 @@ console.log(`幽灵（画着、实际已经没了）：${longG.length} 个，合
             `；另有 ${gs.length - longG.length} 个短于 ${SHORT} 秒（两边上报差一两包）`);
 for (const g of longG.sort((a, b) => b.sec - a.sec).slice(0, TOP)) {
   console.log(`  ${kindName(g.kind)} ${where(g)}  ${mmss(g.from)} ~ ${mmss(g.to)}  挂了 ${Math.round(g.sec)} 秒` +
-              (g.unsure ? "（画的是问号：没看见插眼）" : ""));
+              (g.unsure ? "（画的是虚线圈：没看见插眼）" : ""));
 }
 
 // ── 漏显示 ──
@@ -268,7 +268,7 @@ for (const [g, bs] of awayStat) {
   console.log(`  ${g}：` + bs.map((c, i) => `${awayLabel(i)} ${cell(c)}`).join("，") + `；合计 ${cell(all)}`);
 }
 for (const s of [...unsureSegs.values()].sort((a, b) => b.ghost - a.ghost).slice(0, TOP)) {
-  console.log(`    没看见插眼的真眼 ${where(s)}  ${mmss(s.from)} ~ ${mmss(s.to)}  活着 ${Math.round(s.alive)} 秒，幽灵 ${Math.round(s.ghost)} 秒`);
+  console.log(`    没看见插眼的${kindName(s.kind)} ${where(s)}  ${mmss(s.from)} ~ ${mmss(s.to)}  活着 ${Math.round(s.alive)} 秒，幽灵 ${Math.round(s.ghost)} 秒`);
 }
 
 // ── 排眼播报里还没处理的两种 ──
