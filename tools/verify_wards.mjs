@@ -23,10 +23,13 @@
 //   · 我方插下真眼时旁边没冒出来的敌方眼（2026-11-23）：我方新真眼 1600 以内、当时我们画着但没视野的敌方眼，
 //     之后 12 秒里冒没冒出来，回放里当时活没活。按 1050（真眼照射半径）内外、假眼 / 真眼分开数。
 //     攒着决定"真眼照了没冒出来就删"能不能放宽到 1050——风险是高地上的眼（低处看不到，照不出来却活着）
+//   · 影子统计"照到了没出现就删"（2026-11-25）：tools/ward_vision.mjs 的视野模型（地形高度 + 树 + 真视，等 8 秒确认），
+//     程序里还没用。列出它会删哪些、回放里删得对不对，攒到足够多次 0 误删再做进程序（wards.md）
 // 漏显示是危险的一侧（以为安全其实有眼），幽灵是吵的一侧——wards.md 一直按这个方向取舍。
 
 import { findRecordings, matchIdFromArgs, requirePair, runSelf, spectateTimeline, atClock, mmss,
          CachePool, parseWards, loadConstants } from "./verify_common.mjs";
+import { loadMap, WardVision, MAP_PATH } from "./ward_vision.mjs";
 
 const USAGE = "用法：node tools/verify_wards.mjs <对局号> [--top N]";
 const matchId = matchIdFromArgs(USAGE);
@@ -87,6 +90,9 @@ const awayStat = new Map(AWAY_GROUPS.map(g => [g, [...AWAY, Infinity].map(() => 
 const unsureSegs = new Map();           // 没看见插眼的：key -> { kind, x, y, alive, ghost, from, to }
 /** 我方新真眼旁边看的范围、跟多少秒。1050 = item_ward_sentry true_sight_range */
 const PROBE = 1600, PROBE_SIGHT = 1050, PROBE_SECS = 12;
+const visionMap = loadMap();
+const vision = visionMap && new WardVision(visionMap);
+const shadow = [];                      // 影子删除：{ key, firstSeen, kind, x, y, unsure, at, alive, saved, miss }
 const probes = [];                      // { ek, kind, at, d, alive, appeared, removedAt }
 const ownSeenKeys = new Set();
 const broadcasts = [];                  // 排眼播报：{ clock, kind, pid, ours, live, held }
@@ -122,10 +128,23 @@ await runSelf(recs.self, ({ st, info, C: c, wards }) => {
                       held: mine.map(w => ({ x: w.x, y: w.y })) });
   }
 
+  const shadowNew = vision ? vision.update(st, info, wards) : [];
   const t = atClock(truthFrames, clock, 4);
   if (!t) return;
   frames++;
   const truthEnemy = t.wards.filter(w => w.team === enemyTeam);
+
+  // 影子统计：删的那一刻活没活（回放里那时有它、8 秒后还在报——眼死后还报 6~7 秒尸体）；删了之后它在我们这边
+  // 还画着的时间，按幽灵的口径算省掉多少幽灵、漏画多少活眼（又被看见就停：真做进程序时它会被重新加回来）
+  for (const e of shadowNew) {
+    const alive = lives.some(l => l.team === enemyTeam && l.kind === e.kind && near(l, e) && l.start <= clock + 1 && l.end >= clock + 8);
+    shadow.push({ ...e, at: clock, alive, saved: 0, miss: 0 });
+  }
+  for (const e of shadow) {
+    const w = wards.enemy.get(e.key);
+    if (!w || w.firstSeen !== e.firstSeen || w.lastSeen === clock || !vision.isDone(e.key, e.firstSeen)) continue;
+    if (truthEnemy.some(x => x.kind === e.kind && near(x, e))) e.miss += dt; else e.saved += dt;
+  }
 
   // 我方新插的真眼：旁边没视野的敌方眼记下来，之后 PROBE_SECS 秒看它冒没冒出来、程序删没删
   for (const [k, o] of wards.own) {
@@ -321,4 +340,21 @@ for (const kind of ["obs", "sentry"]) {
 for (const p of probes.filter(p => !p.appeared).sort((a, b) => a.at - b.at).slice(0, TOP * 2)) {
   console.log(`    ${mmss(p.at)} ${kindName(p.kind)} ${where(p)} 离新真眼 ${p.d}，离开视野 ${Math.round(p.away)} 秒，没冒出来，` +
               `回放里${p.alive ? "**活着**" : "已经没了"}` + (p.removedAt !== null ? `；程序 ${mmss(p.removedAt)} 删了` : "；程序没删"));
+}
+
+// ── 影子统计：照到了没出现就删 ──
+console.log(`
+影子统计：真视 + 视野照到了却没出现就删（tools/ward_vision.mjs，程序里还没用；见 wards.md）：`);
+if (!vision) {
+  console.log(`  没有地图数据（${MAP_PATH}）：先跑 tools/map_dump.py 导出地形高度和树`);
+} else if (!shadow.length) {
+  console.log("  这局一次都没删");
+} else {
+  const ok = shadow.filter(e => !e.alive), bad = shadow.filter(e => e.alive);
+  console.log(`  删了 ${shadow.length} 次：删对 ${ok.length}（省掉幽灵 ${Math.round(sum(ok.map(e => e.saved)))} 秒），` +
+              `误删活眼 ${bad.length}（漏画 ${Math.round(sum(bad.map(e => e.miss)))} 秒）`);
+  for (const e of shadow) {
+    console.log(`    ${mmss(e.at)} ${kindName(e.kind)} ${where(e)}${e.unsure ? "（虚线圈）" : ""} ` +
+                (e.alive ? "**误删：回放里还活着**" : "删对") + `，之后省掉幽灵 ${Math.round(e.saved)} 秒、漏画 ${Math.round(e.miss)} 秒`);
+  }
 }

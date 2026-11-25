@@ -1,0 +1,6 @@
+"AddonInfo"
+{
+	"TeamCount"		"10"
+	"maps"			"dota"
+	"IsPlayable"	"1"
+}

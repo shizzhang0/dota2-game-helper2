@@ -189,6 +189,30 @@ import { EconTracker } from ".../ui/js/networth.js";
 `ui/js/source.js` 顶层没有副作用，所以在 Node 里 import 是安全的。
 **不要另写一份计算逻辑**，否则测的是复制品不是产品。
 
+## 地图数据导出 `tools/map_dump.py`（2026-11-25）
+
+敌方眼位的视野模型（`tools/ward_vision.mjs`，见 wards.md「用地形高度和树判断看不看得见」）要每格的地面高度和树的位置，
+输出 `devdata/map_dump.json`（不进 git）和一张预览图。
+
+- **树**：`maps/dota.vpk` 里的 `dota.trm` 能直接读：112 字节头（`trmp`、版本、个数 2403、两个图层名），
+  之后每棵 12 字节 `int32 x, y, 图层`（2 = 一直在，0 / 1 = radiant / dire 基地图层）。`dota.gnv` 是寻路网格（64 码一格、
+  320 × 328，每格一个字节的标志），标的是悬崖边和不能走的地方，**不含高度**
+- **地面高度**：游戏文件里没读出来（`dota.vhcg` 格式不明），所以借 **Dota 2 Workshop Tools**（Steam 里 Dota 2 的免费 DLC）
+  跑一个自定义游戏 `tools/map_dump/addon/`，让 Lua 的 `GetGroundHeight` 逐格报，打印到控制台：
+
+```
+python tools/map_dump.py install                     # 把 addon 拷进 game/dota_addons/map_dump
+& "...\game\bin\win64\dota2.exe" -tools -condebug     # 启动器里选 map_dump → Launch Tools
+dota_launch_custom_game map_dump dota                 # 在 VConsole2 里，等出现 MAPDUMP END
+python tools/map_dump.py parse                       # 读 game/dota/console.log
+```
+
+几个坑：
+- Lua 沙箱没有文件 io，只能借控制台落盘；工具里 `con_logfile` 是 Unknown command，要靠 **`-condebug`** 启动参数写 `console.log`
+- 一帧里查十万次高度会超时，所以分帧（每次 think 4 行）；控制台一行太长会截断，所以一行只打 64 格
+- 工具开着时会在 addon 目录里放自己的缓存文件，`install` 是覆盖拷贝、不先删
+- 地图大改（新版本动了地形）时要重新导一次高度
+
 ## 准确性对账 `tools/verify_networth.mjs` / `tools/verify_wards.mjs`（2026-10-15）
 
 **拿回放当标准答案，端到端地查用户当时看到的对不对。** 同一局录两份：
