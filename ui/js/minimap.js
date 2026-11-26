@@ -1,3 +1,5 @@
+import { WardVision } from "./wardvision.js";
+
 // minimap 段派生的状态。两个实测坑：
 //   1. 双方泉水也用 minimap_ward_obs 图标绘制且贯穿全局，必须按 unitname 过滤
 //   2. 数据里存在坐标 (0,0) 的幽灵条目，需丢弃
@@ -92,7 +94,9 @@ function trueSightNear(w, seen, state, myTeam) {
 }
 
 export class WardTracker {
-  constructor(C) { this.C = C; this.reset(); }
+  /** map：地形高度和树（wardvision.js 的 loadVisionMap），没有就不做"照到了没出现就删"。
+      地图是异步读的、可能晚于第一包到，所以调用方每包都可以重新赋 this.map，update() 里跟着换 */
+  constructor(C, map = null) { this.C = C; this.map = map; this.reset(); }
   reset() {
     this.own = new Map();      // key -> {x, y, kind, firstSeen|null}
     this.enemy = new Map();    // key -> {x, y, kind, lastSeen}
@@ -106,6 +110,9 @@ export class WardTracker {
     this.claimed = new Map();     // 被一条无歧义的排眼事件删掉的眼 -> 何时，见 resolveKills()
     this.freshSentries = [];      // 我方刚插下的真眼 {x, y, at}，见 update() 里"插眼的瞬时视野"
     this.allyVotes = new Map();   // "队内槽位|英雄名" -> 票数：几号玩家是哪个英雄，见 noteAllies()
+    this.vision = this.map ? new WardVision(this.map) : null;   // 见 update() 末尾"照到了没出现就删"
+    this.visionFor = this.map;
+    this.visionDeleted = [];      // 本包被它删掉的（对账脚本统计用）
   }
 
   /** **几号玩家是哪个英雄**（2026-11-22）。排眼播报只给玩家编号（playerid1），小地图的英雄条目只给英雄名，
@@ -261,6 +268,11 @@ export class WardTracker {
   update(state, info) {
     const clock = info.clock;
     this.newOwnSentries = 0;
+    this.visionDeleted = [];
+    if (this.map !== this.visionFor) {
+      this.vision = this.map ? new WardVision(this.map) : null;
+      this.visionFor = this.map;
+    }
     if (clock === null) return;
     // 时钟倒流 = 换局/重开，旧状态作废（号角前 clock 本就不单调）
     if (this.lastClock !== null && clock < this.lastClock - 5) this.reset();
@@ -391,6 +403,16 @@ export class WardTracker {
         // 不压制的话下一包它又被当成"第一次看见"加回来，firstSeen 是现在——又挂满一整个寿命。
         // 两局对账（m9052676196、m9053873687）的 20 个幽灵里大半是这样来的，每个都挂七分钟左右
         this.dewarded.set(key, clock);
+      }
+    }
+
+    // **照到了没出现就删**（2026-11-26）：上面"消失不说明没了"的例外——那个点此刻真视和普通视野都照得到、
+    // 它却连着十秒没出现，就是真没了。视野按地形高度和树算，见 wardvision.js。
+    // 不进 dewarded：删的前提是它没在报；要是之后又被看见，说明它还活着（判错了），应当马上画回来
+    if (this.vision) {
+      for (const e of this.vision.update(state, info, this.enemy)) {
+        this.enemy.delete(e.key);
+        this.visionDeleted.push({ ...e, at: clock });
       }
     }
   }
