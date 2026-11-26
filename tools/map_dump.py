@@ -5,10 +5,15 @@
 所以借 Dota 2 Workshop Tools：用正式地图跑一个自定义游戏，让游戏自己的 GetGroundHeight 逐格报高度。
 Lua 那半在 tools/map_dump/addon/。
 
+导出的结果打成 ui/data/map.bin 随程序发（"照到了没出现就删"要用，见 ui/js/wardvision.js）。
+文件头里记着导出时本机 maps/dota.vpk 里 dota.trm（树）和 dota.gnv（可走的格子）的 CRC32：
+程序启动时拿本机的比，对不上 = 地图改过了，这条规则自动关掉，等重新导出。
+
 用法：
     python tools/map_dump.py install     # 把 addon 拷进 Dota 目录，打印接下来怎么跑
     （在 Workshop Tools 里跑完）
-    python tools/map_dump.py parse       # 读 game/dota/console.log，写 devdata/map_dump.json 和一张预览图
+    python tools/map_dump.py parse       # 读 game/dota/console.log，写 devdata/map_dump.json、预览图和 ui/data/map.bin
+    python tools/map_dump.py pack        # 只把 devdata/map_dump.json 重新打成 ui/data/map.bin
 """
 import argparse
 import json
@@ -25,6 +30,63 @@ from sync_constants import find_dota  # noqa: E402
 
 ADDON = "map_dump"
 OUT_DIR = ROOT.parent / "devdata"
+MAP_BIN = ROOT.parent / "ui" / "data" / "map.bin"
+# 地图包里拿来认"地图改没改"的两份文件。树和可走的格子：改地形几乎总会改到这两样。
+# dota.vhcg（格式不明，像是碰撞 / 高度）没用上：它和光照、装饰这些一起重编时会不会变说不准，不想白白关掉规则
+MAP_FILES = ("trm", "gnv")
+
+
+def map_crcs(dota):
+    """maps/dota.vpk 目录里 dota.trm、dota.gnv 的 CRC32（VPK 目录里自带，不用读文件内容）。
+    和 src-tauri/src/mapcheck.rs 读的是同一处，改了这里要同步那边"""
+    p = dota / "maps" / "dota.vpk"
+    with p.open("rb") as f:
+        sig, ver, tree_size = struct.unpack("<III", f.read(12))
+        if sig != 0x55AA1234 or ver not in (1, 2):
+            sys.exit(f"{p} 不是认得的 VPK（magic {sig:#x}，版本 {ver}）")
+        if ver == 2:
+            f.read(16)
+        tree = f.read(tree_size)
+    out, i = {}, 0
+    def cstr():
+        nonlocal i
+        j = tree.index(b"\0", i)
+        v = tree[i:j].decode("utf-8", "replace")
+        i = j + 1
+        return v
+    while (ext := cstr()):
+        while (path := cstr()):
+            while (name := cstr()):
+                crc, preload = struct.unpack_from("<IH", tree, i)
+                i += 18 + preload
+                if path == "maps" and name == "dota" and ext in MAP_FILES:
+                    out[ext] = crc
+    missing = [e for e in MAP_FILES if e not in out]
+    if missing:
+        sys.exit(f"{p} 里找不到 maps/dota.{'、'.join(missing)}")
+    return out
+
+
+def pack(dota):
+    """devdata/map_dump.json -> ui/data/map.bin。格式（小端）：
+         0  "DMAP"   4  u16 版本 1   6  u16 格子边长
+         8  i32 x0  12  i32 y0      16  u16 宽   18  u16 高
+        20  u32 dota.trm 的 CRC32   24  u32 dota.gnv 的 CRC32   28  u32 树的棵数
+        32  i16 高度 × 宽×高（逐行，y 从下往上）   然后 i16 x, y × 树的棵数
+       读的一侧是 ui/js/wardvision.js 的 parseMap"""
+    src = OUT_DIR / "map_dump.json"
+    if not src.is_file():
+        sys.exit(f"没有 {src}：先跑 install / parse")
+    m = json.loads(src.read_text(encoding="utf-8"))
+    crc = map_crcs(dota)
+    trees = [(x, y) for x, y, _z, standing in m["trees"] if standing]
+    buf = struct.pack("<4sHHiiHHIII", b"DMAP", 1, m["cell"], m["x0"], m["y0"], m["w"], m["h"],
+                      crc["trm"], crc["gnv"], len(trees))
+    buf += struct.pack(f"<{len(m['heights'])}h", *m["heights"])
+    buf += struct.pack(f"<{2 * len(trees)}h", *(v for t in trees for v in t))
+    MAP_BIN.parent.mkdir(exist_ok=True)
+    MAP_BIN.write_bytes(buf)
+    print(f"写了 {MAP_BIN}：{len(buf)} 字节，树 {len(trees)} 棵，dota.trm {crc['trm']:#010x}、dota.gnv {crc['gnv']:#010x}")
 
 
 def install(dota):
@@ -106,16 +168,22 @@ def parse(dota, log):
     png = OUT_DIR / "map_dump.png"
     write_png(png, w, h, pixel)
     print(f"预览图 {png}（亮 = 高，绿 = 树）")
+    pack(dota)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["install", "parse"])
+    ap.add_argument("cmd", choices=["install", "parse", "pack"])
     ap.add_argument("--dota", help="Dota 2 安装目录（默认自动找）")
     ap.add_argument("--log", help="parse 用：日志文件（默认 game/dota/console.log）")
     a = ap.parse_args()
     dota = find_dota(a.dota)
-    install(dota) if a.cmd == "install" else parse(dota, a.log)
+    if a.cmd == "install":
+        install(dota)
+    elif a.cmd == "parse":
+        parse(dota, a.log)
+    else:
+        pack(dota)
 
 
 if __name__ == "__main__":

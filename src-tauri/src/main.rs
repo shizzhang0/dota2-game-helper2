@@ -8,6 +8,7 @@ mod gsicfg;
 mod hittest;
 mod lang;
 mod log;
+mod mapcheck;
 mod prices;
 mod record;
 mod settings;
@@ -156,6 +157,7 @@ fn main() {
             settings::open_release_page,
             record::records_stat,
             log::log_front,
+            mapcheck::map_crc,
             exit_edit
         ])
         .build(tauri::generate_context!())

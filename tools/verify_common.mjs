@@ -18,7 +18,12 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // ui/js 的模块在浏览器分支里用 fetch 读 constants/，这里接到本地文件上；window 给个空对象，isTauri() 就是假
 globalThis.window = globalThis.window || {};
-globalThis.fetch = async (u) => ({ json: async () => JSON.parse(readFileSync(join(ROOT, String(u)), "utf8")) });
+// 地图数据（wardvision.js）按模块位置拿 file: URL，要二进制
+globalThis.fetch = async (u) => {
+  const p = u instanceof URL || String(u).startsWith("file:") ? fileURLToPath(u) : join(ROOT, String(u));
+  return { json: async () => JSON.parse(readFileSync(p, "utf8")),
+           arrayBuffer: async () => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); } };
+};
 
 const ui = (f) => import(pathToFileURL(join(ROOT, "ui", "js", f)).href);
 export const { CachePool } = await ui("cachepool.js");
@@ -27,6 +32,9 @@ export const { loadConstants } = await ui("timers.js");
 export const { EventTracker, loadTowers } = await ui("events.js");
 export const { loadPrices, EconTracker } = await ui("networth.js");
 export const { WardTracker, parseWards } = await ui("minimap.js");
+export const { loadVisionMap, WardVision } = await ui("wardvision.js");
+/** "照到了没出现就删"用的地图，同 main.js。NOVISION=1 关掉它，对照"没有这条规则"时用 */
+export const VISION_MAP = process.env.NOVISION ? null : (await loadVisionMap()).map;
 
 /** 程序录制的目录（和 record.rs 一致）。可以用环境变量 HELPER2_RECORDS 换 */
 export const RECORDS = process.env.HELPER2_RECORDS
@@ -90,7 +98,7 @@ function isMenu(pkt) {
 
 /** 把自己打的录制按 main.js 的顺序喂一遍，每包回调一次 onFrame({ pkt, st, info, econ, wards, tracker })。
     几份录制按顺序连着喂，中间不重置——和程序一直开着、Dota 崩了重连是同一个情形。 */
-export async function runSelf(recordings, onFrame) {
+export async function runSelf(recordings, onFrame, { vision = VISION_MAP } = {}) {
   const towers = await loadTowers(), prices = await loadPrices();
   const pool = new CachePool(), match = new MatchTracker(), econ = new EconTracker();
   let tracker = null, wards = null, last = null;
@@ -104,7 +112,7 @@ export async function runSelf(recordings, onFrame) {
       if (!tracker || info.newMatch) tracker = new EventTracker(C);
       tracker.C = C; tracker.update(pkt, st, info);
       if (!wards || info.newMatch) wards = new WardTracker(C);
-      wards.C = C; wards.update(st, info);
+      wards.C = C; wards.map = vision; wards.update(st, info);
       if (info.newMatch) econ.reset();
       const ended = info.gameState === "DOTA_GAMERULES_STATE_POST_GAME";
       const frozen = ended && last?.info.gameState === "DOTA_GAMERULES_STATE_POST_GAME"

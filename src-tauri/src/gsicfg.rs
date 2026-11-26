@@ -59,14 +59,18 @@ fn libraries(steam: &PathBuf) -> Vec<PathBuf> {
     out
 }
 
-/// 每个 Steam 库里 Dota 的 GSI 配置目录（`.../dota/cfg/gamestate_integration`），不管存不存在
-fn gsi_dirs() -> Vec<PathBuf> {
+/// 每个 Steam 库里 Dota 的 `game/dota` 目录，不管存不存在
+pub(crate) fn dota_dirs() -> Vec<PathBuf> {
     let Some(steam) = steam_path() else { return vec![] };
     libraries(&steam)
         .into_iter()
-        .map(|lib| lib.join("steamapps").join("common").join("dota 2 beta")
-                      .join("game").join("dota").join("cfg").join("gamestate_integration"))
+        .map(|lib| lib.join("steamapps").join("common").join("dota 2 beta").join("game").join("dota"))
         .collect()
+}
+
+/// 每个 Steam 库里 Dota 的 GSI 配置目录（`.../dota/cfg/gamestate_integration`），不管存不存在
+fn gsi_dirs() -> Vec<PathBuf> {
+    dota_dirs().into_iter().map(|d| d.join("cfg").join("gamestate_integration")).collect()
 }
 
 /// 卸载时删掉我们写的那个配置（nsis 卸载前带 `--cleanup` 启动程序，见 windows/hooks.nsh）。

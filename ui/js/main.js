@@ -6,6 +6,7 @@ import { EventTracker, loadTowers } from "./events.js";
 import { loadPrices, EconTracker } from "./networth.js";
 import { initPanel, render } from "./render.js";
 import { WardTracker, deadTowers } from "./minimap.js";
+import { loadVisionMap } from "./wardvision.js";
 import { loadSettings, onSettingsChange } from "./settings.js";
 import { initEditor, setEditorOpen } from "./editor.js";
 import { checkUpdate } from "./update.js";
@@ -30,6 +31,17 @@ let hidden = false;
 // Dota 在不在前台（2026-10-15）：切到别的程序时面板收起，切回来再出现。见 foreground.rs
 let dotaFront = true;
 let wards = null;
+// 敌方眼"照到了没出现就删"用的地形和树（见 wardvision.js）。启动时读、每局开始再和本机地图包比一次：
+// Dota 可能在程序开着的时候更新了地图。比不上就是 null，这条规则关掉
+let visionMap = null;
+function checkVisionMap() {
+  loadVisionMap().then(({ map, why }) => {
+    if (!map && why) send("warn", `[wards] 不做"照到了没出现就删"：${why}`);
+    if (map && !visionMap) send("info", "[wards] 地图数据和本机一致，\"照到了没出现就删\"已启用");
+    visionMap = map;
+  });
+}
+checkVisionMap();
 let lastAt = 0;              // 上一包到达的墙钟时间，用来判断 GSI 是不是断了
 // Dota 自己的 HUD 设置：启动时读一次，之后每局开始再读（见 dotahud.js）
 readDotaHud();
@@ -107,13 +119,14 @@ async function onPacket(pkt) {
   // 换局要**重新取一次 st**：update 返回的是池子里那个对象的引用，reset 只是把池子换成新对象，
   // 手里的 st 还指着上一局的合并状态；新局第一包的空 items/hero 又被池子的空对象守卫挡住，
   // 不重取的话刚重置的净资产和新建的眼位会拿上一局的装备、眼位初始化
-  if (info.newMatch) { pool.reset(); st = pool.update(pkt); readDotaHud(); hidden = false; }
+  if (info.newMatch) { pool.reset(); st = pool.update(pkt); readDotaHud(); hidden = false; checkVisionMap(); }
   C = await loadConstants(info.modeOrDefault);
   if (!tracker || info.newMatch) tracker = new EventTracker(C);
   tracker.C = C;                       // 模式判定完成后热切常数
   tracker.update(pkt, st, info);
   if (!wards || info.newMatch) wards = new WardTracker(C);
   wards.C = C;
+  wards.map = visionMap;
   wards.update(st, info);
   if (info.newMatch) econ.reset();
   // **游戏结束后净资产定格在结束那一包**（2026-10-09）。遗迹倒下、状态变成 POST_GAME 之后，
