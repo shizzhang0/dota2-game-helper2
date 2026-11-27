@@ -407,7 +407,7 @@ export class WardTracker {
     }
 
     // **照到了没出现就删**（2026-11-26）：上面"消失不说明没了"的例外——那个点此刻真视和普通视野都照得到、
-    // 它却连着十秒没出现，就是真没了。视野按地形高度和树算，见 wardvision.js。
+    // 它却连着十几秒没出现（候选 2 秒 + 确认 15 秒），就是真没了。视野按地形高度和树算，见 wardvision.js。
     // 不进 dewarded：删的前提是它没在报；要是之后又被看见，说明它还活着（判错了），应当马上画回来
     if (this.vision) {
       for (const e of this.vision.update(state, info, this.enemy)) {
